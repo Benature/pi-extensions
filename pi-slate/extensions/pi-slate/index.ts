@@ -537,6 +537,9 @@ export default function piSlate(pi: ExtensionAPI): void {
     if (waveTimer !== undefined) { clearInterval(waveTimer); waveTimer = undefined; }
     if (!isWaveActive()) return;
     setWaveActive(false);
+    // Restore the host default so a blanked message never sticks if the
+    // Slate composer goes away mid-session.
+    try { currentContext?.ui.setWorkingMessage?.(undefined); } catch { /* stale ctx */ }
     requestRender();
   };
   const startWave = (ctx: ExtensionContext): void => {
