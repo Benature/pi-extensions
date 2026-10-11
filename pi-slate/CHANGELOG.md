@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.1.14
+
+A cleaner, theme-consistent workbench.
+
+- Sidebar: blends into the terminal with no panel background, a one-line shaded context meter, de-cluttered MCP/Skills rows (just a status dot and name), and a foldable Prompts section with keyboard navigation
+- New working indicator: a rolling sine wave in the composer border, with the host working message restored when it stops
+- Switching themes restyles the whole interface consistently — headings, inline code, links, and the context bar all follow your theme's accent (Tokyo Night inline code is its signature blue again; Black Metal uses its rose accent)
+- Diffs follow your theme: tinted from your palette with matching syntax highlighting
+- Prompt editing: image placeholder tokens delete atomically, and select-all plus shift+backspace/delete clears the whole prompt
+
 ### Changed
 
 - Cleaner sidebar: blends into the terminal with no panel background; a one-line context meter with a shaded track replaces the old context rows; MCP and Skills rows show just a status dot and the name — redundant enabled/disabled/available labels, source columns, and scroll counters are gone; Prompts section gains a keyboard fold menu and completions.
