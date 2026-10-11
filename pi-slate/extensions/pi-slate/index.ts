@@ -36,6 +36,7 @@ import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
+import { trainFrame } from "./working-train.ts";
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
@@ -50,6 +51,7 @@ import {
   parseSlateArgs,
   resolveMessageLength,
   messageLengthMessage,
+  dashboardColumnWidth,
   slateArgumentCompletions,
   SLATE_USAGE,
   SLATE_VERSION,
@@ -327,6 +329,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     thinkingFold.stop();
     tokenRate.dispose();
     workingWord = undefined;
+    stopTrain();
     if (loaded.error) ctx.ui.notify(loaded.error, "warning");
     if (ctx.mode !== "tui") return;
     if (owns("tool-cards")) {
@@ -526,6 +529,44 @@ export default function piSlate(pi: ExtensionAPI): void {
 
   const workingWords = createWordPicker();
   let workingWord: string | undefined;
+  const TRAIN_WIDGET_KEY = "slate:working-train";
+  let trainTimer: ReturnType<typeof setInterval> | undefined;
+  let trainTick = 0;
+  const trainHost = (ctx: ExtensionContext | undefined): ctx is ExtensionContext =>
+    Boolean(ctx && ctx.mode === "tui" && editorActive() && typeof ctx.ui.setWidget === "function");
+  const trainWidth = (): number => {
+    const columns = activeTui?.terminal.columns ?? 0;
+    if (columns < 1) return 80;
+    const rows = activeTui?.terminal.rows ?? 0;
+    const rail = sidebar.isVisible(columns, rows) ? dashboardColumnWidth(columns, rows, sidebar.preferredWidth) : 0;
+    return Math.max(1, columns - rail - composerPaddingX(config.density) * 2);
+  };
+  const paintTrain = (ctx: ExtensionContext): void => {
+    ctx.ui.setWidget(TRAIN_WIDGET_KEY, trainFrame(trainWidth(), trainTick++));
+    requestRender();
+  };
+  const stopTrain = (): void => {
+    if (trainTimer !== undefined) { clearInterval(trainTimer); trainTimer = undefined; }
+    const ctx = currentContext;
+    if (ctx && typeof ctx.ui.setWidget === "function") {
+      try { ctx.ui.setWidget(TRAIN_WIDGET_KEY, undefined); requestRender(); } catch { /* A stale UI context must not break session teardown. */ }
+    }
+  };
+  const startTrain = (ctx: ExtensionContext): void => {
+    if (trainTimer !== undefined) { clearInterval(trainTimer); trainTimer = undefined; }
+    trainTick = 0;
+    try {
+      ctx.ui.setWorkingMessage("");
+      paintTrain(ctx);
+    } catch { return; }
+    const timer = setInterval(() => {
+      const current = currentContext;
+      if (!trainHost(current)) { stopTrain(); return; }
+      try { paintTrain(current); } catch { stopTrain(); }
+    }, 333);
+    timer.unref();
+    trainTimer = timer;
+  };
   const syncThinkingStatus = (): void => {
     const ctx = currentContext;
     if (!editorActive() || !ctx || !workingWord || typeof ctx.ui.setWorkingMessage !== "function") return;
@@ -547,12 +588,18 @@ export default function piSlate(pi: ExtensionAPI): void {
     if (owns("sidebar") && ctx.mode === "tui") { turnStartedAt = Date.now(); syncSidebar(ctx); }
     if (!editorActive()) return;
     thinkingFold.stop();
+    if (trainHost(ctx)) {
+      workingWord = undefined;
+      startTrain(ctx);
+      return;
+    }
     workingWord = workingWords.next();
     syncThinkingStatus();
   });
   pi.on("agent_end", (_event, ctx) => {
     currentContext = ctx;
     thinkingFold.stop();
+    stopTrain();
     if (turnStartedAt !== undefined) { lastTurnMs = Date.now() - turnStartedAt; turnStartedAt = undefined; }
     if (owns("sidebar")) { background.clearShells(); sidebar.setTasks(background.snapshot()); }
     syncSidebar(ctx);
@@ -643,6 +690,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   pi.on("session_shutdown", (_event, ctx) => {
     sessionEpoch += 1;
     workingWord = undefined;
+    stopTrain();
     thinkingFold.stop();
     tokenRate.dispose();
     images?.dispose();
