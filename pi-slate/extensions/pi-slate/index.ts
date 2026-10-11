@@ -85,6 +85,13 @@ import {
 } from "./catppuccin.ts";
 import { persistTheme, SLATE_THEME } from "./install-defaults.ts";
 
+const PROGRESS_STYLES = ["waves", "dna-helix", "pendulum-wave"] as const satisfies readonly ProgressStyle[];
+const PROGRESS_LABELS: Record<ProgressStyle, string> = {
+  waves: "Waves",
+  "dna-helix": "DNA helix",
+  "pendulum-wave": "Pendulum wave",
+};
+
 type SlateConfig = SurfaceConfig & {
   density: "comfortable" | "compact";
   sidebarPercent?: number;
@@ -144,7 +151,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
-      ...(value.progress === "waves" || value.progress === "dna-helix" ? { progress: value.progress } : {}),
+      ...(value.progress === "waves" || value.progress === "dna-helix" || value.progress === "pendulum-wave" ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
     ...(!parsed.ok ? { error: parsed.error } : {}),
@@ -733,14 +740,11 @@ export default function piSlate(pi: ExtensionAPI): void {
   };
 
   const pickProgress = async (ctx: ExtensionContext): Promise<ProgressStyle | undefined> => {
-    const value = await ctx.ui.select("Progress indicator", [
-      withCurrent("Waves", (config.progress ?? "waves") === "waves"),
-      withCurrent("DNA helix", config.progress === "dna-helix"),
-    ]);
-    const key = value ? withoutCurrent(value) : undefined;
-    if (key === "Waves") return "waves";
-    if (key === "DNA helix") return "dna-helix";
-    return undefined;
+    const value = await ctx.ui.select("Progress indicator", PROGRESS_STYLES.map((s) =>
+      withCurrent(PROGRESS_LABELS[s], (config.progress ?? "waves") === s)));
+    if (!value) return undefined;
+    const key = withoutCurrent(value);
+    return PROGRESS_STYLES.find((s) => PROGRESS_LABELS[s] === key);
   };
 
   const pickDensity = async (ctx: ExtensionContext): Promise<SlateConfig["density"] | undefined> => {
@@ -1061,7 +1065,7 @@ export default function piSlate(pi: ExtensionAPI): void {
       if (kind === "progress") {
         const progress = (parsed.kind === "progress" ? parsed.value : undefined) ?? await pickProgress(ctx);
         if (!progress) return;
-        apply({ ...config, progress }, `Progress indicator set to ${progress === "dna-helix" ? "DNA helix" : "waves"}`, ctx);
+        apply({ ...config, progress }, `Progress indicator set to ${PROGRESS_LABELS[progress]}`, ctx);
         return;
       }
 

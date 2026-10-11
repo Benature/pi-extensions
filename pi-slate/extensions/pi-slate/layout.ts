@@ -298,7 +298,7 @@ export const SLATE_VERSION = JSON.parse(
 ).version as string;
 
 export const SLATE_USAGE =
-  "Usage: /slate session [mcp|skills|commands|tasks|image] | surfaces [set <names...>|full|none] | density [comfortable|compact] | footer [standard|minimal] | width [default|narrow|medium|wide|<percent>] | focused [on|off] | pid [on|off] | progress [waves|dna-helix] | message-length [default|all|<count>] | theme [default|tokyo-night|quiet|mauve|sapphire|peach|teal] | style [default|quiet|mauve|sapphire|peach|teal] | bug [file|open]";
+  "Usage: /slate session [mcp|skills|commands|tasks|image] | surfaces [set <names...>|full|none] | density [comfortable|compact] | footer [standard|minimal] | width [default|narrow|medium|wide|<percent>] | focused [on|off] | pid [on|off] | progress [waves|dna-helix|pendulum-wave] | message-length [default|all|<count>] | theme [default|tokyo-night|quiet|mauve|sapphire|peach|teal] | style [default|quiet|mauve|sapphire|peach|teal] | bug [file|open]";
 
 export function withCurrent(label: string, current: boolean): string {
   return current ? `${label} (current)` : label;
@@ -336,6 +336,7 @@ const SLATE_COMPLETIONS = [
   "progress",
   "progress waves",
   "progress dna-helix",
+  "progress pendulum-wave",
   "message-length",
   "message-length default",
   "message-length all",
@@ -439,7 +440,7 @@ export function parseSlateArgs(raw: string): SlateArgs {
   }
   if (head === "progress") {
     if (!tail) return { ok: true, kind: "progress" };
-    if (tail === "waves" || tail === "dna-helix") return { ok: true, kind: "progress", value: tail };
+    if (tail === "waves" || tail === "dna-helix" || tail === "pendulum-wave") return { ok: true, kind: "progress", value: tail };
     return { ok: false };
   }
   if (head === "message-length") {
