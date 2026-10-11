@@ -551,7 +551,7 @@ export default function piSlate(pi: ExtensionAPI): void {
       const current = currentContext;
       if (!waveHost(current)) { stopWave(); return; }
       try { advanceWave(); requestRender(); } catch { stopWave(); }
-    }, 333);
+    }, 120);
     timer.unref();
     waveTimer = timer;
   };
