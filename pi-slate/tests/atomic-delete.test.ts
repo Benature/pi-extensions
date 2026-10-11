@@ -6,6 +6,7 @@ import test from "node:test";
 import type { CustomEditor, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Editor, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 import { atomicImageTokenDelete } from "../extensions/pi-slate/atomic-delete.ts";
+import type { ComposerSelectionEditor } from "../extensions/pi-slate/composer-selection.ts";
 import { installEditorPatch, installImagePlaceholders } from "../extensions/pi-slate/image-placeholders.ts";
 
 const fixtures = mkdtempSync(join(tmpdir(), "pi-slate-atomic-delete-"));
@@ -321,7 +322,7 @@ test("real editor: select-all then backspace clears the whole prompt, not just t
   const placeholders = attachPlaceholders(editor);
   // Mirrors index.ts attach order: images first, selection outermost.
   const selection = new ComposerSelectionController();
-  selection.attach(editor as unknown as Parameters<ComposerSelectionController["attach"]>[0]);
+  selection.attach(editor as unknown as ComposerSelectionEditor);
   t.after(() => { selection.dispose(); placeholders.dispose(); });
 
   editor.setText("look [image-1]");
