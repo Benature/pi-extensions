@@ -309,7 +309,7 @@ export function withoutCurrent(label: string): string {
 
 const THEME_STYLES = ["default", "quiet", "mauve", "sapphire", "peach", "teal"] as const;
 const SLATE_COMPLETIONS = [
-  "session", "session mcp", "session skills", "session commands", "session tasks", "session image",
+  "session", "session mcp", "session skills", "session prompts", "session commands", "session tasks", "session image",
   "surfaces",
   "surfaces set",
   ...SURFACES.map((name) => `surfaces set ${name}`),
@@ -347,7 +347,7 @@ const SLATE_COMPLETIONS = [
 
 export type SlateArgs =
   | { ok: true; kind: "menu" }
-  | { ok: true; kind: "session"; section?: "mcp" | "skills" | "commands" | "tasks" | "image" }
+  | { ok: true; kind: "session"; section?: "mcp" | "skills" | "prompts" | "commands" | "tasks" | "image" }
   | { ok: true; kind: "surfaces"; value?: Surface[] }
   | { ok: true; kind: "density"; value?: "comfortable" | "compact" }
   | { ok: true; kind: "footer"; value?: "standard" | "minimal" }
@@ -371,7 +371,7 @@ export function parseSlateArgs(raw: string): SlateArgs {
   const [head, tail, extra] = words;
   if (head === "session") {
     if (words.length === 1) return { ok: true, kind: "session" };
-    if (words.length === 2 && (tail === "mcp" || tail === "skills" || tail === "commands" || tail === "tasks" || tail === "image")) return { ok: true, kind: "session", section: tail };
+    if (words.length === 2 && (tail === "mcp" || tail === "skills" || tail === "prompts" || tail === "commands" || tail === "tasks" || tail === "image")) return { ok: true, kind: "session", section: tail };
     return { ok: false };
   }
   if (head === "surfaces") {

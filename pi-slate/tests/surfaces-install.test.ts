@@ -350,6 +350,20 @@ test("a stale command menu cannot insert into a new session; disposed clock cann
   const before = f.calls.length; t.mock.timers.tick(10000); assert.equal(f.calls.length, before);
 });
 
+test("session menu folds prompts and prompt commands still insert after extraction", async t => {
+  const f = await fixture(t, JSON.stringify({ surfaces: ["sidebar"], focused: false }));
+  f.extraCommands.push({ name: "retro", source: "prompt", sourceInfo: { path: "retro.md", scope: "user" } });
+  await f.emit("agent_settled");
+  f.choices.push("Expand sidebar section");
+  await f.commands.get("slate")!.handler("session prompts", f.ctx);
+  assert.equal(railOf(f).getFolds().prompts, true);
+  const saved = JSON.parse(await readFile(f.path, "utf8"));
+  assert.equal(saved.sidebarSections.prompts, true, "prompts fold persists through the menu path");
+  f.choices.push("/retro · prompt");
+  await f.commands.get("slate")!.handler("session commands", f.ctx);
+  assert.equal(f.draft(), "existing draft/retro ", "prompt commands survive the commands/prompts split");
+});
+
 function railOf(f: Awaited<ReturnType<typeof fixture>>): Sidebar {
   return (Reflect.get(Reflect.get(f.tui, "layoutRoot"), "entries") as Array<{ component: Sidebar }>)[1]!.component;
 }
