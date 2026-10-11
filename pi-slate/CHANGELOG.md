@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Working indicator styles: `/slate progress` picks the composer-border animation — `waves` (default) or `dna-helix`, a turning double helix with backbone crossings, same slot and size
+
 ## 0.1.14
 
 A cleaner, theme-consistent workbench.

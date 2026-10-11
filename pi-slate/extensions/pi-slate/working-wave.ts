@@ -5,6 +5,8 @@
  * in place (block heights travel across seven columns); it never moves.
  */
 
+import { helixFrame } from "./working-helix.ts";
+
 const BLOCKS = "▁▂▃▄▅▆▇█";
 const COLUMNS = 7;
 
@@ -23,6 +25,23 @@ export function waveFrame(tick: number): string {
     frame += BLOCKS[Math.round(3.5 + 3.5 * Math.sin(((x - step) * Math.PI) / 4))];
   }
   return frame;
+}
+
+export type ProgressStyle = "waves" | "dna-helix";
+
+let style: ProgressStyle = "waves";
+
+export function setProgressStyle(next: ProgressStyle): void {
+  style = next;
+}
+
+export function progressStyle(): ProgressStyle {
+  return style;
+}
+
+/** Frame for the active progress indicator; same slot and width either way. */
+export function progressFrame(tick: number): string {
+  return style === "dna-helix" ? helixFrame(tick) : waveFrame(tick);
 }
 
 // Shared animation state: index.ts advances it on a timer, the composer reads
