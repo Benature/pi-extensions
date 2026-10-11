@@ -10,7 +10,7 @@ import {
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
 import { footerVisibility, modelStatusLabel, type ModelDisplay } from "./layout.ts";
-import { isTrainActive, trainFrame, trainTick } from "./working-train.ts";
+import { isWaveActive, waveFrame, waveTick } from "./working-wave.ts";
 
 export function composerPaddingX(density: "comfortable" | "compact"): number {
   return density === "compact" ? 2 : 4;
@@ -395,13 +395,13 @@ export class ComposerEditor extends CustomEditor {
     if (width <= 2) return super.renderTopBorder(width, hiddenLineCount);
     const src = this.source();
     const paint = (text: string) => this.borderColor(text);
-    // While the train runs it owns the working-status slot: a tiny locomotive
-    // animating in place where the italic working word used to sit.
+    // While the wave runs it owns the working-status slot: a tiny sine wave
+    // rolling in place where the italic working word used to sit.
     const renderStatus = this.embedWorkingStatus
       ? (statusWidth: number) => {
           const kind = this.statusIndicator?.kind;
-          if (isTrainActive() && (kind === undefined || kind === "working")) {
-            return src.theme.italic(src.theme.fg("accent", trainFrame(trainTick())));
+          if (isWaveActive() && (kind === undefined || kind === "working")) {
+            return src.theme.italic(src.theme.fg("accent", waveFrame(waveTick())));
           }
           return composerStatusLabel(this.statusIndicator, src.theme, statusWidth);
         }

@@ -36,7 +36,7 @@ import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
-import { advanceTrain, isTrainActive, setTrainActive } from "./working-train.ts";
+import { advanceWave, isWaveActive, setWaveActive } from "./working-wave.ts";
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
@@ -328,7 +328,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     thinkingFold.stop();
     tokenRate.dispose();
     workingWord = undefined;
-    stopTrain();
+    stopWave();
     if (loaded.error) ctx.ui.notify(loaded.error, "warning");
     if (ctx.mode !== "tui") return;
     if (owns("tool-cards")) {
@@ -528,32 +528,32 @@ export default function piSlate(pi: ExtensionAPI): void {
 
   const workingWords = createWordPicker();
   let workingWord: string | undefined;
-  let trainTimer: ReturnType<typeof setInterval> | undefined;
-  // The train rides the Slate composer's border; without a live custom editor
+  let waveTimer: ReturnType<typeof setInterval> | undefined;
+  // The wave rolls in the Slate composer border; without a live custom editor
   // the working status falls back to the classic word.
-  const trainHost = (ctx: ExtensionContext | undefined): ctx is ExtensionContext =>
+  const waveHost = (ctx: ExtensionContext | undefined): ctx is ExtensionContext =>
     Boolean(ctx && ctx.mode === "tui" && editorActive() && activeEditor);
-  const stopTrain = (): void => {
-    if (trainTimer !== undefined) { clearInterval(trainTimer); trainTimer = undefined; }
-    if (!isTrainActive()) return;
-    setTrainActive(false);
+  const stopWave = (): void => {
+    if (waveTimer !== undefined) { clearInterval(waveTimer); waveTimer = undefined; }
+    if (!isWaveActive()) return;
+    setWaveActive(false);
     requestRender();
   };
-  const startTrain = (ctx: ExtensionContext): void => {
-    if (trainTimer !== undefined) { clearInterval(trainTimer); trainTimer = undefined; }
-    setTrainActive(true);
+  const startWave = (ctx: ExtensionContext): void => {
+    if (waveTimer !== undefined) { clearInterval(waveTimer); waveTimer = undefined; }
+    setWaveActive(true);
     try {
-      // Blank the indicator text; the composer border renders the train instead.
+      // Blank the indicator text; the composer border renders the wave instead.
       ctx.ui.setWorkingMessage("");
       requestRender();
-    } catch { setTrainActive(false); return; }
+    } catch { setWaveActive(false); return; }
     const timer = setInterval(() => {
       const current = currentContext;
-      if (!trainHost(current)) { stopTrain(); return; }
-      try { advanceTrain(); requestRender(); } catch { stopTrain(); }
+      if (!waveHost(current)) { stopWave(); return; }
+      try { advanceWave(); requestRender(); } catch { stopWave(); }
     }, 333);
     timer.unref();
-    trainTimer = timer;
+    waveTimer = timer;
   };
   const syncThinkingStatus = (): void => {
     const ctx = currentContext;
@@ -576,9 +576,9 @@ export default function piSlate(pi: ExtensionAPI): void {
     if (owns("sidebar") && ctx.mode === "tui") { turnStartedAt = Date.now(); syncSidebar(ctx); }
     if (!editorActive()) return;
     thinkingFold.stop();
-    if (trainHost(ctx)) {
+    if (waveHost(ctx)) {
       workingWord = undefined;
-      startTrain(ctx);
+      startWave(ctx);
       return;
     }
     workingWord = workingWords.next();
@@ -587,7 +587,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   pi.on("agent_end", (_event, ctx) => {
     currentContext = ctx;
     thinkingFold.stop();
-    stopTrain();
+    stopWave();
     if (turnStartedAt !== undefined) { lastTurnMs = Date.now() - turnStartedAt; turnStartedAt = undefined; }
     if (owns("sidebar")) { background.clearShells(); sidebar.setTasks(background.snapshot()); }
     syncSidebar(ctx);
@@ -678,7 +678,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   pi.on("session_shutdown", (_event, ctx) => {
     sessionEpoch += 1;
     workingWord = undefined;
-    stopTrain();
+    stopWave();
     thinkingFold.stop();
     tokenRate.dispose();
     images?.dispose();

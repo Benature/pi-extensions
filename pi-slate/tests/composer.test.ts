@@ -20,7 +20,7 @@ import {
   scrollComposerByLines,
 } from "../extensions/pi-slate/composer.ts";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { advanceTrain, setTrainActive, TRAIN_PERIOD } from "../extensions/pi-slate/working-train.ts";
+import { advanceWave, setWaveActive, WAVE_PERIOD } from "../extensions/pi-slate/working-wave.ts";
 import { KeybindingsManager } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/keybindings.js";
 
 const theme = {
@@ -269,7 +269,7 @@ test("composer editor renders PID only when enabled and hides it if it cannot fi
   assert.doesNotMatch(stripVTControlCharacters(editor.render(80)[0] ?? ""), /PID-/);
 });
 
-test("working train sits in the composer top border without growing the frame", () => {
+test("working wave sits in the composer top border without growing the frame", () => {
   const borderTheme = { fg: (_name: string, text: string) => text, italic: (text: string) => text } as Theme;
   const editor = new ComposerEditor(
     { terminal: { rows: 24, columns: 80 }, requestRender() {} } as TUI,
@@ -282,25 +282,25 @@ test("working train sits in the composer top border without growing the frame", 
     { kind: "working", renderInBorder: () => "" } as unknown as Parameters<ComposerEditor["setWorkingStatusIndicator"]>[0],
   );
   try {
-    setTrainActive(false);
+    setWaveActive(false);
     const idle = editor.render(80);
-    assert.ok(!idle[0]!.includes("=>"), "idle border carries no train");
-    setTrainActive(true);
-    for (let tick = 0; tick < TRAIN_PERIOD * 10; tick++) {
+    assert.doesNotMatch(idle[0]!, /[▁▂▃▄▅▆▇█]/, "idle border carries no wave");
+    setWaveActive(true);
+    for (let tick = 0; tick < WAVE_PERIOD * 10; tick++) {
       const lines = editor.render(80);
       assert.equal(lines.length, idle.length, `tick ${tick}: frame never grows`);
       assert.equal(visibleWidth(lines[0]!), 80, `tick ${tick}: border keeps its width`);
-      assert.match(lines[0]!, /^╭── [o@]-[o@]==[.oO]> /, `tick ${tick}: train sits in the word slot`);
-      advanceTrain();
+      assert.match(lines[0]!, /^╭── [▁▂▃▄▅▆▇█]{7} /, `tick ${tick}: wave sits in the word slot`);
+      advanceWave();
     }
-    setTrainActive(false);
-    assert.deepEqual(editor.render(80), idle, "inactive border is byte-identical to before the train");
+    setWaveActive(false);
+    assert.deepEqual(editor.render(80), idle, "inactive border is byte-identical to before the wave");
   } finally {
-    setTrainActive(false);
+    setWaveActive(false);
   }
 });
 
-test("non-working statuses still render while the train runs", () => {
+test("non-working statuses still render while the wave runs", () => {
   const borderTheme = { fg: (_name: string, text: string) => text, italic: (text: string) => text } as Theme;
   const editor = new ComposerEditor(
     { terminal: { rows: 24, columns: 80 }, requestRender() {} } as TUI,
@@ -312,13 +312,13 @@ test("non-working statuses still render while the train runs", () => {
   editor.setWorkingStatusIndicator(
     { kind: "retry", renderInBorder: () => "Retrying (1/3) in 5s..." } as unknown as Parameters<ComposerEditor["setWorkingStatusIndicator"]>[0],
   );
-  setTrainActive(true);
+  setWaveActive(true);
   try {
     const top = editor.render(80)[0] ?? "";
-    assert.ok(top.includes("Retrying (1/3)"), "retry status is never hidden by the train");
-    assert.ok(!top.includes("=>"), "retry status keeps the train off the border");
+    assert.ok(top.includes("Retrying (1/3)"), "retry status is never hidden by the wave");
+    assert.doesNotMatch(top, /[▁▂▃▄▅▆▇█]/, "retry status keeps the wave off the border");
   } finally {
-    setTrainActive(false);
+    setWaveActive(false);
   }
 });
 
