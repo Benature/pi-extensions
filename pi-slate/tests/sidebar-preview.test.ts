@@ -181,6 +181,8 @@ test("prompts section folds, scrolls, inspects and shows none when empty", () =>
   const expanded = plain(sidebar.render(40));
   assert(expanded.some(line => line.includes("⌄ Prompts · 6")));
   assert(expanded.some(line => line.includes("prompt-0")) && expanded.some(line => line.includes("prompt-2")));
+  const promptRow = expanded.find(line => line.includes("prompt-0"))!;
+  assert.equal(promptRow.trim(), "prompt-0", "prompt rows carry no redundant right-aligned source column");
   assert(!expanded.some(line => line.includes("prompt-3")), "only three visible");
   assert(expanded.some(line => line.includes("1–3 / 6")));
   sidebar.handleMouse(mouse(row(sidebar, "prompt-0")));

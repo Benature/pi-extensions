@@ -304,7 +304,8 @@ export class Sidebar implements Component {
           action: () => this.actions?.inspect?.(skill.name, `${skill.loaded ? "Instructions observed loaded on this branch" : "Available; instructions not observed loaded"}\nSource: ${skill.source}\n${skill.path}`) });
       } else if (list === "prompts") {
         const prompt = this.resources.prompts[i]!;
-        rows.push({ text: this.pair(this.paint("muted", sidebarText(prompt.name)), this.paint("dim", prompt.source), width), list, item: i,
+        // Name only: the source column repeated "prompt" on every row.
+        rows.push({ text: this.paint("muted", sidebarText(prompt.name)), list, item: i,
           action: () => this.actions?.inspect?.(prompt.name, `${prompt.description || "No description"}\nSource: ${prompt.source}\nInvoke as /${prompt.name}`) });
       }
     }
