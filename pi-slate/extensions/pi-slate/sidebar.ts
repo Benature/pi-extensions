@@ -232,12 +232,21 @@ export class Sidebar implements Component {
   private headerRows(width: number): Row[] {
     const s = this.session;
     const percent = s.percent !== null && Number.isFinite(s.percent) ? s.percent : null;
-    const filled = percent === null ? 0 : Math.round(Math.max(0, Math.min(100, percent)) * width / 100);
     const tone = percent !== null && percent >= 80 ? "warning" : "success";
     const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · pid ${s.pid}`;
     const occupancy = `${s.estimated ? "~" : ""}${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}`
       + ` · ${sidebarCost(s.usage.cost)} · ${sidebarRate(s.rate)}`;
-    const context = this.pair("Context", percent === null ? "—%" : `${Math.round(percent)}%`, width);
+    const meter = ((): string => {
+      const pct = percent === null ? "—%" : `${Math.round(percent)}%`;
+      if (width < visibleWidth(pct) + 3) return this.paint("muted", truncateToWidth(pct, width, "…"));
+      const suffix = ` │ ${pct}`;
+      const barWidth = Math.max(0, width - "Context ".length - visibleWidth(suffix));
+      const filledCells = percent === null ? 0 : Math.round(Math.max(0, Math.min(100, percent)) * barWidth / 100);
+      const label = truncateToWidth("Context ", Math.max(0, width - barWidth - visibleWidth(suffix)), "…");
+      return this.paint("muted", label)
+        + (filledCells ? this.paint(tone, "█".repeat(filledCells)) : "")
+        + this.paint("dim", "░".repeat(barWidth - filledCells) + suffix);
+    })();
     const branchUsage = () => this.actions?.inspect?.("Branch usage", this.sessionDetails());
     const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
     return [
@@ -247,8 +256,7 @@ export class Sidebar implements Component {
       { text: "" },
       { text: this.pair(this.paint("text", sidebarText(s.model)), this.paint("dim", sidebarText(s.thinking)), width) },
       { text: "" },
-      { text: this.paint("muted", context) },
-      { text: this.paint(tone, "█".repeat(filled)) + this.paint("dim", "─".repeat(width - filled)) },
+      { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
       { text: this.pair(stat("in", formatCompactTokenCount(s.usage.input)), stat("cache", formatCompactTokenCount(s.usage.cacheRead)), width), action: branchUsage },
@@ -296,11 +304,12 @@ export class Sidebar implements Component {
           action: () => this.actions?.inspect?.(skill.name, `${skill.loaded ? "Instructions observed loaded on this branch" : "Available; instructions not observed loaded"}\nSource: ${skill.source}\n${skill.path}`) });
       } else if (list === "prompts") {
         const prompt = this.resources.prompts[i]!;
-        rows.push({ text: this.pair(this.paint("muted", sidebarText(prompt.name)), this.paint("dim", prompt.source), width), list, item: i,
+        // Name only: the source column repeated "prompt" on every row.
+        rows.push({ text: this.paint("muted", sidebarText(prompt.name)), list, item: i,
           action: () => this.actions?.inspect?.(prompt.name, `${prompt.description || "No description"}\nSource: ${prompt.source}\nInvoke as /${prompt.name}`) });
       }
     }
-    if (items.length > visible) rows.push({ text: this.paint("dim", `${start + 1}–${Math.min(items.length, start + visible)} / ${items.length} · scroll ↕`), list });
+    if (items.length > visible) rows.push({ text: this.paint("dim", `${start + 1}–${Math.min(items.length, start + visible)} / ${items.length}`), list });
     return rows;
   }
   private taskRows(width: number, height: number): Row[] {

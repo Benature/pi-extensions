@@ -80,17 +80,60 @@ test("usage is a single stable label/value lane; full accounting stays in detail
   assert.match(sidebar.sessionDetails(), /~82 tokens\/sec/);
 });
 
-test("native blend header is 14 rows matching the slot constant, ending in the hairline", () => {
+test("native blend header is 13 rows matching the slot constant, ending in the hairline", () => {
   const { sidebar } = fixture();
-  assert.equal(sessionSidebarSlots(60, 0, false).header, 14);
-  assert.equal(sessionSidebarSlots(30, 0, false).header, 14);
+  assert.equal(sessionSidebarSlots(60, 0, false).header, 13);
+  assert.equal(sessionSidebarSlots(30, 0, false).header, 13);
   assert.equal(sessionSidebarSlots(29, 0, false).header, 6, "small-terminal fallback unchanged");
   const lines = plain(sidebar.render(40));
   const hairline = lines.findIndex(line => /^─+$/.test(line));
-  assert.equal(hairline, 13, "hairline closes a 14-row header");
-  assert(lines[8]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
-  assert(lines[10]!.includes("in 61.4k") && lines[10]!.includes("cache 48k"));
-  assert(lines[11]!.includes("out 876") && lines[11]!.includes("uncached 7.3k"));
+  assert.equal(hairline, 12, "hairline closes a 13-row header");
+  assert(/^Context [█░]+ │ 16%$/.test(lines[6]!), "single context meter row");
+  assert(lines[7]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
+  assert(lines[9]!.includes("in 61.4k") && lines[9]!.includes("cache 48k"));
+  assert(lines[10]!.includes("out 876") && lines[10]!.includes("uncached 7.3k"));
+});
+
+test("context meter fills the rail with a shaded track and degrades gracefully when narrow", () => {
+  const { sidebar } = fixture();
+  const meter = (width: number) => {
+    const line = plain(sidebar.render(width)).find(line => line.startsWith("Context") || line.endsWith("%"));
+    assert(line, `meter at width ${width}`); assert(!line.includes("─"), "meter never uses the divider glyph"); return line;
+  };
+  assert.equal(meter(80), `Context ${"█".repeat(10)}${"░".repeat(54)} │ 16%`);
+  assert.equal(meter(40), `Context ${"█".repeat(4)}${"░".repeat(20)} │ 16%`);
+  assert.equal(meter(28), `Context ${"█".repeat(2)}${"░".repeat(10)} │ 16%`);
+  sidebar.setSession({ ...session, percent: null });
+  assert.equal(meter(40), `Context ${"░".repeat(25)} │ —%`, "null percent is an empty track");
+  sidebar.setSession({ ...session, percent: 0 });
+  assert.equal(meter(40), `Context ${"░".repeat(25)} │ 0%`);
+  sidebar.setSession({ ...session, percent: 100 });
+  assert.equal(meter(40), `Context ${"█".repeat(23)} │ 100%`);
+  sidebar.setSession(session);
+  for (const width of [8, 12, 20]) {
+    const line = meter(width);
+    assert(visibleWidth(line) <= width - 2, `bounded at ${width}`);
+    assert(line.includes("16%"), `percent survives at ${width}`);
+    if (width < 16) assert(!line.includes("Context"), `label yields before the percent at ${width}`);
+  }
+  for (const line of plain(sidebar.render(3))) assert(visibleWidth(line) <= 1, "degenerate rail stays bounded");
+});
+
+test("context meter fill shifts to the warning tone at 80% and above", () => {
+  const codes: Record<string, number> = { muted: 90, dim: 2, success: 32, warning: 33, text: 37 };
+  const toneTheme = { fg: (tone: string, text: string) => `\x1b[${codes[tone] ?? 0}m${text}\x1b[0m`, bold: (text: string) => text } as Theme;
+  const { sidebar } = fixture();
+  sidebar.setThemeProvider(() => toneTheme); sidebar.invalidate();
+  const meterLine = () => sidebar.render(40).find(line => stripAnsi(line).includes("Context"))!;
+  for (const [percent, code] of [[0, 32], [79, 32], [80, 33], [100, 33]] as const) {
+    sidebar.setSession({ ...session, percent }); sidebar.invalidate();
+    const line = meterLine();
+    const fill = line.match(/█+/)?.[0] ?? "";
+    if (fill) assert(line.includes(`\x1b[${code}m${fill}\x1b[0m`), `${percent}% fills with code ${code}`);
+    assert(line.includes("\x1b[2m"), "track and separator stay dim");
+  }
+  sidebar.setSession({ ...session, percent: null }); sidebar.invalidate();
+  assert(!/█/.test(stripAnsi(meterLine())), "null percent fills nothing");
 });
 
 test("occupancy and stat rows keep the branch usage inspect action; nulls render as dashes", () => {
@@ -138,8 +181,10 @@ test("prompts section folds, scrolls, inspects and shows none when empty", () =>
   const expanded = plain(sidebar.render(40));
   assert(expanded.some(line => line.includes("⌄ Prompts · 6")));
   assert(expanded.some(line => line.includes("prompt-0")) && expanded.some(line => line.includes("prompt-2")));
+  const promptRow = expanded.find(line => line.includes("prompt-0"))!;
+  assert.equal(promptRow.trim(), "prompt-0", "prompt rows carry no redundant right-aligned source column");
   assert(!expanded.some(line => line.includes("prompt-3")), "only three visible");
-  assert(expanded.some(line => line.includes("1–3 / 6 · scroll ↕")));
+  assert(expanded.some(line => line.includes("1–3 / 6")));
   sidebar.handleMouse(mouse(row(sidebar, "prompt-0")));
   assert.deepEqual(inspected, ["prompt-0"]);
   assert(texts[0]!.includes("Prompt 0 description") && texts[0]!.includes("Source: prompt"));

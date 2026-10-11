@@ -4,7 +4,7 @@ export type SidebarSlots = { header: number; middle: number; tasks: number; imag
 export function sessionSidebarSlots(height: number, taskCount: number, hasImage: boolean): SidebarSlots {
   const rows = Math.max(0, Math.floor(height));
   const footer = rows >= 12 ? 1 : 0;
-  const header = Math.min(rows >= 30 ? 14 : 6, rows - footer);
+  const header = Math.min(rows >= 30 ? 13 : 6, rows - footer);
   let remaining = rows - header - footer;
   const middleMin = Math.min(6, remaining);
   const taskWant = taskCount ? (rows < 30 ? 1 : 2) + Math.min(rows < 30 ? 2 : 3, taskCount) * 2 : 0;

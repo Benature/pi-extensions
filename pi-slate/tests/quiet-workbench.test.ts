@@ -84,6 +84,32 @@ test("growing usage and money keep a stable label lane and value edge with the r
   sidebar.dispose();
 });
 
+test("context meter keeps a shaded track and dim separator with the real theme", () => {
+  const sidebar = new Sidebar(() => 10000);
+  sidebar.attach({ terminal: { rows: 50, columns: 140 }, requestRender() {} } as unknown as TUI, theme);
+  assert.equal(sessionSidebarSlots(50, 0, false).header, 13, "meter merged the old context pair and block bar rows");
+  for (const width of [28, 40, 80]) {
+    sidebar.setSession(session);
+    const rows = sidebar.render(width);
+    const meter = rows.find(row => stripVTControlCharacters(row).includes("Context"))!;
+    assert(meter, `meter at ${width}`);
+    assert.match(stripVTControlCharacters(meter), /^│ Context [█░]+ │ 11%$/, `structure at ${width}`);
+    assert(!stripVTControlCharacters(meter).includes("─"), "meter track is never the divider glyph");
+    assert.equal(visibleWidth(meter), width);
+    const track = stripVTControlCharacters(meter).match(/░+/)![0];
+    const dimOpen = theme.fg("dim", "").replace(/\u001b\[39m$/, "");
+    assert(meter.includes(`${dimOpen}${track}`), "empty cells use the dim shaded track");
+  }
+  sidebar.setSession({ ...session, percent: 83 });
+  const warning = sidebar.render(40);
+  const fill = stripVTControlCharacters(warning.find(row => stripVTControlCharacters(row).includes("Context"))!).match(/█+/)![0];
+  assert(warning.some(row => row.includes(theme.fg("warning", fill))), "fill shifts to the warning tone at >= 80%");
+  sidebar.setSession({ ...session, percent: null });
+  const empty = stripVTControlCharacters(sidebar.render(40).find(row => stripVTControlCharacters(row).includes("Context"))!);
+  assert(empty.includes("░") && !empty.includes("█") && empty.endsWith("—%"), "null percent is an empty track with a dash");
+  sidebar.dispose();
+});
+
 test("quiet editor avoids duplicate identity/model and restores compact facts without losing its draft", () => {
   const source: ComposerSource = { project: "project", branch: "feat/workbench", model: { id: "sample-model", provider: "sample" },
     thinking: "medium", footer: "standard", theme, paddingX: 4, workspaceHeader: true, dashboardVisible: true,
