@@ -11,16 +11,17 @@ export type SidebarUsage = {
 };
 export type SidebarSkill = { name: string; path: string; source: string; loaded: boolean };
 export type SidebarCommand = { name: string; source: string; description?: string };
+export type SidebarPrompt = { name: string; source: string; description?: string };
 export type SidebarMcp = { name: string; enabled: boolean | null; source: string };
-export type SidebarResources = { skills: SidebarSkill[]; commands: SidebarCommand[]; mcp: SidebarMcp[]; mcpError?: string };
+export type SidebarResources = { skills: SidebarSkill[]; commands: SidebarCommand[]; prompts: SidebarPrompt[]; mcp: SidebarMcp[]; mcpError?: string };
 export type SidebarSession = {
   id: string; name: string; pid: number; cwd: string; model: string; thinking: string;
   tokens: number | null; percent: number | null; contextWindow: number | null;
   estimated: boolean; rate: number | null; startedAt: number; lastTurnMs: number | null;
   working: boolean; turns: number; messages: number; usage: SidebarUsage;
 };
-export type SidebarFolds = { mcp: boolean; skills: boolean };
-export const DEFAULT_SIDEBAR_FOLDS: SidebarFolds = { mcp: false, skills: false };
+export type SidebarFolds = { mcp: boolean; skills: boolean; prompts: boolean };
+export const DEFAULT_SIDEBAR_FOLDS: SidebarFolds = { mcp: false, skills: false, prompts: false };
 
 /** Display-only strings must never inject terminal commands or extra rows. */
 export function sidebarText(value: unknown, max = 512): string {
@@ -30,7 +31,7 @@ export function sidebarText(value: unknown, max = 512): string {
 }
 export function parseSidebarFolds(value: unknown): SidebarFolds {
   const raw = record(value);
-  return { mcp: raw?.mcp === true, skills: raw?.skills === true };
+  return { mcp: raw?.mcp === true, skills: raw?.skills === true, prompts: raw?.prompts === true };
 }
 export function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -90,19 +91,23 @@ export function sidebarMessageCounts(entries: readonly SessionEntry[]): { turns:
   return { turns, messages };
 }
 
-export function commandResources(commands: readonly SlashCommandInfo[]): { skills: SidebarSkill[]; commands: SidebarCommand[] } {
+export function commandResources(commands: readonly SlashCommandInfo[]): { skills: SidebarSkill[]; commands: SidebarCommand[]; prompts: SidebarPrompt[] } {
   const skills = new Map<string, SidebarSkill>();
   const result = new Map<string, SidebarCommand>();
+  const prompts = new Map<string, SidebarPrompt>();
   for (const command of commands) {
     if (command.source === "skill") {
       const path = command.sourceInfo?.path;
       if (path) skills.set(resolve(path), { name: sidebarText(command.name.replace(/^skill:/, "")), path: resolve(path), source: sidebarText(command.sourceInfo.scope), loaded: false });
+    } else if (command.source === "prompt") {
+      const name = sidebarText(command.name);
+      if (name) prompts.set(name, { name, source: command.source, description: sidebarText(command.description) });
     } else {
       const name = sidebarText(command.name);
       if (name) result.set(name, { name, source: command.source, description: sidebarText(command.description) });
     }
   }
-  return { skills: [...skills.values()], commands: [...result.values()] };
+  return { skills: [...skills.values()], commands: [...result.values()], prompts: [...prompts.values()] };
 }
 
 function skillReadPath(tool: string, args: unknown, cwd: string): string | undefined {

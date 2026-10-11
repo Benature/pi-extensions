@@ -201,7 +201,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   const mcpFiles = new SidebarMcpFiles();
   const mcpHost = loadSidebarMcpHost(getPackageDir(), VERSION);
   const background = new BackgroundTasks();
-  let resources: SidebarResources = { skills: [], commands: [], mcp: [] };
+  let resources: SidebarResources = { skills: [], commands: [], prompts: [], mcp: [] };
   let sessionStartedAt = 0;
   let turnStartedAt: number | undefined;
   let lastTurnMs: number | null = null;
@@ -287,7 +287,8 @@ export default function piSlate(pi: ExtensionAPI): void {
     const commands = pi.getCommands();
     skills.discoverCommands(commands);
     const registered = typeof pi.getMcpServers === "function" ? pi.getMcpServers() : [];
-    resources = { commands: commandResources(commands).commands, skills: skills.snapshot(),
+    const catalog = commandResources(commands);
+    resources = { commands: catalog.commands, prompts: catalog.prompts, skills: skills.snapshot(),
       ...mcpFiles.snapshot(getAgentDir(), ctx.cwd, typeof ctx.isProjectTrusted === "function" && ctx.isProjectTrusted(), registered) };
     if (owns("sidebar") && !sidebarYielded) sidebar.setResources(resources);
   };
@@ -906,7 +907,7 @@ export default function piSlate(pi: ExtensionAPI): void {
         if (item) inspect(ctx, item.name, `${item.loaded ? "Instructions observed loaded on this branch" : "Available; not observed loaded"}\n${item.path}`);
       }
     } else if (section === "commands") {
-      const items = [...resources.commands];
+      const items = [...resources.commands, ...resources.prompts];
       const labels = items.map(item => `/${item.name} · ${item.source}`);
       if (!labels.length) { ctx.ui.notify("No extension or prompt commands available", "info"); return; }
       const choice = await pickSidebarItem(ctx, "Insert command (does not execute)", labels);

@@ -16,6 +16,7 @@ const resources: SidebarResources = {
   mcp: Array.from({ length: 7 }, (_, i) => ({ name: `server-${i}`, enabled: i !== 2, source: "global" })),
   skills: Array.from({ length: 6 }, (_, i) => ({ name: `skill-${i}`, path: `/tmp/skills/${i}/SKILL.md`, loaded: i === 0, source: "project" })),
   commands: Array.from({ length: 6 }, (_, i) => ({ name: `run-${i}`, source: "extension" })),
+  prompts: Array.from({ length: 6 }, (_, i) => ({ name: `prompt-${i}`, source: "prompt", description: `Prompt ${i} description` })),
 };
 function fixture(rows = 60) {
   let clock = 4000; let renders = 0;
@@ -42,9 +43,9 @@ function task(i: number): BackgroundTask {
 test("quiet session rail merges usage into context and hides empty shelves", () => {
   const { sidebar } = fixture();
   const lines = plain(sidebar.render(80));
-  for (const label of ["SESSION", "Sidebar redesign", "pid 8421", "sonnet-4.6", "16%", "31.6k / 200k", "Input", "Output", "Cache", "Uncached", "Cost", "Rate", "MCP · 6 enabled", "Skills · 1 loaded"])
+  for (const label of ["SESSION", "Sidebar redesign", "pid 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "in 61.4k", "out 876", "cache 48k", "uncached 7.3k", "MCP · 6 enabled", "Skills · 1 loaded", "Prompts · 6"])
     assert(lines.some(line => line.includes(label)), label);
-  for (const label of ["Stats", "Tokens · branch", "Commands ·", "Tasks", "Preview", "no selection", "/run-0"])
+  for (const label of ["Stats", "Tokens · branch", "Commands ·", "Tasks", "Preview", "no selection", "/run-0", "prompt-0"])
     assert(!lines.some(line => line.includes(label)), label);
   assert.match(sidebar.sessionDetails(), /Cache read: 48k/);
 });
@@ -71,10 +72,35 @@ test("usage is a single stable label/value lane; full accounting stays in detail
   const { sidebar } = fixture();
   for (const width of [18, 28, 40, 80]) {
     const text = plain(sidebar.render(width)).join("\n");
-    for (const value of ["pid 8421", "Input", "61.4k", "Output", "876", "Cache", "48k", "Uncached", "7.3k", "$0.12", "~82/s"]) assert(text.includes(value), value);
+    assert(text.includes("pid 8421"));
+    if (width >= 28) for (const value of ["61.4k", "876", "48k", "7.3k", "$0.12"]) assert(text.includes(value), value);
+    if (width >= 40) assert(text.includes("~82/s")); // Narrow rails truncate the merged occupancy tail first.
   }
   assert.match(sidebar.sessionDetails(), /Cache read: 48k · Cache write: 6.1k/);
   assert.match(sidebar.sessionDetails(), /~82 tokens\/sec/);
+});
+
+test("native blend header is 14 rows matching the slot constant, ending in the hairline", () => {
+  const { sidebar } = fixture();
+  assert.equal(sessionSidebarSlots(60, 0, false).header, 14);
+  assert.equal(sessionSidebarSlots(30, 0, false).header, 14);
+  assert.equal(sessionSidebarSlots(29, 0, false).header, 6, "small-terminal fallback unchanged");
+  const lines = plain(sidebar.render(40));
+  const hairline = lines.findIndex(line => /^─+$/.test(line));
+  assert.equal(hairline, 13, "hairline closes a 14-row header");
+  assert(lines[8]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
+  assert(lines[10]!.includes("in 61.4k") && lines[10]!.includes("cache 48k"));
+  assert(lines[11]!.includes("out 876") && lines[11]!.includes("uncached 7.3k"));
+});
+
+test("occupancy and stat rows keep the branch usage inspect action; nulls render as dashes", () => {
+  const { sidebar } = fixture(); const inspected: string[] = [];
+  sidebar.setActions({ copy() {}, openFile() {}, inspect: title => inspected.push(title) });
+  sidebar.setSession({ ...session, estimated: true, usage: { input: null, output: null, total: null, cacheRead: null, cacheWrite: null, cost: null } });
+  sidebar.handleMouse(mouse(row(sidebar, "~31.6k / 200k · — · ~82/s")));
+  sidebar.handleMouse(mouse(row(sidebar, "in —")));
+  sidebar.handleMouse(mouse(row(sidebar, "uncached —")));
+  assert.deepEqual(inspected, ["Branch usage", "Branch usage", "Branch usage"]);
 });
 
 test("a 24-row terminal still renders an image body; a very short one prioritizes tasks", () => {
@@ -95,10 +121,34 @@ test("foldable MCP and Skills sections persist independently and keep counts vis
   assert(plain(sidebar.render(40)).some(line => line.includes("server-0")));
   sidebar.handleMouse(mouse(row(sidebar, "Skills")));
   assert.equal(sidebar.getFolds().skills, true);
-  assert.deepEqual(saved, [{ mcp: true, skills: false }, { mcp: true, skills: true }]);
+  assert.deepEqual(saved, [{ mcp: true, skills: false, prompts: false }, { mcp: true, skills: true, prompts: false }]);
   sidebar.handleMouse(mouse(row(sidebar, "MCP")));
   assert(!plain(sidebar.render(40)).some(line => line.includes("server-0")));
   assert(plain(sidebar.render(40)).some(line => line.includes("6 enabled")));
+});
+
+test("prompts section folds, scrolls, inspects and shows none when empty", () => {
+  const { sidebar } = fixture(); const inspected: string[] = []; const texts: string[] = [];
+  sidebar.setActions({ copy() {}, openFile() {}, inspect: (title, text) => { inspected.push(title); texts.push(text); } });
+  const collapsed = plain(sidebar.render(40));
+  assert(collapsed.some(line => line.includes("› Prompts · 6")), "collapsed heading keeps the count");
+  assert(!collapsed.some(line => line.includes("prompt-0")));
+  sidebar.handleMouse(mouse(row(sidebar, "Prompts")));
+  assert.equal(sidebar.getFolds().prompts, true);
+  const expanded = plain(sidebar.render(40));
+  assert(expanded.some(line => line.includes("⌄ Prompts · 6")));
+  assert(expanded.some(line => line.includes("prompt-0")) && expanded.some(line => line.includes("prompt-2")));
+  assert(!expanded.some(line => line.includes("prompt-3")), "only three visible");
+  assert(expanded.some(line => line.includes("1–3 / 6 · scroll ↕")));
+  sidebar.handleMouse(mouse(row(sidebar, "prompt-0")));
+  assert.deepEqual(inspected, ["prompt-0"]);
+  assert(texts[0]!.includes("Prompt 0 description") && texts[0]!.includes("Source: prompt"));
+  sidebar.handleMouse(mouse(row(sidebar, "prompt-0"), { type: "wheel", wheelDelta: -2 }));
+  const scrolled = plain(sidebar.render(40));
+  assert(scrolled.some(line => line.includes("prompt-3")));
+  assert(!scrolled.some(line => line.includes("prompt-0")));
+  sidebar.setResources({ ...resources, prompts: [] });
+  assert(plain(sidebar.render(40)).some(line => line.trim() === "none"));
 });
 
 test("a failed preference save cannot change the visible fold state", () => {
@@ -109,7 +159,7 @@ test("a failed preference save cannot change the visible fold state", () => {
 });
 
 test("MCP is limited to five rows; list wheel scroll does not move the session header", () => {
-  const { sidebar } = fixture(); sidebar.setFolds({ mcp: true, skills: true });
+  const { sidebar } = fixture(); sidebar.setFolds({ mcp: true, skills: true, prompts: false });
   const before = plain(sidebar.render(40));
   assert.equal(before.filter(line => /server-\d/.test(line)).length, 5);
   assert(!before.some(line => line.includes("server-5")));
@@ -122,7 +172,7 @@ test("MCP is limited to five rows; list wheel scroll does not move the session h
 });
 
 test("skill lists scroll and clamp; the rail does not list commands", () => {
-  const { sidebar } = fixture(); sidebar.setFolds({ mcp: false, skills: true });
+  const { sidebar } = fixture(); sidebar.setFolds({ mcp: false, skills: true, prompts: false });
   sidebar.handleMouse(mouse(row(sidebar, "skill-0"), { type: "wheel", wheelDelta: -2 }));
   assert(plain(sidebar.render(40)).some(line => line.includes("skill-4")));
   assert(!plain(sidebar.render(40)).some(line => line.includes("/run-0")));
@@ -184,14 +234,14 @@ test("image double-click uses native clickCount or the fallback timer", () => {
 
 test("short terminals collapse the image body, keep tasks visible, and scroll middle overflow", () => {
   const { sidebar } = fixture(18); sidebar.setView(image()); sidebar.setTasks([task(0), task(1), task(2)]);
-  sidebar.setFolds({ mcp: true, skills: true });
+  sidebar.setFolds({ mcp: true, skills: true, prompts: false });
   const lines = plain(sidebar.render(40));
   assert.equal(sidebar.imagePath(), "/tmp/a.png");
   assert(!lines.some(line => line.includes("IMAGE")));
   assert(lines.some(line => line.includes("Tasks")));
   sidebar.handleMouse(mouse(6, { type: "wheel", wheelDelta: -40 }));
   const scrolled = plain(sidebar.render(40));
-  assert(scrolled.some(line => line.includes("Skills") || /server-\d/.test(scrolled.join("\n"))));
+  assert(scrolled.some(line => /Skills|Prompts|server-\d|skill-\d|prompt-\d/.test(line)));
   assert.equal(scrolled[0], lines[0]);
   assert.equal(sidebar.imagePath(), "/tmp/a.png");
 });
@@ -227,9 +277,9 @@ test("unknown values and invalid MCP config remain explicit even when folded", (
 });
 
 test("reset discards old images, task rows and hit targets without changing fold preference", () => {
-  const { sidebar } = fixture(); sidebar.setFolds({ mcp: true, skills: false }); sidebar.setView(image()); sidebar.setTasks([task(0)]);
+  const { sidebar } = fixture(); sidebar.setFolds({ mcp: true, skills: false, prompts: true }); sidebar.setView(image()); sidebar.setTasks([task(0)]);
   sidebar.render(40); sidebar.reset();
-  assert.equal(sidebar.currentViewId(), undefined); assert.deepEqual(sidebar.getFolds(), { mcp: true, skills: false });
+  assert.equal(sidebar.currentViewId(), undefined); assert.deepEqual(sidebar.getFolds(), { mcp: true, skills: false, prompts: true });
   assert(!plain(sidebar.render(40)).some(line => line.includes("job-0") || line.includes("server-0")));
   sidebar.dispose(); sidebar.dispose();
 });
