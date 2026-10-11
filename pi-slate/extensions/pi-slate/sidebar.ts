@@ -9,7 +9,7 @@ import type { BackgroundTask } from "./background-tasks.ts";
 import { sessionSidebarSlots, sidebarCost, sidebarDuration, sidebarListOffset, sidebarRate, sidebarUncached } from "./sidebar-layout.ts";
 
 export const DOUBLE_CLICK_MS = 400;
-type ListName = "mcp" | "skills" | "tasks";
+type ListName = "mcp" | "skills" | "prompts" | "tasks";
 type Row = { text: string; action?: () => void; list?: ListName; item?: number };
 type Hit = { y: number; x0: number; x1: number; action: () => void };
 export type SidebarActions = {
@@ -26,7 +26,7 @@ const EMPTY_SESSION: SidebarSession = {
   lastTurnMs: null, working: false, turns: 0, messages: 0,
   usage: { input: null, output: null, total: null, cacheRead: null, cacheWrite: null, cost: null },
 };
-const EMPTY_RESOURCES: SidebarResources = { skills: [], commands: [], mcp: [] };
+const EMPTY_RESOURCES: SidebarResources = { skills: [], commands: [], prompts: [], mcp: [] };
 
 /** One session rail; plain facts in, theme-aware bounded rows and matching hit regions out. */
 export class Sidebar implements Component {
@@ -46,7 +46,7 @@ export class Sidebar implements Component {
   private resources: SidebarResources = EMPTY_RESOURCES;
   private tasks: BackgroundTask[] = [];
   private folds: SidebarFolds = { ...DEFAULT_SIDEBAR_FOLDS };
-  private offsets: Record<ListName, number> = { mcp: 0, skills: 0, tasks: 0 };
+  private offsets: Record<ListName, number> = { mcp: 0, skills: 0, prompts: 0, tasks: 0 };
   private middleOffset = 0;
   private middleRows = 0;
   private middleStart = 0;
@@ -102,7 +102,7 @@ export class Sidebar implements Component {
   setActions(actions: SidebarActions): void { this.actions = actions; }
   setSession(session: SidebarSession): void { this.session = { ...session, usage: { ...session.usage } }; this.changed(); }
   setResources(resources: SidebarResources): void {
-    this.resources = { ...resources, mcp: resources.mcp.map(x => ({ ...x })), skills: resources.skills.map(x => ({ ...x })), commands: resources.commands.map(x => ({ ...x })) };
+    this.resources = { ...resources, mcp: resources.mcp.map(x => ({ ...x })), skills: resources.skills.map(x => ({ ...x })), commands: resources.commands.map(x => ({ ...x })), prompts: resources.prompts.map(x => ({ ...x })) };
     this.changed();
   }
   setTasks(tasks: readonly BackgroundTask[]): void { this.tasks = tasks.map(task => ({ ...task })); this.changed(); }
@@ -117,7 +117,7 @@ export class Sidebar implements Component {
   /** A new session cannot inherit scroll positions, selected images, or old hit targets. */
   reset(): void {
     this.session = EMPTY_SESSION; this.resources = EMPTY_RESOURCES; this.tasks = [];
-    this.offsets = { mcp: 0, skills: 0, tasks: 0 }; this.middleOffset = 0;
+    this.offsets = { mcp: 0, skills: 0, prompts: 0, tasks: 0 }; this.middleOffset = 0;
     this.selectedImage = undefined; this.peekImage = undefined; this.pinned = false; this.clearedImageId = undefined;
     this.hits = []; this.listRows = []; this.lastClick = undefined; this.changed();
   }
@@ -235,8 +235,11 @@ export class Sidebar implements Component {
     const filled = percent === null ? 0 : Math.round(Math.max(0, Math.min(100, percent)) * width / 100);
     const tone = percent !== null && percent >= 80 ? "warning" : "success";
     const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · pid ${s.pid}`;
-    const occupancy = `${s.estimated ? "~" : ""}${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}`;
+    const occupancy = `${s.estimated ? "~" : ""}${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}`
+      + ` · ${sidebarCost(s.usage.cost)} · ${sidebarRate(s.rate)}`;
     const context = this.pair("Context", percent === null ? "—%" : `${Math.round(percent)}%`, width);
+    const branchUsage = () => this.actions?.inspect?.("Branch usage", this.sessionDetails());
+    const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
     return [
       { text: this.paint("muted", "SESSION"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) },
       { text: this.heading(sidebarText(s.name) || "Untitled session") },
@@ -246,14 +249,10 @@ export class Sidebar implements Component {
       { text: "" },
       { text: this.paint("muted", context) },
       { text: this.paint(tone, "█".repeat(filled)) + this.paint("dim", "─".repeat(width - filled)) },
-      { text: this.paint("muted", occupancy) },
+      { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      ...[["Input", formatCompactTokenCount(s.usage.input)], ["Output", formatCompactTokenCount(s.usage.output)],
-        ["Cache", formatCompactTokenCount(s.usage.cacheRead)], ["Uncached", formatCompactTokenCount(sidebarUncached(s.usage))],
-        ["Cost", sidebarCost(s.usage.cost)], ["Rate", sidebarRate(s.rate)]].map(([label, value]) => ({
-        text: this.pair(this.paint("muted", label!), this.paint("text", value!), width),
-        action: () => this.actions?.inspect?.("Branch usage", this.sessionDetails()),
-      })),
+      { text: this.pair(stat("in", formatCompactTokenCount(s.usage.input)), stat("cache", formatCompactTokenCount(s.usage.cacheRead)), width), action: branchUsage },
+      { text: this.pair(stat("out", formatCompactTokenCount(s.usage.output)), stat("uncached", formatCompactTokenCount(sidebarUncached(s.usage))), width), action: branchUsage },
       { text: "" },
       { text: this.paint("dim", "─".repeat(width)) },
     ];
@@ -274,6 +273,8 @@ export class Sidebar implements Component {
     }
     rows.push({ text: "" }, { text: resourceHeading(`${this.folds.skills ? "⌄" : "›"} Skills`, `${loaded} loaded`), action: () => this.toggleSection("skills") });
     if (this.folds.skills) rows.push(...this.resourceRows("skills", width));
+    rows.push({ text: "" }, { text: resourceHeading(`${this.folds.prompts ? "⌄" : "›"} Prompts`, `${this.resources.prompts.length}`), action: () => this.toggleSection("prompts") });
+    if (this.folds.prompts) rows.push(...this.resourceRows("prompts", width));
     return rows;
   }
   private resourceRows(list: Exclude<ListName, "tasks">, width: number): Row[] {
@@ -293,6 +294,10 @@ export class Sidebar implements Component {
         const skill = this.resources.skills[i]!;
         rows.push({ text: this.paint(skill.loaded ? "muted" : "dim", this.pair(`${skill.loaded ? "●" : "○"} ${sidebarText(skill.name)}`, skill.loaded ? "loaded" : "available", width)), list, item: i,
           action: () => this.actions?.inspect?.(skill.name, `${skill.loaded ? "Instructions observed loaded on this branch" : "Available; instructions not observed loaded"}\nSource: ${skill.source}\n${skill.path}`) });
+      } else if (list === "prompts") {
+        const prompt = this.resources.prompts[i]!;
+        rows.push({ text: this.pair(this.paint("muted", sidebarText(prompt.name)), this.paint("dim", prompt.source), width), list, item: i,
+          action: () => this.actions?.inspect?.(prompt.name, `${prompt.description || "No description"}\nSource: ${prompt.source}\nInvoke as /${prompt.name}`) });
       }
     }
     if (items.length > visible) rows.push({ text: this.paint("dim", `${start + 1}–${Math.min(items.length, start + visible)} / ${items.length} · scroll ↕`), list });

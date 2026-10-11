@@ -60,7 +60,14 @@ test("counts are conversation turns/messages, not tools, system or custom notice
 test("skill catalog is not the loaded set; commands exclude skill invocations", () => {
   const r = commandResources([command("review"), command("review"), command("hello", "extension"), command("plan", "prompt")]);
   assert.equal(r.skills.length, 1); assert.equal(r.skills[0]!.loaded, false);
-  assert.deepEqual(r.commands.map(x => x.name), ["hello", "plan"]);
+  assert.deepEqual(r.commands.map(x => x.name), ["hello"]);
+});
+
+test("prompt commands leave the command lane and dedupe by name", () => {
+  const r = commandResources([command("plan", "prompt"), command("plan", "prompt"), command("review"), command("ship", "prompt")]);
+  assert.deepEqual(r.prompts.map(x => x.name), ["plan", "ship"]);
+  assert.deepEqual(r.prompts[0], { name: "plan", source: "prompt", description: "description" });
+  assert.deepEqual(r.commands, []);
 });
 
 test("successful canonical skill reads load instructions; failed or non-skill reads do not", () => {
@@ -142,8 +149,9 @@ test("MCP file cache follows changes/removal and refuses untrusted project confi
 });
 
 test("fold config defaults safely and display strings neutralize terminal escape/control data", () => {
-  assert.deepEqual(parseSidebarFolds(undefined), { mcp: false, skills: false });
-  assert.deepEqual(parseSidebarFolds({ mcp: true, skills: "true" }), { mcp: true, skills: false });
+  assert.deepEqual(parseSidebarFolds(undefined), { mcp: false, skills: false, prompts: false });
+  assert.deepEqual(parseSidebarFolds({ mcp: true, skills: "true" }), { mcp: true, skills: false, prompts: false });
+  assert.deepEqual(parseSidebarFolds({ prompts: true, future: "keep" }), { mcp: false, skills: false, prompts: true });
   const text = sidebarText("bad\x1b[2J\n\x1b]52;c;evil\x07server");
   assert(!/[\x00-\x1f\x7f-\x9f]/.test(text)); assert(!text.includes("\x1b[2J"));
   assert.equal(sidebarText("长名字", 2), "长名");

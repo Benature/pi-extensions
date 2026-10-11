@@ -289,7 +289,7 @@ test("dashboard uses live branch facts and session-scoped tasks; commands preser
   f.manager.appendMessage({ role: "user", content: "hi", timestamp: 0 });
   f.manager.appendMessage({ role: "assistant", api: "anthropic-messages", provider: "anthropic", model: "fixture", timestamp: 1, stopReason: "stop", content: [{ type: "text", text: "done" }], usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 50, totalTokens: 470, cost: { input: .1, output: .2, cacheRead: .03, cacheWrite: .02, total: .35 } } });
   await f.emit("session_info_changed");
-  assert.match(rail(), /Dashboard test/); assert.match(rail(), /pid/); assert.match(rail(), /Input\s+450/); assert.match(rail(), /\$0.35/);
+  assert.match(rail(), /Dashboard test/); assert.match(rail(), /pid/); assert.match(rail(), /in\s+450/); assert.match(rail(), /uncached\s+100/); assert.match(rail(), /\$0.35/);
   assert(!/Summary|Activity Preview|Context\s*\n/.test(rail()));
   f.extraCommands.push({ name: "skill:review", source: "skill", sourceInfo: { path: "/skills/review/SKILL.md", scope: "user" } });
   await f.emit("message_end", { message: { role: "toolResult", toolName: "codemode", toolCallId: "outer", content: [], isError: false, nestedCalls: { calls: [{ id: "nested-read", name: "read", arguments: { path: "/skills/review/SKILL.md" }, status: "ok" }], complete: true } } });
@@ -350,6 +350,20 @@ test("a stale command menu cannot insert into a new session; disposed clock cann
   const before = f.calls.length; t.mock.timers.tick(10000); assert.equal(f.calls.length, before);
 });
 
+test("session menu folds prompts and prompt commands still insert after extraction", async t => {
+  const f = await fixture(t, JSON.stringify({ surfaces: ["sidebar"], focused: false }));
+  f.extraCommands.push({ name: "retro", source: "prompt", sourceInfo: { path: "retro.md", scope: "user" } });
+  await f.emit("agent_settled");
+  f.choices.push("Expand sidebar section");
+  await f.commands.get("slate")!.handler("session prompts", f.ctx);
+  assert.equal(railOf(f).getFolds().prompts, true);
+  const saved = JSON.parse(await readFile(f.path, "utf8"));
+  assert.equal(saved.sidebarSections.prompts, true, "prompts fold persists through the menu path");
+  f.choices.push("/retro · prompt");
+  await f.commands.get("slate")!.handler("session commands", f.ctx);
+  assert.equal(f.draft(), "existing draft/retro ", "prompt commands survive the commands/prompts split");
+});
+
 function railOf(f: Awaited<ReturnType<typeof fixture>>): Sidebar {
   return (Reflect.get(Reflect.get(f.tui, "layoutRoot"), "entries") as Array<{ component: Sidebar }>)[1]!.component;
 }
@@ -361,7 +375,7 @@ test("fold save preserves external sibling state, unknown section keys and unkno
   const saved = JSON.parse(await readFile(f.path, "utf8"));
   assert.deepEqual(saved.sidebarSections, { skills: true, future: "keep", mcp: true });
   assert.deepEqual(saved.modelDisplay, { providerSuffix: true, future: "keep" }); assert.deepEqual(saved.unrelated, { nested: true });
-  assert.deepEqual(railOf(f).getFolds(), { skills: true, mcp: true });
+  assert.deepEqual(railOf(f).getFolds(), { skills: true, mcp: true, prompts: false });
 });
 
 test("pending Expand and Pin menu choices remain idempotent after mouse actions", async t => {

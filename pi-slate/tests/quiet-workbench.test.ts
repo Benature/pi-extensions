@@ -61,11 +61,19 @@ test("growing usage and money keep a stable label lane and value edge with the r
     for (const value of [0, 999, 128400, 999900000, 1e12, 1e20, 1e308, null]) {
       sidebar.setSession({ ...session, usage: { ...session.usage, input: value, output: value, cost: value } });
       const rows = sidebar.render(width).map(stripVTControlCharacters);
-      for (const label of ["Input", "Output", "Cache", "Uncached", "Cost", "Rate"]) {
+      const stats: string[] = [];
+      for (const label of ["in", "out"]) {
         const line = rows.find(row => row.startsWith("│ " + label + " "))!;
         assert(line, label); assert.equal(visibleWidth(line), width);
         assert.equal(visibleWidth(line.trimEnd()), width, "right edge must not move");
-        assert.doesNotMatch(line, /…/, "values must not consume the label lane");
+        stats.push(line);
+      }
+      const occupancy = rows.find(row => row.includes("/ 500k"))!;
+      assert(occupancy, "occupancy line");
+      if (width > 28) { // Below this, bounded values truncate instead of moving edges.
+        for (const line of stats) assert.doesNotMatch(line, /…/, "values must not consume the label lane");
+        assert(occupancy.includes(`${sidebarCost(value)} · ~82/s`), `${sidebarCost(value)} on the occupancy line`);
+        assert.doesNotMatch(occupancy, /…/);
       }
     }
   }

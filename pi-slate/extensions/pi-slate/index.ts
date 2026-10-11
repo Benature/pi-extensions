@@ -201,7 +201,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   const mcpFiles = new SidebarMcpFiles();
   const mcpHost = loadSidebarMcpHost(getPackageDir(), VERSION);
   const background = new BackgroundTasks();
-  let resources: SidebarResources = { skills: [], commands: [], mcp: [] };
+  let resources: SidebarResources = { skills: [], commands: [], prompts: [], mcp: [] };
   let sessionStartedAt = 0;
   let turnStartedAt: number | undefined;
   let lastTurnMs: number | null = null;
@@ -287,7 +287,8 @@ export default function piSlate(pi: ExtensionAPI): void {
     const commands = pi.getCommands();
     skills.discoverCommands(commands);
     const registered = typeof pi.getMcpServers === "function" ? pi.getMcpServers() : [];
-    resources = { commands: commandResources(commands).commands, skills: skills.snapshot(),
+    const catalog = commandResources(commands);
+    resources = { commands: catalog.commands, prompts: catalog.prompts, skills: skills.snapshot(),
       ...mcpFiles.snapshot(getAgentDir(), ctx.cwd, typeof ctx.isProjectTrusted === "function" && ctx.isProjectTrusted(), registered) };
     if (owns("sidebar") && !sidebarYielded) sidebar.setResources(resources);
   };
@@ -875,7 +876,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     apply({ ...config, focused: on }, on ? "Focused mode on" : "Focused mode off", ctx);
   };
 
-  const sessionMenu = async (ctx: ExtensionContext, section?: "mcp" | "skills" | "commands" | "tasks" | "image"): Promise<void> => {
+  const sessionMenu = async (ctx: ExtensionContext, section?: "mcp" | "skills" | "prompts" | "commands" | "tasks" | "image"): Promise<void> => {
     if (ctx.mode !== "tui" || !owns("sidebar")) {
       ctx.ui.notify("Select the Slate sidebar surface and /reload to use the session dashboard", "info"); return;
     }
@@ -883,30 +884,33 @@ export default function piSlate(pi: ExtensionAPI): void {
     const active = (): boolean => epoch === sessionEpoch && currentContext?.mode === "tui" && currentContext.sessionManager.getSessionId() === owner;
     refreshResources(ctx); syncSidebar(ctx);
     if (!section) {
-      const choice = await pickSidebarItem(ctx, "Session dashboard", ["Session details", "MCP servers", "Skills", "Commands", "Background tasks", "Image"]);
+      const choice = await pickSidebarItem(ctx, "Session dashboard", ["Session details", "MCP servers", "Skills", "Prompts", "Commands", "Background tasks", "Image"]);
       if (!choice || !active()) return;
       if (choice === "Session details") { inspect(ctx, "Session", sidebar.sessionDetails()); return; }
-      section = ({ "MCP servers": "mcp", Skills: "skills", Commands: "commands", "Background tasks": "tasks", Image: "image" } as const)[choice as "MCP servers" | "Skills" | "Commands" | "Background tasks" | "Image"];
+      section = ({ "MCP servers": "mcp", Skills: "skills", Prompts: "prompts", Commands: "commands", "Background tasks": "tasks", Image: "image" } as const)[choice as "MCP servers" | "Skills" | "Prompts" | "Commands" | "Background tasks" | "Image"];
     }
-    if (section === "mcp" || section === "skills") {
-      const mcp = [...resources.mcp]; const skills = [...resources.skills];
-      const items = section === "mcp" ? mcp : skills;
+    if (section === "mcp" || section === "skills" || section === "prompts") {
+      const mcp = [...resources.mcp]; const skills = [...resources.skills]; const prompts = [...resources.prompts];
+      const items = section === "mcp" ? mcp : section === "skills" ? skills : prompts;
       const expanded = !sidebar.getFolds()[section];
       const toggle = `${expanded ? "Expand" : "Collapse"} sidebar section`;
       const labels = items.map((item, i) => `${i + 1}. ${item.name}`);
-      const choice = await pickSidebarItem(ctx, section === "mcp" ? "MCP servers (configured state)" : "Skills (available vs observed loaded)", [toggle, ...labels]);
+      const choice = await pickSidebarItem(ctx, section === "mcp" ? "MCP servers (configured state)" : section === "skills" ? "Skills (available vs observed loaded)" : "Prompts (templates)", [toggle, ...labels]);
       if (!choice || !active()) return;
       if (choice === toggle) { sidebar.setSection(section, expanded); return; }
       const index = labels.indexOf(choice);
       if (section === "mcp") {
         const item = mcp[index];
         if (item) inspect(ctx, item.name, `${item.enabled === null ? "—" : item.enabled ? "enabled" : "disabled"} (configuration, not connection status)\nSource: ${item.source}\nUse /mcp to manage this server.`);
-      } else {
+      } else if (section === "skills") {
         const item = skills[index];
         if (item) inspect(ctx, item.name, `${item.loaded ? "Instructions observed loaded on this branch" : "Available; not observed loaded"}\n${item.path}`);
+      } else {
+        const item = prompts[index];
+        if (item) inspect(ctx, item.name, `${item.description ? `${item.description}\n` : ""}Source: ${item.source}\nInsert with /slate session commands.`);
       }
     } else if (section === "commands") {
-      const items = [...resources.commands];
+      const items = [...resources.commands, ...resources.prompts];
       const labels = items.map(item => `/${item.name} · ${item.source}`);
       if (!labels.length) { ctx.ui.notify("No extension or prompt commands available", "info"); return; }
       const choice = await pickSidebarItem(ctx, "Insert command (does not execute)", labels);
