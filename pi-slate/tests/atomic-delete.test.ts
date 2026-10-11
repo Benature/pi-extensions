@@ -301,3 +301,31 @@ test("real editor: deleting a token keeps re-paste numbering intact", (t) => {
   // Numbering comes from scanning the current text, so re-paste reuses 1.
   assert.equal(editor.getText(), "[image-1]");
 });
+
+test("real editor: jump mode armed then backspace still deletes the whole token", (t) => {
+  const editor = new Editor({} as TUI, {} as EditorTheme);
+  const placeholders = attachPlaceholders(editor);
+  t.after(() => placeholders.dispose());
+
+  editor.setText("a [image-1]");
+  editor.handleInput("\x1d"); // ctrl+] arms jump-forward mode
+  editor.handleInput("\x7f"); // control key cancels jump mode, then deletes
+  assert.equal(editor.getText(), "a ");
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 2 });
+  assert.equal((editor as unknown as { jumpMode: unknown }).jumpMode, null);
+});
+
+test("real editor: select-all then backspace clears the whole prompt, not just the token", async (t) => {
+  const { ComposerSelectionController } = await import("../extensions/pi-slate/composer-selection.ts");
+  const editor = new Editor({} as TUI, {} as EditorTheme);
+  const placeholders = attachPlaceholders(editor);
+  // Mirrors index.ts attach order: images first, selection outermost.
+  const selection = new ComposerSelectionController();
+  selection.attach(editor as unknown as Parameters<ComposerSelectionController["attach"]>[0]);
+  t.after(() => { selection.dispose(); placeholders.dispose(); });
+
+  editor.setText("look [image-1]");
+  editor.handleInput("\x01"); // ctrl+a → select all
+  editor.handleInput("\x7f");
+  assert.equal(editor.getText(), "");
+});

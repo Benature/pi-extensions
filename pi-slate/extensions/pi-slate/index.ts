@@ -506,11 +506,14 @@ export default function piSlate(pi: ExtensionAPI): void {
           },
         );
         if (previousDown) activeEditor.onDownBoundary = previousDown;
+        // Images wrap first so composer-selection stays outermost: select-all
+        // followed by backspace must clear the whole prompt before the atomic
+        // image-token delete sees the keypress.
+        images?.attachEditor(activeEditor);
         selection.attach(activeEditor, {
           copy: (text) => copyWithFeedback(tui, ctx.ui.notify, text),
           requestRender: () => tui.requestRender(),
         });
-        images?.attachEditor(activeEditor);
         activeTui = tui;
         requestRender = (force = false) => tui.requestRender(force);
         return activeEditor;

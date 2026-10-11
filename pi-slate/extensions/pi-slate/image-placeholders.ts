@@ -112,9 +112,12 @@ export function installEditorPatch(
   }
   function handleInputPatch(this: CustomEditor, data: string) {
     const direction = atomicDeleteDirection(data);
-    if (direction && !instance.isInPaste && instance.jumpMode == null) {
+    if (direction && !instance.isInPaste) {
       const edit = atomicImageTokenDelete(this.getText(), this.getCursor(), direction);
       if (edit) {
+        // Mirror the editor: a control key cancels an armed jump mode and
+        // falls through to normal handling — the atomic delete is that handling.
+        if (instance.jumpMode != null) instance.jumpMode = null;
         // One setText = one undo snapshot, so a single undo restores the
         // whole token (never a partial token).
         const pastes = instance.pastes;
