@@ -6,7 +6,7 @@
  */
 
 import { helixFrame } from "./working-helix.ts";
-import { pendulumFrame } from "./working-pendulum.ts";
+import { snakeFrame } from "./working-snake.ts";
 
 const BLOCKS = "▁▂▃▄▅▆▇█";
 const COLUMNS = 7;
@@ -28,7 +28,7 @@ export function waveFrame(tick: number): string {
   return frame;
 }
 
-export type ProgressStyle = "waves" | "dna-helix" | "pendulum-wave";
+export type ProgressStyle = "waves" | "dna-helix" | "snake";
 
 let style: ProgressStyle = "waves";
 
@@ -43,7 +43,7 @@ export function progressStyle(): ProgressStyle {
 /** Frame for the active progress indicator; same slot and width either way. */
 export function progressFrame(tick: number): string {
   if (style === "dna-helix") return helixFrame(tick);
-  if (style === "pendulum-wave") return pendulumFrame(tick);
+  if (style === "snake") return snakeFrame(tick);
   return waveFrame(tick);
 }
 

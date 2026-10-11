@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Working indicator styles: `/slate progress` picks the composer-border animation — `waves` (default), `dna-helix` (a turning double helix with backbone crossings), or `pendulum-wave` (a row of pendulums from above, drifting in and out of step), all the same slot and size
+- Working indicator styles: `/slate progress` picks the composer-border animation — `waves` (default), `dna-helix` (a turning double helix with backbone crossings), or `snake` (a diamondback slithering through the slot, flicking its tongue), all the same slot and size
 
 ## 0.1.14
 
