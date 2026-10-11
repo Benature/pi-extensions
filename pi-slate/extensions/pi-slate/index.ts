@@ -36,7 +36,7 @@ import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
-import { trainFrame } from "./working-train.ts";
+import { advanceTrain, isTrainActive, setTrainActive } from "./working-train.ts";
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
@@ -51,7 +51,6 @@ import {
   parseSlateArgs,
   resolveMessageLength,
   messageLengthMessage,
-  dashboardColumnWidth,
   slateArgumentCompletions,
   SLATE_USAGE,
   SLATE_VERSION,
@@ -529,40 +528,29 @@ export default function piSlate(pi: ExtensionAPI): void {
 
   const workingWords = createWordPicker();
   let workingWord: string | undefined;
-  const TRAIN_WIDGET_KEY = "slate:working-train";
   let trainTimer: ReturnType<typeof setInterval> | undefined;
-  let trainTick = 0;
+  // The train rides the Slate composer's border; without a live custom editor
+  // the working status falls back to the classic word.
   const trainHost = (ctx: ExtensionContext | undefined): ctx is ExtensionContext =>
-    Boolean(ctx && ctx.mode === "tui" && editorActive() && typeof ctx.ui.setWidget === "function");
-  const trainWidth = (): number => {
-    const columns = activeTui?.terminal.columns ?? 0;
-    if (columns < 1) return 80;
-    const rows = activeTui?.terminal.rows ?? 0;
-    const rail = sidebar.isVisible(columns, rows) ? dashboardColumnWidth(columns, rows, sidebar.preferredWidth) : 0;
-    return Math.max(1, columns - rail - composerPaddingX(config.density) * 2);
-  };
-  const paintTrain = (ctx: ExtensionContext): void => {
-    ctx.ui.setWidget(TRAIN_WIDGET_KEY, trainFrame(trainWidth(), trainTick++));
-    requestRender();
-  };
+    Boolean(ctx && ctx.mode === "tui" && editorActive() && activeEditor);
   const stopTrain = (): void => {
     if (trainTimer !== undefined) { clearInterval(trainTimer); trainTimer = undefined; }
-    const ctx = currentContext;
-    if (ctx && typeof ctx.ui.setWidget === "function") {
-      try { ctx.ui.setWidget(TRAIN_WIDGET_KEY, undefined); requestRender(); } catch { /* A stale UI context must not break session teardown. */ }
-    }
+    if (!isTrainActive()) return;
+    setTrainActive(false);
+    requestRender();
   };
   const startTrain = (ctx: ExtensionContext): void => {
     if (trainTimer !== undefined) { clearInterval(trainTimer); trainTimer = undefined; }
-    trainTick = 0;
+    setTrainActive(true);
     try {
+      // Blank the indicator text; the composer border renders the train instead.
       ctx.ui.setWorkingMessage("");
-      paintTrain(ctx);
-    } catch { return; }
+      requestRender();
+    } catch { setTrainActive(false); return; }
     const timer = setInterval(() => {
       const current = currentContext;
       if (!trainHost(current)) { stopTrain(); return; }
-      try { paintTrain(current); } catch { stopTrain(); }
+      try { advanceTrain(); requestRender(); } catch { stopTrain(); }
     }, 333);
     timer.unref();
     trainTimer = timer;
