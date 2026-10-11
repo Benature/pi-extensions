@@ -480,8 +480,8 @@ export class Sidebar implements Component {
     if (width === 1) return border;
     if (line.includes("\x1b_G") || line.includes("\x1b]1337;File=")) return `${border} ${line}`;
     const body = truncateToWidth(line, Math.max(0, width - 2), "…");
-    const lineText = `${border} ${body}${" ".repeat(Math.max(0, width - 2 - visibleWidth(body)))}`;
-    return this.theme?.bg?.("customMessageBg", lineText) ?? lineText;
+    // No panel background: the sidebar blends into the terminal chrome.
+    return `${border} ${body}${" ".repeat(Math.max(0, width - 2 - visibleWidth(body)))}`;
   }
 }
 

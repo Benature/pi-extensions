@@ -91,9 +91,9 @@ async function fixture(t: TestContext, text: string | undefined, mode = "tui", c
       assert.ok(factory); calls.push("editor"); editorFactory = factory; composer = factory(tui, editorTheme, new KeybindingsManager());
     },
     getEditorComponent: () => editorFactory,
-    setWidget: (key: string, factory: (tui: TUI, theme: Theme) => Component, options: { placement: string }) => {
-      assert.equal(key, "pi-slate:surface-host"); assert.equal(options.placement, "belowEditor");
-      calls.push("widget"); assert.deepEqual(factory(tui, theme).render(80), []);
+    setWidget: (key: string, content: unknown, options?: { placement: string }) => {
+      assert.equal(key, "pi-slate:surface-host"); assert.equal(options?.placement, "belowEditor");
+      calls.push("widget"); assert.deepEqual((content as (tui: TUI, theme: Theme) => Component)(tui, theme).render(80), []);
     },
     setTitle() { assert.fail("Slate must not take the title"); },
     setTheme() { assert.fail("no automatic theme changes"); },

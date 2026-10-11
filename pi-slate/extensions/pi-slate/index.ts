@@ -36,6 +36,7 @@ import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
+import { advanceWave, isWaveActive, setWaveActive } from "./working-wave.ts";
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
@@ -327,6 +328,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     thinkingFold.stop();
     tokenRate.dispose();
     workingWord = undefined;
+    stopWave();
     if (loaded.error) ctx.ui.notify(loaded.error, "warning");
     if (ctx.mode !== "tui") return;
     if (owns("tool-cards")) {
@@ -526,6 +528,36 @@ export default function piSlate(pi: ExtensionAPI): void {
 
   const workingWords = createWordPicker();
   let workingWord: string | undefined;
+  let waveTimer: ReturnType<typeof setInterval> | undefined;
+  // The wave rolls in the Slate composer border; without a live custom editor
+  // the working status falls back to the classic word.
+  const waveHost = (ctx: ExtensionContext | undefined): ctx is ExtensionContext =>
+    Boolean(ctx && ctx.mode === "tui" && editorActive() && activeEditor);
+  const stopWave = (): void => {
+    if (waveTimer !== undefined) { clearInterval(waveTimer); waveTimer = undefined; }
+    if (!isWaveActive()) return;
+    setWaveActive(false);
+    // Restore the host default so a blanked message never sticks if the
+    // Slate composer goes away mid-session.
+    try { currentContext?.ui.setWorkingMessage?.(undefined); } catch { /* stale ctx */ }
+    requestRender();
+  };
+  const startWave = (ctx: ExtensionContext): void => {
+    if (waveTimer !== undefined) { clearInterval(waveTimer); waveTimer = undefined; }
+    setWaveActive(true);
+    try {
+      // Blank the indicator text; the composer border renders the wave instead.
+      ctx.ui.setWorkingMessage("");
+      requestRender();
+    } catch { setWaveActive(false); return; }
+    const timer = setInterval(() => {
+      const current = currentContext;
+      if (!waveHost(current)) { stopWave(); return; }
+      try { advanceWave(); requestRender(); } catch { stopWave(); }
+    }, 120);
+    timer.unref();
+    waveTimer = timer;
+  };
   const syncThinkingStatus = (): void => {
     const ctx = currentContext;
     if (!editorActive() || !ctx || !workingWord || typeof ctx.ui.setWorkingMessage !== "function") return;
@@ -547,12 +579,18 @@ export default function piSlate(pi: ExtensionAPI): void {
     if (owns("sidebar") && ctx.mode === "tui") { turnStartedAt = Date.now(); syncSidebar(ctx); }
     if (!editorActive()) return;
     thinkingFold.stop();
+    if (waveHost(ctx)) {
+      workingWord = undefined;
+      startWave(ctx);
+      return;
+    }
     workingWord = workingWords.next();
     syncThinkingStatus();
   });
   pi.on("agent_end", (_event, ctx) => {
     currentContext = ctx;
     thinkingFold.stop();
+    stopWave();
     if (turnStartedAt !== undefined) { lastTurnMs = Date.now() - turnStartedAt; turnStartedAt = undefined; }
     if (owns("sidebar")) { background.clearShells(); sidebar.setTasks(background.snapshot()); }
     syncSidebar(ctx);
@@ -643,6 +681,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   pi.on("session_shutdown", (_event, ctx) => {
     sessionEpoch += 1;
     workingWord = undefined;
+    stopWave();
     thinkingFold.stop();
     tokenRate.dispose();
     images?.dispose();

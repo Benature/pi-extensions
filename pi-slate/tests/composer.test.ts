@@ -20,6 +20,7 @@ import {
   scrollComposerByLines,
 } from "../extensions/pi-slate/composer.ts";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { advanceWave, setWaveActive, WAVE_PERIOD } from "../extensions/pi-slate/working-wave.ts";
 import { KeybindingsManager } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/keybindings.js";
 
 const theme = {
@@ -266,6 +267,59 @@ test("composer editor renders PID only when enabled and hides it if it cannot fi
   for (const line of narrow) assert.equal(visibleWidth(line), 8);
   showPid = false;
   assert.doesNotMatch(stripVTControlCharacters(editor.render(80)[0] ?? ""), /PID-/);
+});
+
+test("working wave sits in the composer top border without growing the frame", () => {
+  const borderTheme = { fg: (_name: string, text: string) => text, italic: (text: string) => text } as Theme;
+  const editor = new ComposerEditor(
+    { terminal: { rows: 24, columns: 80 }, requestRender() {} } as TUI,
+    { borderColor: (text) => text } as EditorTheme,
+    new KeybindingsManager(),
+    () => ({ project: "slate", branch: null, model: undefined, footer: "standard", theme: borderTheme }),
+    { embedWorkingStatus: true },
+  );
+  editor.setWorkingStatusIndicator(
+    { kind: "working", renderInBorder: () => "" } as unknown as Parameters<ComposerEditor["setWorkingStatusIndicator"]>[0],
+  );
+  try {
+    setWaveActive(false);
+    const idle = editor.render(80);
+    assert.doesNotMatch(idle[0]!, /[▁▂▃▄▅▆▇█]/, "idle border carries no wave");
+    setWaveActive(true);
+    for (let tick = 0; tick < WAVE_PERIOD * 10; tick++) {
+      const lines = editor.render(80);
+      assert.equal(lines.length, idle.length, `tick ${tick}: frame never grows`);
+      assert.equal(visibleWidth(lines[0]!), 80, `tick ${tick}: border keeps its width`);
+      assert.match(lines[0]!, /^╭── [▁▂▃▄▅▆▇█]{7} /, `tick ${tick}: wave sits in the word slot`);
+      advanceWave();
+    }
+    setWaveActive(false);
+    assert.deepEqual(editor.render(80), idle, "inactive border is byte-identical to before the wave");
+  } finally {
+    setWaveActive(false);
+  }
+});
+
+test("non-working statuses still render while the wave runs", () => {
+  const borderTheme = { fg: (_name: string, text: string) => text, italic: (text: string) => text } as Theme;
+  const editor = new ComposerEditor(
+    { terminal: { rows: 24, columns: 80 }, requestRender() {} } as TUI,
+    { borderColor: (text) => text } as EditorTheme,
+    new KeybindingsManager(),
+    () => ({ project: "slate", branch: null, model: undefined, footer: "standard", theme: borderTheme }),
+    { embedWorkingStatus: true },
+  );
+  editor.setWorkingStatusIndicator(
+    { kind: "retry", renderInBorder: () => "Retrying (1/3) in 5s..." } as unknown as Parameters<ComposerEditor["setWorkingStatusIndicator"]>[0],
+  );
+  setWaveActive(true);
+  try {
+    const top = editor.render(80)[0] ?? "";
+    assert.ok(top.includes("Retrying (1/3)"), "retry status is never hidden by the wave");
+    assert.doesNotMatch(top, /[▁▂▃▄▅▆▇█]/, "retry status keeps the wave off the border");
+  } finally {
+    setWaveActive(false);
+  }
 });
 
 test("empty composer frames sides and prompt without a hint row", () => {
