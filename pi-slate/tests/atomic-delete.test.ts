@@ -330,3 +330,18 @@ test("real editor: select-all then backspace clears the whole prompt, not just t
   editor.handleInput("\x7f");
   assert.equal(editor.getText(), "");
 });
+
+test("real editor: select-all then shift+backspace clears the whole prompt, not just the token", async (t) => {
+  const { ComposerSelectionController } = await import("../extensions/pi-slate/composer-selection.ts");
+  const editor = new Editor({} as TUI, {} as EditorTheme);
+  const placeholders = attachPlaceholders(editor);
+  // Mirrors index.ts attach order: images first, selection outermost.
+  const selection = new ComposerSelectionController();
+  selection.attach(editor as unknown as ComposerSelectionEditor);
+  t.after(() => { selection.dispose(); placeholders.dispose(); });
+
+  editor.setText("look [image-1]");
+  editor.handleInput("\x01"); // ctrl+a → select all
+  editor.handleInput("\x1b[127;2u"); // kitty shift+backspace
+  assert.equal(editor.getText(), "");
+});

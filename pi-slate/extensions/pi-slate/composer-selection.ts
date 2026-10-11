@@ -291,7 +291,8 @@ export class ComposerSelectionController {
       }
 
       if (this.selected) {
-        if (matchesKey(data, "backspace") || matchesKey(data, "delete")) {
+        if (matchesKey(data, "backspace") || matchesKey(data, "delete")
+          || matchesKey(data, "shift+backspace") || matchesKey(data, "shift+delete")) {
           editor.setText("");
           return;
         }
