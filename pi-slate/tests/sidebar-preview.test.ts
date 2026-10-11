@@ -139,7 +139,7 @@ test("prompts section folds, scrolls, inspects and shows none when empty", () =>
   assert(expanded.some(line => line.includes("⌄ Prompts · 6")));
   assert(expanded.some(line => line.includes("prompt-0")) && expanded.some(line => line.includes("prompt-2")));
   assert(!expanded.some(line => line.includes("prompt-3")), "only three visible");
-  assert(expanded.some(line => line.includes("1–3 / 6 · scroll ↕")));
+  assert(expanded.some(line => line.includes("1–3 / 6")));
   sidebar.handleMouse(mouse(row(sidebar, "prompt-0")));
   assert.deepEqual(inspected, ["prompt-0"]);
   assert(texts[0]!.includes("Prompt 0 description") && texts[0]!.includes("Source: prompt"));
