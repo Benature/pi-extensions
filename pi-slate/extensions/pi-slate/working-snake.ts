@@ -9,7 +9,7 @@
 const SCALE = ["-", "~", "*", "'", "*", "~", "-", ".", ",", "_", ","]; // backwards from the head
 
 /** Natural width in columns; the composer may hand down a narrower budget. */
-export const SNAKE_COLUMNS = 24;
+const SNAKE_COLUMNS = 24;
 
 const HOLD = 2; // ticks each frame holds: the snake glides, it does not hurry
 

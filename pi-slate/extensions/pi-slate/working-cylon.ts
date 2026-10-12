@@ -5,7 +5,7 @@
  */
 
 /** Natural width in columns; the composer may hand down a narrower budget. */
-export const CYLON_COLUMNS = 12;
+const CYLON_COLUMNS = 12;
 
 /** Ticks after which the animation repeats exactly at the natural width: out, back, and out again. */
 export const CYLON_PERIOD = 16;

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseFlavor, parseStyle, type Flavor, type Style } from "./catppuccin.ts";
 import { parseSurfaces, SURFACES, type Surface } from "./surfaces.ts";
-import type { ProgressStyle } from "./working-wave.ts";
+import { isProgressStyle, type ProgressStyle } from "./working-wave.ts";
 
 // The source SVG is a 4×4 square grid. Terminal cells are approximately twice
 // as tall as they are wide, so every source square occupies two columns.
@@ -441,7 +441,7 @@ export function parseSlateArgs(raw: string): SlateArgs {
   }
   if (head === "progress") {
     if (!tail) return { ok: true, kind: "progress" };
-    if (tail === "waves" || tail === "dna-helix" || tail === "snake" || tail === "cylon-scanner") return { ok: true, kind: "progress", value: tail };
+    if (isProgressStyle(tail)) return { ok: true, kind: "progress", value: tail };
     return { ok: false };
   }
   if (head === "message-length") {

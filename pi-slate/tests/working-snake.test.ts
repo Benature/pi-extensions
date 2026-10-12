@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SNAKE_PERIOD, snakeFrame } from "../extensions/pi-slate/working-snake.ts";
-import { progressFrame, setProgressStyle } from "../extensions/pi-slate/working-wave.ts";
 
 const SNAKE_ONLY = /^[>@\-~*'.,_ ]{24}$/;
 
@@ -62,10 +61,4 @@ test("degenerate ticks render frame zero", () => {
   assert.equal(snakeFrame(Number.NaN), snakeFrame(0));
   assert.equal(snakeFrame(-3), snakeFrame(0));
   assert.equal(snakeFrame(2.9), snakeFrame(2));
-});
-
-test("progress frame dispatches snake when selected", () => {
-  setProgressStyle("snake");
-  assert.equal(progressFrame(3), snakeFrame(3));
-  setProgressStyle("waves");
 });

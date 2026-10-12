@@ -36,7 +36,7 @@ import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
-import { advanceWave, isWaveActive, setProgressStyle, setWaveActive, type ProgressStyle } from "./working-wave.ts";
+import { advanceWave, isProgressStyle, isWaveActive, PROGRESS_STYLES, setProgressStyle, setWaveActive, type ProgressStyle } from "./working-wave.ts";
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
@@ -85,7 +85,6 @@ import {
 } from "./catppuccin.ts";
 import { persistTheme, SLATE_THEME } from "./install-defaults.ts";
 
-const PROGRESS_STYLES = ["waves", "dna-helix", "snake", "cylon-scanner"] as const satisfies readonly ProgressStyle[];
 const PROGRESS_LABELS: Record<ProgressStyle, string> = {
   waves: "Waves",
   "dna-helix": "DNA helix",
@@ -152,7 +151,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
-      ...(PROGRESS_STYLES.includes(value.progress as ProgressStyle) ? { progress: value.progress as ProgressStyle } : {}),
+      ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
     ...(!parsed.ok ? { error: parsed.error } : {}),

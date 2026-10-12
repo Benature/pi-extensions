@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { HELIX_PERIOD, helixFrame } from "../extensions/pi-slate/working-helix.ts";
-import { progressFrame, setProgressStyle, waveFrame } from "../extensions/pi-slate/working-wave.ts";
 
 const HELIX_ONLY = /^[▔▁\\╳]{7}$/;
 
@@ -47,12 +46,4 @@ test("degenerate ticks render frame zero", () => {
   assert.equal(helixFrame(Number.NaN), helixFrame(0));
   assert.equal(helixFrame(-3), helixFrame(0));
   assert.equal(helixFrame(2.9), helixFrame(2));
-});
-
-test("progress frame dispatches on the selected style", () => {
-  setProgressStyle("waves");
-  assert.equal(progressFrame(3), waveFrame(3));
-  setProgressStyle("dna-helix");
-  assert.equal(progressFrame(3), helixFrame(3));
-  setProgressStyle("waves");
 });

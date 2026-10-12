@@ -243,6 +243,16 @@ test("/slate args route density, footer, and width", () => {
     { value: "pid on", label: "pid on" },
     { value: "pid off", label: "pid off" },
   ]);
+  assert.deepEqual(parseSlateArgs("progress"), { ok: true, kind: "progress" });
+  assert.deepEqual(parseSlateArgs("progress snake"), { ok: true, kind: "progress", value: "snake" });
+  assert.deepEqual(parseSlateArgs("progress nope"), { ok: false });
+  assert.deepEqual(slateArgumentCompletions("progress"), [
+    { value: "progress", label: "progress" },
+    { value: "progress waves", label: "progress waves" },
+    { value: "progress dna-helix", label: "progress dna-helix" },
+    { value: "progress snake", label: "progress snake" },
+    { value: "progress cylon-scanner", label: "progress cylon-scanner" },
+  ]);
   assert.deepEqual(parseSlateArgs("message-length"), { ok: true, kind: "message-length-menu" });
   assert.deepEqual(parseSlateArgs("message-length default"), { ok: true, kind: "message-length" });
   assert.deepEqual(parseSlateArgs("message-length 50"), { ok: true, kind: "message-length", value: 50 });

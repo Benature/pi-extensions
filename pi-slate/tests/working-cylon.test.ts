@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CYLON_PERIOD, cylonFrame } from "../extensions/pi-slate/working-cylon.ts";
-import { progressFrame, setProgressStyle } from "../extensions/pi-slate/working-wave.ts";
 
 const CYLON_ONLY = /^\[[ =]{10}\]$/;
 
@@ -54,10 +53,4 @@ test("degenerate ticks render frame zero", () => {
   assert.equal(cylonFrame(Number.NaN), cylonFrame(0));
   assert.equal(cylonFrame(-3), cylonFrame(0));
   assert.equal(cylonFrame(2.9), cylonFrame(2));
-});
-
-test("progress frame dispatches cylon-scanner when selected", () => {
-  setProgressStyle("cylon-scanner");
-  assert.equal(progressFrame(3), cylonFrame(3));
-  setProgressStyle("waves");
 });

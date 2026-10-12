@@ -29,16 +29,19 @@ export function waveFrame(tick: number): string {
   return frame;
 }
 
-export type ProgressStyle = "waves" | "dna-helix" | "snake" | "cylon-scanner";
+/** The selectable progress indicators, in picker order. */
+export const PROGRESS_STYLES = ["waves", "dna-helix", "snake", "cylon-scanner"] as const;
+
+export type ProgressStyle = (typeof PROGRESS_STYLES)[number];
+
+export function isProgressStyle(value: unknown): value is ProgressStyle {
+  return typeof value === "string" && (PROGRESS_STYLES as readonly string[]).includes(value);
+}
 
 let style: ProgressStyle = "waves";
 
 export function setProgressStyle(next: ProgressStyle): void {
   style = next;
-}
-
-export function progressStyle(): ProgressStyle {
-  return style;
 }
 
 /**

@@ -3,11 +3,16 @@ import test from "node:test";
 import {
   advanceWave,
   isWaveActive,
+  progressFrame,
+  setProgressStyle,
   setWaveActive,
   WAVE_PERIOD,
   waveFrame,
   waveTick,
 } from "../extensions/pi-slate/working-wave.ts";
+import { cylonFrame } from "../extensions/pi-slate/working-cylon.ts";
+import { helixFrame } from "../extensions/pi-slate/working-helix.ts";
+import { snakeFrame } from "../extensions/pi-slate/working-snake.ts";
 
 const BLOCK_ONLY = /^[▁▂▃▄▅▆▇█]{7}$/;
 
@@ -49,6 +54,17 @@ test("degenerate ticks render frame zero", () => {
   assert.equal(waveFrame(Number.NaN), waveFrame(0));
   assert.equal(waveFrame(-3), waveFrame(0));
   assert.equal(waveFrame(2.9), waveFrame(2));
+});
+
+test("progress frame dispatches on the selected style", () => {
+  setProgressStyle("dna-helix");
+  assert.equal(progressFrame(3), helixFrame(3));
+  setProgressStyle("snake");
+  assert.equal(progressFrame(3, 12), snakeFrame(3, 12));
+  setProgressStyle("cylon-scanner");
+  assert.equal(progressFrame(3, 8), cylonFrame(3, 8));
+  setProgressStyle("waves");
+  assert.equal(progressFrame(3), waveFrame(3));
 });
 
 test("wave state resets on activation and advances monotonically", () => {
