@@ -6,6 +6,7 @@
  */
 
 import { helixFrame } from "./working-helix.ts";
+import { cylonFrame } from "./working-cylon.ts";
 import { snakeFrame } from "./working-snake.ts";
 
 const BLOCKS = "▁▂▃▄▅▆▇█";
@@ -28,7 +29,7 @@ export function waveFrame(tick: number): string {
   return frame;
 }
 
-export type ProgressStyle = "waves" | "dna-helix" | "snake";
+export type ProgressStyle = "waves" | "dna-helix" | "snake" | "cylon-scanner";
 
 let style: ProgressStyle = "waves";
 
@@ -44,6 +45,7 @@ export function progressStyle(): ProgressStyle {
 export function progressFrame(tick: number): string {
   if (style === "dna-helix") return helixFrame(tick);
   if (style === "snake") return snakeFrame(tick);
+  if (style === "cylon-scanner") return cylonFrame(tick);
   return waveFrame(tick);
 }
 

@@ -3,10 +3,10 @@ import test from "node:test";
 import { SNAKE_PERIOD, snakeFrame } from "../extensions/pi-slate/working-snake.ts";
 import { progressFrame, setProgressStyle } from "../extensions/pi-slate/working-wave.ts";
 
-const SNAKE_ONLY = /^[><\\/~ ]{7}$/;
+const SNAKE_ONLY = /^[>@\-~*'.,_ ]{7}$/;
 
 test("snake frame is deterministic for a given tick", () => {
-  for (const tick of [0, 1, 7, 13, 14, 42, 1000]) {
+  for (const tick of [0, 1, 13, 69, 70, 42, 1000]) {
     assert.equal(snakeFrame(tick), snakeFrame(tick));
   }
 });
@@ -33,12 +33,13 @@ test("every tick animates: consecutive frames differ", () => {
   }
 });
 
-test("the snake has a head, a sloping body, a flicking tongue, and wraps the slot", () => {
+test("the ornate snake keeps its @> head on screen and trails shimmering scales", () => {
   const seen = new Set<string>();
   for (let tick = 0; tick < SNAKE_PERIOD; tick++) for (const ch of snakeFrame(tick)) seen.add(ch);
-  for (const ch of [">", "/", "\\", "~", "<"]) assert.ok(seen.has(ch), `expected ${ch} somewhere in a lap`);
+  for (const ch of [">", "@", "~", "*", "'", "_", ",", ".", "-"]) assert.ok(seen.has(ch), `expected ${ch} somewhere in a lap`);
   for (let tick = 0; tick < SNAKE_PERIOD; tick++) {
-    assert.ok(snakeFrame(tick).includes(">"), `tick ${tick}: the head is always on screen`);
+    const frame = snakeFrame(tick);
+    assert.ok(frame.includes(">") && frame.includes("@"), `tick ${tick}: the head is always on screen (split at the wrap)`);
   }
 });
 

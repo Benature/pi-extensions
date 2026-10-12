@@ -85,11 +85,12 @@ import {
 } from "./catppuccin.ts";
 import { persistTheme, SLATE_THEME } from "./install-defaults.ts";
 
-const PROGRESS_STYLES = ["waves", "dna-helix", "snake"] as const satisfies readonly ProgressStyle[];
+const PROGRESS_STYLES = ["waves", "dna-helix", "snake", "cylon-scanner"] as const satisfies readonly ProgressStyle[];
 const PROGRESS_LABELS: Record<ProgressStyle, string> = {
   waves: "Waves",
   "dna-helix": "DNA helix",
   snake: "Snake",
+  "cylon-scanner": "Cylon scanner",
 };
 
 type SlateConfig = SurfaceConfig & {
@@ -151,7 +152,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
-      ...(value.progress === "waves" || value.progress === "dna-helix" || value.progress === "snake" ? { progress: value.progress } : {}),
+      ...(PROGRESS_STYLES.includes(value.progress as ProgressStyle) ? { progress: value.progress as ProgressStyle } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
     ...(!parsed.ok ? { error: parsed.error } : {}),
