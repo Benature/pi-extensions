@@ -3,7 +3,7 @@ import test from "node:test";
 import { SNAKE_PERIOD, snakeFrame } from "../extensions/pi-slate/working-snake.ts";
 import { progressFrame, setProgressStyle } from "../extensions/pi-slate/working-wave.ts";
 
-const SNAKE_ONLY = /^[>@\-~*'.,_ ]{7}$/;
+const SNAKE_ONLY = /^[>@\-~*'.,_ ]{24}$/;
 
 test("snake frame is deterministic for a given tick", () => {
   for (const tick of [0, 1, 13, 69, 70, 42, 1000]) {
@@ -11,13 +11,20 @@ test("snake frame is deterministic for a given tick", () => {
   }
 });
 
-test("snake frame is always seven columns with no control characters", () => {
+test("snake frame is always its natural width with no control characters", () => {
   for (let tick = 0; tick < 1000; tick++) {
     const frame = snakeFrame(tick);
     assert.match(frame, SNAKE_ONLY, `tick ${tick}`);
-    assert.equal([...frame].length, 7);
+    assert.equal([...frame].length, 24);
     assert.ok(!/[\x00-\x1f\x7f]/.test(frame), `tick ${tick}: no control chars`);
   }
+});
+
+test("snake shrinks to a narrower budget and never exceeds its natural width", () => {
+  assert.equal([...snakeFrame(3, 12)].length, 12);
+  assert.equal([...snakeFrame(3, 100)].length, 24);
+  assert.equal([...snakeFrame(3, 2)].length, 3);
+  assert.match(snakeFrame(3, 12), /^[>@\-~*'.,_ ]{12}$/);
 });
 
 test("snake loops exactly after SNAKE_PERIOD ticks", () => {

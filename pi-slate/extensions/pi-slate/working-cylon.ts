@@ -1,21 +1,25 @@
 /**
  * Cylon scanner for the composer working-status slot: the == eye sweeping its
- * bracketed track, in the same word-sized single row as the wave. Pure and
- * deterministic: the tick alone picks the frame.
+ * bracketed track, out and back. Pure and deterministic: the tick alone picks
+ * the frame.
  */
 
-/** Ticks after which the animation repeats exactly: out, back, and out again. */
-export const CYLON_PERIOD = 6;
+/** Natural width in columns; the composer may hand down a narrower budget. */
+export const CYLON_COLUMNS = 12;
 
-const INNER = 5; // columns between the brackets; the eye is two of them
+/** Ticks after which the animation repeats exactly at the natural width: out, back, and out again. */
+export const CYLON_PERIOD = 16;
 
 /**
- * One fixed-width cylon frame (7 visible columns, word-sized).
- * Never throws; degenerate ticks render frame zero.
+ * One fixed-width cylon frame. Never throws; degenerate ticks render frame
+ * zero and degenerate widths the narrowest scanner.
  */
-export function cylonFrame(tick: number): string {
+export function cylonFrame(tick: number, columns = CYLON_COLUMNS): string {
   const safe = Number.isFinite(tick) ? Math.max(0, Math.floor(tick)) : 0;
-  const step = safe % CYLON_PERIOD;
-  const at = step <= 3 ? step : CYLON_PERIOD - step; // 0 1 2 3 2 1
-  return `[${" ".repeat(at)}==${" ".repeat(INNER - 2 - at)}]`;
+  const width = Math.max(4, Math.min(CYLON_COLUMNS, Math.floor(columns) || CYLON_COLUMNS));
+  const inner = width - 2; // columns between the brackets; the eye is two of them
+  const period = 2 * (inner - 2);
+  const step = safe % period;
+  const at = step <= inner - 2 ? step : period - step;
+  return `[${" ".repeat(at)}==${" ".repeat(inner - 2 - at)}]`;
 }

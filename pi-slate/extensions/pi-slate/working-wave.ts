@@ -41,11 +41,15 @@ export function progressStyle(): ProgressStyle {
   return style;
 }
 
-/** Frame for the active progress indicator; same slot and width either way. */
-export function progressFrame(tick: number): string {
+/**
+ * Frame for the active progress indicator. The wave and helix hold their
+ * word-sized seven columns; the snake and cylon grow to the width the
+ * composer border offers, capped at their natural size.
+ */
+export function progressFrame(tick: number, width?: number): string {
   if (style === "dna-helix") return helixFrame(tick);
-  if (style === "snake") return snakeFrame(tick);
-  if (style === "cylon-scanner") return cylonFrame(tick);
+  if (style === "snake") return snakeFrame(tick, width);
+  if (style === "cylon-scanner") return cylonFrame(tick, width);
   return waveFrame(tick);
 }
 

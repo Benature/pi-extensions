@@ -401,7 +401,7 @@ export class ComposerEditor extends CustomEditor {
       ? (statusWidth: number) => {
           const kind = this.statusIndicator?.kind;
           if (isWaveActive() && (kind === undefined || kind === "working")) {
-            return src.theme.italic(src.theme.fg("accent", progressFrame(waveTick())));
+            return src.theme.italic(src.theme.fg("accent", progressFrame(waveTick(), statusWidth)));
           }
           return composerStatusLabel(this.statusIndicator, src.theme, statusWidth);
         }
