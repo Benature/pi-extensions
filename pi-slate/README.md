@@ -70,6 +70,7 @@ For the full workbench, select `/slate surfaces full`, turn `/slate focused off`
 
 - `/slate focused [on|off]` controls the saved focused state; fresh settings still start focused.
 - `/slate pid [on|off]` controls the optional prompt-edge PID label, off by default.
+- `/slate progress [waves|dna-helix|snake|cylon-scanner]` picks the prompt-edge working animation; `waves` is the default.
 - Working/thinking status stays on the prompt edge; the editor keeps its draft and Slate density across host setup.
 - Below **100 columns** or **30 rows**, the rail hides without changing your focus/width preferences. Context and cost return to the composer, with model/thinking when space permits. `/slate session` still reaches details, catalogs, tasks and image controls.
 - Runtime and message counts stay in `/slate session` details. Cache, Uncached, and Rate are visible on the rail usage lane.
@@ -82,6 +83,10 @@ For the full workbench, select `/slate surfaces full`, turn `/slate focused off`
 With the editor selected in the TUI, an observed thinking block adds elapsed whole seconds and the available estimated token rate to the existing prompt-edge working word: `Pondering · 7s · ↑↓42`. Under one second it omits the duration; without a rate it shows `Pondering · 7s`. The timer stops when thinking ends, a response is aborted, or the session shuts down. Print, RPC, and JSON modes are unchanged.
 
 Native thinking visibility, labels, click-to-expand, and `Ctrl+T` remain untouched, including during streaming and on session restore. Settled per-message `Thought 12s` needs a Pi per-message hidden-label API; the current global setter would incorrectly relabel older thoughts.
+
+### Working Indicator
+
+While the model runs, the composer edge shows a progress animation instead of the italic working word: `waves` (the default rolling blocks), `dna-helix` (a turning double helix), `snake` (an ornate diamondback gliding through the slot), or `cylon-scanner` (an `==` eye sweeping a bracketed track). The wave and helix stay word-sized at seven columns; the snake and cylon-scanner use the border's width, capped at their natural size. `/slate progress` picks the style, saved as `progress` in `pi-slate.json` and applied immediately.
 
 ### Diff
 
@@ -205,6 +210,7 @@ These work when `editor` is selected. No terminal configuration.
 | Surfaces | `/slate surfaces [set <names...>\|full\|none]` | Show or save the selected set; requires `/reload`. |
 | Focused | `/slate focused [on\|off]` | Set focused mode. Focused mode hides the sidebar; standard mode restores it. |
 | PID display | `/slate pid [on\|off]` | Show the agent process ID on the composer's top edge. Off by default; omitted when the frame is too narrow. |
+| Working indicator | `/slate progress [waves\|dna-helix\|snake\|cylon-scanner]` | Animate the composer's working-status slot. `waves` is the default. |
 | Sidebar width | `/slate width [default\|narrow\|medium\|wide\|<percent>]` | Choose the sidebar width and return to standard mode. `default` is 20%. |
 | Session dashboard | `/slate session [mcp\|skills\|commands\|tasks\|image]` | Inspect facts, expand/collapse resources, insert commands, or manage the image shelf. |
 | Message length | `/slate message-length [default\|all\|<count>]` | How many chat messages stay on screen. `default` is 100. |

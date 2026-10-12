@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseFlavor, parseStyle, type Flavor, type Style } from "./catppuccin.ts";
 import { parseSurfaces, SURFACES, type Surface } from "./surfaces.ts";
+import { isProgressStyle, type ProgressStyle } from "./working-wave.ts";
 
 // The source SVG is a 4×4 square grid. Terminal cells are approximately twice
 // as tall as they are wide, so every source square occupies two columns.
@@ -297,7 +298,7 @@ export const SLATE_VERSION = JSON.parse(
 ).version as string;
 
 export const SLATE_USAGE =
-  "Usage: /slate session [mcp|skills|commands|tasks|image] | surfaces [set <names...>|full|none] | density [comfortable|compact] | footer [standard|minimal] | width [default|narrow|medium|wide|<percent>] | focused [on|off] | pid [on|off] | message-length [default|all|<count>] | theme [default|tokyo-night|quiet|mauve|sapphire|peach|teal] | style [default|quiet|mauve|sapphire|peach|teal] | bug [file|open]";
+  "Usage: /slate session [mcp|skills|commands|tasks|image] | surfaces [set <names...>|full|none] | density [comfortable|compact] | footer [standard|minimal] | width [default|narrow|medium|wide|<percent>] | focused [on|off] | pid [on|off] | progress [waves|dna-helix|snake|cylon-scanner] | message-length [default|all|<count>] | theme [default|tokyo-night|quiet|mauve|sapphire|peach|teal] | style [default|quiet|mauve|sapphire|peach|teal] | bug [file|open]";
 
 export function withCurrent(label: string, current: boolean): string {
   return current ? `${label} (current)` : label;
@@ -332,6 +333,11 @@ const SLATE_COMPLETIONS = [
   "pid",
   "pid on",
   "pid off",
+  "progress",
+  "progress waves",
+  "progress dna-helix",
+  "progress snake",
+  "progress cylon-scanner",
   "message-length",
   "message-length default",
   "message-length all",
@@ -355,6 +361,7 @@ export type SlateArgs =
   | { ok: true; kind: "width"; width?: number }
   | { ok: true; kind: "focused"; value?: boolean }
   | { ok: true; kind: "pid"; value?: boolean }
+  | { ok: true; kind: "progress"; value?: ProgressStyle }
   | { ok: true; kind: "message-length-menu" }
   | { ok: true; kind: "message-length"; value?: number | "all" }
   | { ok: true; kind: "theme-menu" }
@@ -430,6 +437,11 @@ export function parseSlateArgs(raw: string): SlateArgs {
   if (head === "pid") {
     if (!tail) return { ok: true, kind: "pid" };
     if (tail === "on" || tail === "off") return { ok: true, kind: "pid", value: tail === "on" };
+    return { ok: false };
+  }
+  if (head === "progress") {
+    if (!tail) return { ok: true, kind: "progress" };
+    if (isProgressStyle(tail)) return { ok: true, kind: "progress", value: tail };
     return { ok: false };
   }
   if (head === "message-length") {

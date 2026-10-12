@@ -36,7 +36,7 @@ import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
-import { advanceWave, isWaveActive, setWaveActive } from "./working-wave.ts";
+import { advanceWave, isProgressStyle, isWaveActive, PROGRESS_STYLES, setProgressStyle, setWaveActive, type ProgressStyle } from "./working-wave.ts";
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
@@ -85,6 +85,13 @@ import {
 } from "./catppuccin.ts";
 import { persistTheme, SLATE_THEME } from "./install-defaults.ts";
 
+const PROGRESS_LABELS: Record<ProgressStyle, string> = {
+  waves: "Waves",
+  "dna-helix": "DNA helix",
+  snake: "Snake",
+  "cylon-scanner": "Cylon scanner",
+};
+
 type SlateConfig = SurfaceConfig & {
   density: "comfortable" | "compact";
   sidebarPercent?: number;
@@ -92,6 +99,7 @@ type SlateConfig = SurfaceConfig & {
   messageLength?: number | "all";
   modelDisplay?: ModelDisplay;
   showPid?: boolean;
+  progress?: ProgressStyle;
   sidebarSections: SidebarFolds;
 };
 
@@ -143,6 +151,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
+      ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
     ...(!parsed.ok ? { error: parsed.error } : {}),
@@ -186,6 +195,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   const loaded = loadConfig(configPath);
   const saveConfig = (next: SlateConfig): void => writeConfig(configPath, { ...next, footer: next.composerMetadata });
   let config = loaded.config;
+  setProgressStyle(config.progress ?? "waves");
   // Runtime ownership is fixed until /reload, even when a command saves a new set.
   const selected = [...config.surfaces];
   const owns = (surface: typeof selected[number]): boolean => has(selected, surface);
@@ -713,6 +723,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     try {
       saveConfig(next);
       config = next;
+      setProgressStyle(next.progress ?? "waves");
       if (owns("sidebar")) {
         sidebar.setPreferredWidth(config.sidebarPercent);
         sidebar.setHidden(config.focused === true);
@@ -726,6 +737,14 @@ export default function piSlate(pi: ExtensionAPI): void {
       const messageText = error instanceof Error ? error.message : String(error);
       ctx.ui.notify(`Could not save Slate settings: ${messageText}`, "error");
     }
+  };
+
+  const pickProgress = async (ctx: ExtensionContext): Promise<ProgressStyle | undefined> => {
+    const value = await ctx.ui.select("Progress indicator", PROGRESS_STYLES.map((s) =>
+      withCurrent(PROGRESS_LABELS[s], (config.progress ?? "waves") === s)));
+    if (!value) return undefined;
+    const key = withoutCurrent(value);
+    return PROGRESS_STYLES.find((s) => PROGRESS_LABELS[s] === key);
   };
 
   const pickDensity = async (ctx: ExtensionContext): Promise<SlateConfig["density"] | undefined> => {
@@ -985,7 +1004,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   };
 
   pi.registerCommand("slate", {
-    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, message length, theme, or file a bug",
+    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, progress indicator, message length, theme, or file a bug",
     getArgumentCompletions: slateArgumentCompletions,
     handler: async (args, ctx) => {
       const parsed = parseSlateArgs(args);
@@ -996,7 +1015,7 @@ export default function piSlate(pi: ExtensionAPI): void {
 
       let kind = parsed.kind;
       if (kind === "menu") {
-        const setting = await ctx.ui.select("Slate", ["Session dashboard", "Surfaces", "Density", "Composer metadata", "Sidebar width", "Focused", "PID display", "Message length", "Theme", "File a bug"]);
+        const setting = await ctx.ui.select("Slate", ["Session dashboard", "Surfaces", "Density", "Composer metadata", "Sidebar width", "Focused", "PID display", "Progress indicator", "Message length", "Theme", "File a bug"]);
         if (setting === "Session dashboard") { await sessionMenu(ctx); return; }
         if (setting === "Surfaces") {
           const names = await ctx.ui.input("Surfaces (names separated by spaces, full, or none; reload required)", formatSurfaces(config.surfaces));
@@ -1011,6 +1030,7 @@ export default function piSlate(pi: ExtensionAPI): void {
         else if (setting === "Sidebar width") kind = "width-menu";
         else if (setting === "Focused") kind = "focused";
         else if (setting === "PID display") kind = "pid";
+        else if (setting === "Progress indicator") kind = "progress";
         else if (setting === "Message length") kind = "message-length-menu";
         else if (setting === "Theme") kind = "theme-menu";
         else if (setting === "File a bug") kind = "bug-menu";
@@ -1039,6 +1059,13 @@ export default function piSlate(pi: ExtensionAPI): void {
         const footer = (parsed.kind === "footer" ? parsed.value : undefined) ?? await pickFooter(ctx);
         if (!footer) return;
         apply({ ...config, composerMetadata: footer }, `Composer metadata set to ${footer}`, ctx);
+        return;
+      }
+
+      if (kind === "progress") {
+        const progress = (parsed.kind === "progress" ? parsed.value : undefined) ?? await pickProgress(ctx);
+        if (!progress) return;
+        apply({ ...config, progress }, `Progress indicator set to ${PROGRESS_LABELS[progress]}`, ctx);
         return;
       }
 
