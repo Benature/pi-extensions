@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- Working indicator styles: `/slate progress` picks the composer-border animation — `waves` (default), `dna-helix` (a turning double helix with backbone crossings), `snake` (an ornate diamondback slithering through the slot), or `cylon-scanner` (the == eye sweeping its bracket), all the same slot and size
+Pick the composer's working animation instead of always getting the wave.
+
+### Added
+
+- Working indicator styles: `/slate progress [waves|dna-helix|snake|cylon-scanner]`, also in the `/slate` menu. `waves` stays the default; `dna-helix` turns a double helix, `snake` glides an ornate diamondback through the slot, and `cylon-scanner` sweeps an `==` eye along a bracketed track. The choice saves to `pi-slate.json` as `progress` and applies immediately.
+
+### Changed
+
+- The snake and cylon-scanner indicators grow to the composer border's width budget, capped at their natural size; the wave and helix keep the word-sized seven columns.
+- Indicator glyphs render upright — the animation no longer inherits the old working word's italic.
 
 ## 0.1.14
 
