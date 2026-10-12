@@ -11,8 +11,10 @@ const SCALE = ["-", "~", "*", "'", "*", "~", "-", ".", ",", "_", ","]; // backwa
 /** Natural width in columns; the composer may hand down a narrower budget. */
 export const SNAKE_COLUMNS = 24;
 
-/** Ticks after which the animation repeats exactly: a head lap (2 × 24) in step with the scale shimmer (11). */
-export const SNAKE_PERIOD = 528;
+const HOLD = 2; // ticks each frame holds: the snake glides, it does not hurry
+
+/** Ticks after which the animation repeats exactly: a head lap (2 × 24) in step with the scale shimmer (11), at half speed. */
+export const SNAKE_PERIOD = 1056;
 
 /**
  * One fixed-width snake frame. Never throws; degenerate ticks render frame
@@ -21,10 +23,10 @@ export const SNAKE_PERIOD = 528;
 export function snakeFrame(tick: number, columns = SNAKE_COLUMNS): string {
   const safe = Number.isFinite(tick) ? Math.max(0, Math.floor(tick)) : 0;
   const width = Math.max(3, Math.min(SNAKE_COLUMNS, Math.floor(columns) || SNAKE_COLUMNS));
-  const step = safe % SNAKE_PERIOD;
+  const step = Math.floor((safe % SNAKE_PERIOD) / HOLD);
   const headCol = Math.floor(step / 2) % width; // half a column a tick
   const shift = step % SCALE.length; // the scales shimmer toward the tail
-  const len = width - 2; // cells of snake, one column clear behind the tail
+  const len = Math.max(2, width - 5); // a clear gap behind the tail, so it never bites it
   let frame = "";
   for (let col = 0; col < width; col++) {
     const d = (((headCol - col) % width) + width) % width; // cells behind the snout

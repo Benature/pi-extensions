@@ -34,9 +34,10 @@ test("snake loops exactly after SNAKE_PERIOD ticks", () => {
   }
 });
 
-test("every tick animates: consecutive frames differ", () => {
-  for (let tick = 0; tick < SNAKE_PERIOD; tick++) {
-    assert.notEqual(snakeFrame(tick), snakeFrame(tick + 1), `ticks ${tick}/${tick + 1}`);
+test("the snake glides: frames hold for two ticks, then move", () => {
+  for (let tick = 0; tick < SNAKE_PERIOD; tick += 2) {
+    assert.equal(snakeFrame(tick), snakeFrame(tick + 1), `ticks ${tick}/${tick + 1}: the frame holds`);
+    assert.notEqual(snakeFrame(tick), snakeFrame(tick + 2), `ticks ${tick}/${tick + 2}: then it moves`);
   }
 });
 
@@ -47,6 +48,13 @@ test("the ornate snake keeps its @> head on screen and trails shimmering scales"
   for (let tick = 0; tick < SNAKE_PERIOD; tick++) {
     const frame = snakeFrame(tick);
     assert.ok(frame.includes(">") && frame.includes("@"), `tick ${tick}: the head is always on screen (split at the wrap)`);
+  }
+});
+
+test("the tail never chases the head: a clear gap every frame", () => {
+  for (let tick = 0; tick < SNAKE_PERIOD; tick++) {
+    const gap = snakeFrame(tick).match(/ /g) ?? [];
+    assert.equal(gap.length, 4, `tick ${tick}: four clear columns behind the tail (the gap may wrap the edge)`);
   }
 });
 
