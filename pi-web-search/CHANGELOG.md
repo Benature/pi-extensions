@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replace `/web-search-settings` with `/web-search`. Empty invocation opens a Status / Providers / Classifier menu.
+- `/web-search provider` adds or modifies a retrieval API key and links to the provider's key page. The picker is color-coded: present, missing, or keyless.
+- `/web-search classifier` lists Pi's registered classifiers plus None, available first, with the current pin highlighted on top. Pins require the `classifier` keyword so pasted secrets are not written to `web-search.json`.
+- Pinning a classifier without Pi credentials says how to log in; a failed classifier discovery no longer mislabels every model as login required.
+- Selecting a classifier confirms in one line instead of reprinting the full status report.
+
 ## 0.2.1
 
 Maintenance release: refresh the Pi, TypeScript, and GitHub Actions pins.

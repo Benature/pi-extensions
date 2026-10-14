@@ -11,7 +11,7 @@ This file is a navigation index for agents, not an API specification. Paths are 
 
 ## Source contracts
 
-- [Tool registration](src/index.ts): tools, first-run welcome, and `/web-search-settings`.
+- [Tool registration](src/index.ts): tools, first-run welcome, and `/web-search`.
 - [Configuration resolver](src/providers/config.ts): accepted settings and defaults.
 - [Provider orchestration](src/providers/index.ts): ordinary chains versus research fan-out.
 - [Sourcegraph](src/providers/sourcegraph.ts): keyless stream search.

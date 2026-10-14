@@ -1,8 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
 	getAgentDir,
 	readStoredCredential,
+	withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 
 /** Retrieval credentials only. Pi owns all classifier authentication. */
@@ -172,6 +175,88 @@ function readerForPath(authPath: string): CredentialReader {
 			return undefined;
 		}
 	};
+}
+
+export function defaultAuthPath(): string {
+	return join(getAgentDir(), "auth.json");
+}
+
+/** Merge a literal API key into auth.json. Never logs the key. */
+export async function storeApiKey(
+	providerId: CredentialProviderId,
+	key: string,
+	authPath?: string,
+): Promise<{ path: string; replaced: boolean }> {
+	const trimmed = trim(key);
+	if (trimmed === undefined) {
+		throw new Error("API key is empty.");
+	}
+	const result = await mutateAuth(authPath, (current) => {
+		const existing = current[providerId];
+		const replaced = isPlainObject(existing);
+		current[providerId] = { type: "api_key", key: trimmed };
+		return { write: true, flag: replaced };
+	});
+	return { path: result.path, replaced: result.flag };
+}
+
+async function mutateAuth(
+	authPath: string | undefined,
+	mutate: (current: Record<string, unknown>) => { write: boolean; flag: boolean },
+): Promise<{ path: string; flag: boolean }> {
+	const path = authPath ?? defaultAuthPath();
+	const targetPath = await realpath(path).catch((error) => {
+		if (isMissingFileError(error)) {
+			return path;
+		}
+		throw error;
+	});
+	return withFileMutationQueue(targetPath, async () => {
+		const current = await readAuthObject(targetPath);
+		const { write, flag } = mutate(current);
+		if (!write) {
+			return { path, flag };
+		}
+		await mkdir(dirname(targetPath), { recursive: true });
+		const temporary = `${targetPath}.${randomUUID()}.tmp`;
+		try {
+			await writeFile(temporary, `${JSON.stringify(current, null, 2)}\n`, {
+				mode: 0o600,
+				flag: "wx",
+			});
+			await rename(temporary, targetPath);
+		} finally {
+			await unlink(temporary).catch(() => {});
+		}
+		return { path, flag };
+	});
+}
+
+async function readAuthObject(path: string): Promise<Record<string, unknown>> {
+	try {
+		const raw = await readFile(path, "utf-8");
+		const parsed: unknown = JSON.parse(raw);
+		if (!isPlainObject(parsed)) {
+			throw new Error("auth.json is not a JSON object. It was not changed.");
+		}
+		return parsed;
+	} catch (error) {
+		if (isMissingFileError(error)) {
+			return {};
+		}
+		if (error instanceof SyntaxError) {
+			throw new Error("auth.json is malformed. It was not changed.", { cause: error });
+		}
+		throw error;
+	}
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isMissingFileError(error: unknown): boolean {
+	return !!error && typeof error === "object" && "code" in error && error.code === "ENOENT";
 }
 
 function trim(value: string | undefined): string | undefined {

@@ -4,7 +4,7 @@
 
 ## Enable multi-source search
 
-Merge into the config file printed by `/web-search-settings`, then run `/reload`:
+Merge into the config file printed by `/web-search`, then run `/reload`:
 
 ```json
 { "research": { "enabled": true } }
@@ -27,16 +27,12 @@ Multi-source tool registration is fixed at extension load. Execution rechecks th
 Authenticate a classifier in Pi, then pin that exact catalog pair:
 
 ```text
-/web-search-settings on
+/web-search classifier
 ```
 
-`on` enables multi-source search and judgment. It keeps an existing provider/model pin without checking other accounts. Otherwise, it selects a pin only when Pi reports exactly one available classifier. The command stops waiting after three seconds and requests cancellation. If discovery fails, settings stay unchanged. Select an exact provider/model to avoid discovery:
+The picker lists Pi's registered classifiers plus **None**. `/web-search classifier typesafe/jev-latest` pins that exact pair without discovery. `/web-search on` still enables judgment and auto-pins only when Pi reports exactly one available classifier. Discovery stops after three seconds; a failure leaves settings unchanged.
 
-```text
-/web-search-settings typesafe/jev-latest
-```
-
-`/web-search-settings off` disables judgment only. The command atomically merges nonsecret settings, preserves tuning, and refuses malformed files. It does not write credentials.
+`/web-search classifier none` disables judgment only. The command atomically merges nonsecret settings, preserves tuning, and refuses malformed files. Retrieval keys are stored separately through `/web-search provider` into `auth.json`.
 
 ```json
 {
@@ -53,7 +49,7 @@ Run `/reload` if research was not already exposed. Other judgment config changes
 
 Old `jev.backend` settings no longer select a provider. Model names do not receive automatic alias changes.
 
-1. Run `/web-search-settings` to check the current pin.
+1. Run `/web-search` to check the current pin.
 2. Select the matching command from the [provider table](../README.md#try-jev-with-your-existing-pi-login).
 3. Run `/reload` if you enabled `multi_search`.
 

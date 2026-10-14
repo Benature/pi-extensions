@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -12,6 +12,7 @@ import {
 	githubToken,
 	parallelApiKey,
 	resolveCredential,
+	storeApiKey,
 } from "../src/env.ts";
 
 async function tempAuthFile(
@@ -116,4 +117,28 @@ test("the alias table documents every supported provider id", () => {
 	assert.deepEqual(CREDENTIAL_ENV_ALIASES.github, ["GITHUB_TOKEN", "GH_TOKEN"]);
 	assert.deepEqual(Object.keys(CREDENTIAL_ENV_ALIASES), ["exa", "parallel", "github"]);
 	assert.ok(Object.values(CREDENTIAL_ENV_ALIASES).flat().every((name) => !["TYPESAFE_API_KEY", "JEV_API_KEY", "AI_GATEWAY_API_KEY", "OPENROUTER_API_KEY"].includes(name)));
+});
+
+test("storeApiKey merges one literal key and leaves other entries", async () => {
+	await tempAuthFile({ openai: { type: "api_key", key: "keep" } }, async (authPath) => {
+		const saved = await storeApiKey("exa", "  new-key  ", authPath);
+		assert.equal(saved.path, authPath);
+		assert.equal(saved.replaced, false);
+		assert.deepEqual(JSON.parse(await readFile(authPath, "utf8")), {
+			openai: { type: "api_key", key: "keep" },
+			exa: { type: "api_key", key: "new-key" },
+		});
+	});
+});
+
+test("a malformed auth file is never overwritten", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "pi-web-search-auth-"));
+	const authPath = join(dir, "auth.json");
+	try {
+		await writeFile(authPath, "{ broken", "utf-8");
+		await assert.rejects(storeApiKey("exa", "secret", authPath), /malformed/);
+		assert.equal(await readFile(authPath, "utf-8"), "{ broken");
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
 });

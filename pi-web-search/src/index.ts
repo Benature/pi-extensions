@@ -5,27 +5,20 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { VERSION } from "@earendil-works/pi-coding-agent";
-import { parallelApiKey } from "./env.ts";
+import {
+	handleWebSearchCommand,
+	WEB_SEARCH_COMMAND,
+	webSearchCompletions,
+} from "./command.ts";
+import { enableStoredCredentials, parallelApiKey } from "./env.ts";
 import { PARALLEL_MCP_SERVER, PARALLEL_MCP_URL } from "./providers/parallel.ts";
 import {
 	type CodeSearchInput,
 	CodeSearchSchema,
 	codeSearch,
 } from "./code_search.ts";
-import {
-	CREDENTIAL_ENV_ALIASES,
-	CREDENTIAL_PROVIDER_IDS,
-	enableStoredCredentials,
-	githubToken,
-	resolveCredential,
-} from "./env.ts";
 import { SearchOutputSchema, type WebSearchDetails } from "./format.ts";
-import {
-	configureJudgment,
-	parseJudgmentArgs,
-	resolveSettings,
-	resolveSettingsSync,
-} from "./providers/config.ts";
+import { resolveSettingsSync } from "./providers/config.ts";
 import {
 	type MultiSearchInput,
 	MultiSearchSchema,
@@ -37,7 +30,6 @@ import {
 	webSearch,
 } from "./web_search.ts";
 import { maybeShowWelcome } from "./welcome.ts";
-import { awaitWithSignal, withTimeout } from "./providers/http.ts";
 
 /** Fail closed on unsupported or malformed host versions. */
 export function assertSupportedPiVersion(version: string): void {
@@ -168,38 +160,15 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 		});
 	}
 
-	pi.registerCommand("web-search-settings", {
-		description: "Show search settings; use on, off, or provider/model to configure optional judgment",
-		getArgumentCompletions: (prefix) => ["on", "off"].filter((value) => value.startsWith(prefix))
-			.map((value) => ({ value, label: value })),
-		handler: async (args, ctx) => {
-			const selection = parseJudgmentArgs(args);
-			let report: string;
-			if (selection === undefined) {
-				report = "Usage: /web-search-settings [on|off|provider/model]. No keys belong in this command.";
-			} else {
-				try {
-					const saved = selection === "status" ? undefined : await configureJudgment(
-						selection,
-						selection === "on" ? () => availableClassifiers(ctx.modelRegistry, ctx.signal) : [],
-					);
-					report = (saved ? `Saved search settings to ${saved.path}. Run /reload to apply tool exposure changes.${saved.note ? `\n${saved.note}` : ""}\n\n` : "") +
-						await buildSettingsReport(ctx.modelRegistry);
-				} catch (error) {
-					report = error instanceof ClassifierDiscoveryError
-						? error.message
-						: "Could not update search settings. Check the config file and permissions. Malformed configuration is never overwritten.";
-				}
-			}
-			if (ctx.hasUI) {
-				ctx.ui.notify(report, "info");
-			} else {
-				// Do not corrupt JSON/RPC stdout in headless mode.
-				pi.sendMessage({ customType: "web-search-settings", content: report, display: true });
-			}
-		},
-	});
+	const command = {
+		description: "Search settings, provider keys, or classifier pin",
+		getArgumentCompletions: webSearchCompletions,
+		handler: (args: string, ctx: ExtensionContext) => handleWebSearchCommand(args, ctx, pi),
+	};
+	pi.registerCommand(WEB_SEARCH_COMMAND, command);
 }
+
+export { availableClassifiers } from "./command.ts";
 
 type RenderTheme = {
 	fg: (color: "error" | "toolOutput" | "muted", text: string) => string;
@@ -249,100 +218,4 @@ function compactSummary(details: WebSearchDetails | undefined): string {
 		parts.push(`jev ${details.jevStatus}`);
 	}
 	return parts.join(" · ");
-}
-
-/**
- * Report retrieval credential presence and Pi's classifier auth snapshot, never keys.
- * No classifier requests or credential re-resolution are made here.
- */
-async function buildSettingsReport(registry: ExtensionContext["modelRegistry"] | undefined): Promise<string> {
-	const resolved = await resolveSettings();
-	if ("error" in resolved) {
-		return [
-			"pi-web-search settings",
-			`config: ${resolved.error.configPath}`,
-			`error: ${resolved.error.message}`,
-			"Fix the file, then run /reload.",
-		].join("\n");
-	}
-
-	const pin = resolved.jev.provider && resolved.jev.model
-		? `${resolved.jev.provider}/${resolved.jev.model}`
-		: "unpinned";
-	const list = (kinds: readonly string[]) =>
-		kinds.length > 0 ? kinds.join(", ") : "none";
-	const lines: string[] = [
-		"pi-web-search settings",
-		`config: ${resolved.configPath}`,
-		`web_search: ${resolved.web.provider} (fallback: ${list(resolved.web.fallback)})`,
-		`code_search: ${resolved.code.provider} (fallback: ${list(resolved.code.fallback)})`,
-		`multi_search: ${resolved.researchEnabled ? "enabled" : "disabled"}`,
-		`jev: ${resolved.jev.enabled ? `enabled (${pin})` : "disabled"}`,
-		"",
-		"Search credentials (presence only; keys are never shown):",
-	];
-	for (const id of CREDENTIAL_PROVIDER_IDS) {
-		const found = resolveCredential(id);
-		const aliases = CREDENTIAL_ENV_ALIASES[id].join(" or ");
-		const viaGh = id === "github" && found === undefined && githubToken() !== undefined;
-		lines.push(
-			found
-				? `- ${id}: present via ${found.source === "env" ? found.name : "auth.json"}`
-				: viaGh
-					? `- github: present via gh auth`
-					: id === "parallel"
-					? `- parallel: anonymous MCP needs no key; ${aliases} or auth.json is optional for higher limits`
-					: id === "github"
-						? `- github: missing — set ${aliases}, run gh auth login, or add "github" to auth.json`
-						: `- ${id}: missing — set ${aliases}, or add "${id}" to auth.json`,
-		);
-	}
-	if (resolved.jev.provider && resolved.jev.model) {
-		const auth = registry?.getProviderAuthStatus(resolved.jev.provider);
-		const registered = registry?.findOfType("classifier", resolved.jev.provider, resolved.jev.model);
-		lines.push(
-			"",
-			"Pinned classifier (Pi snapshot; not a live credential test):",
-			`- ${resolved.jev.provider}/${resolved.jev.model}: ${auth?.configured ? "Pi auth configured" : registry ? "Pi auth not configured" : "Pi auth status unavailable"}; ${registered ? "registered" : "not registered"}.`,
-		);
-	}
-	lines.push(
-		"",
-		"Setup:",
-		"- Judgment uses one exact Pi classifier. No separate Jev key; provider billing applies.",
-		"- Enable: /web-search-settings on (pins only if Pi has exactly one available classifier).",
-		"- Or pin explicitly: /web-search-settings provider/model then /reload.",
-		"- Disable judgment: /web-search-settings off. Nonsecret settings live in web-search.json.",
-		"- Code search is keyless via grep.app and Sourcegraph. GitHub is optional (token or gh auth login).",
-		"- Parallel native MCP is keyless by default; check /mcp for connection status or a same-name mcp.json override.",
-		"- Run /reload after changing multi_search exposure or a Parallel credential (its MCP header is captured at registration).",
-		"- Install from a repository checkout: pi install ./pi-web-search",
-		"- After an npm release is available: pi install npm:@gagansd/pi-web-search",
-	);
-	return lines.join("\n");
-}
-
-class ClassifierDiscoveryError extends Error {}
-
-export async function availableClassifiers(
-	registry: ExtensionContext["modelRegistry"] | undefined,
-	signal?: AbortSignal,
-	timeoutMs = 3_000,
-) {
-	if (!registry) return [];
-	const deadline = withTimeout(signal, timeoutMs);
-	try {
-		if (deadline.signal.aborted) throw deadline.signal.reason;
-		const models = await awaitWithSignal(
-			registry.getAvailableOfType("classifier", undefined, { signal: deadline.signal }),
-			deadline.signal,
-		);
-		return models.map((model) => ({ provider: model.provider, id: model.id }));
-	} catch {
-		throw new ClassifierDiscoveryError(
-			"Classifier discovery failed or stopped. Settings did not change. Use /web-search-settings provider/model to select a classifier directly.",
-		);
-	} finally {
-		deadline.dispose();
-	}
 }

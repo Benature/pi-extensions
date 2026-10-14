@@ -13,9 +13,16 @@ Requires Pi **0.99.0 or newer**.
 
 1. Install: `pi install npm:@gagansd/pi-web-search`
 
-2. The first interactive session shows a one-time setup prompt for existing Exa, GitHub, and Parallel credentials. For optional keys and settings anytime, run `/web-search-settings`.
+2. The first interactive session shows a one-time setup prompt for existing Exa, GitHub, and Parallel credentials. For keys and settings anytime, run `/web-search`.
 
 > Keyless configs have limitations set by Exa and Parallel.
+
+| Command | What it does |
+| --- | --- |
+| `/web-search` | Menu: status, provider keys, classifier. Headless prints status. |
+| `/web-search status` | Providers, credential presence (never keys), and the classifier pin. |
+| `/web-search provider [name]` | Add or modify a retrieval key. The picker is color-coded: keyless, optional, or required; present or missing. |
+| `/web-search classifier [none\|provider/model]` | Pin a classifier for judgment, pick from the list, or disable with `none`. |
 
 ## Classifier API
 
@@ -37,26 +44,29 @@ The classifier receives the query and candidate titles, URLs, and excerpts as st
 | **Any Pi classifier** including llama.cpp | Pin its exact `provider`/`model`. |
 | **OpenAI Decisions API** | Planned adapter; official API contract and access still need verification. Not available today. |
 
-The provider-independent boundary makes other classifiers possible without rewriting retrieval or ranking. Pin any registered Pi classifier with `/web-search-settings provider/model`.
+The provider-independent boundary makes other classifiers possible without rewriting retrieval or ranking. Pin any registered Pi classifier with `/web-search classifier`.
 
 ### Try Jev with your existing Pi login
 
 For OpenRouter:
 
 1. Run `/login openrouter` **only if Pi isn't already authenticated**.
-2. Run `/web-search-settings openrouter/~typesafe/jev-latest`.
+2. Run `/web-search classifier` and pick `openrouter/~typesafe/jev-latest`, or `/web-search classifier openrouter/~typesafe/jev-latest`.
 3. Run `/reload`.
 4. Ask: “Use multi_search to search the web for AbortSignal.timeout.”
 
 | Use | Setup command | Default model |
 | --- | --- | --- |
-| TypeSafe | `/web-search-settings typesafe/jev-latest` | `jev-latest` |
-| Vercel AI Gateway | `/web-search-settings vercel-ai-gateway/typesafe-ai/jev` | `typesafe-ai/jev` |
-| OpenRouter | `/web-search-settings openrouter/~typesafe/jev-latest` | `~typesafe/jev-latest` |
+| TypeSafe | `/web-search classifier typesafe/jev-latest` | `jev-latest` |
+| Vercel AI Gateway | `/web-search classifier vercel-ai-gateway/typesafe-ai/jev` | `typesafe-ai/jev` |
+| OpenRouter | `/web-search classifier openrouter/~typesafe/jev-latest` | `~typesafe/jev-latest` |
+| OpenCode | `/web-search classifier opencode/jev-1.13` | `jev-1.13` |
+| OpenAI Decisions | `/web-search classifier openai/gpt-6-luna` | `gpt-6-luna` |
+| Cloudflare Workers AI | `/web-search classifier` and pick a listed Clef/Jev model | catalog |
 
-The command enables multi-source search and judgment in `web-search.json`, preserving your other settings. **No second API key is needed.** Pi reuses its stored, environment, runtime, or model authentication. If needed, use Pi's `/login vercel-ai-gateway` or `/login typesafe` for the other providers.
+`/web-search classifier` lists every classifier Pi currently registers, plus **None**. Classifiers do not appear in `/model`; this picker is the search-specific pin. Pinning enables multi-source search and judgment in `web-search.json`, preserving your other settings. **No second API key is needed.** Pi reuses its stored, environment, runtime, or model authentication. If needed, use Pi's `/login` for that provider.
 
-`/web-search-settings` shows status; `/web-search-settings off` disables judgment but keeps search enabled. There is no gateway ladder or default classifier. Hosted classification is billed to the pinned account.
+`/web-search classifier none` disables judgment; search stays on. Hosted classification is billed to the pinned account.
 
 Classification is off by default. Failures keep retrieved evidence with warnings. Hosted classifiers receive excerpts before output clipping; safety judgments are not a security boundary. See [all settings and limits](docs/research.md).
 
@@ -123,7 +133,7 @@ See the [configuration resolver](src/providers/config.ts) for validation details
 
 ### Optional multi-source search and Jev
 
-1. Run `/web-search-settings` to identify the config path.
+1. Run `/web-search` to identify the config path.
 2. Merge `{"research":{"enabled":true}}` into that file.
 3. Run `/reload`.
 
@@ -157,7 +167,9 @@ Merge this entry into existing `auth.json` without replacing other credentials:
 - Exclude auth files from version control.
 - Use narrowly scoped keys/tokens.
 
-The [retrieval credential resolver](src/env.ts) reads literal `.key` strings, not shell commands, embedded environment references, or OAuth refresh credentials. Unreadable/malformed auth means no stored key. The extension never writes credentials.
+The [retrieval credential resolver](src/env.ts) reads literal `.key` strings, not shell commands, embedded environment references, or OAuth refresh credentials. Unreadable/malformed auth means no stored key.
+
+`/web-search provider` adds or modifies a retrieval key in `auth.json` and shows where to create one. Keys are never command arguments, never written to `web-search.json`, and never displayed after you type them. Environment aliases still win over the stored value.
 
 Pi supplies optional host peers. This package does not install another Pi copy. See the [npm advisory notes](docs/release-validation.md#npm-advisory-and-host-dependencies).
 
@@ -165,7 +177,7 @@ Pi alone resolves classifier authentication at judgment time. Jev needs no separ
 
 Each provider controls quotas and billing. Keys do not guarantee quota or price changes. Additional sources do not guarantee results or availability.
 
-`/web-search-settings` shows an authentication snapshot, not a live key-validity test. It never displays keys.
+`/web-search` shows an authentication snapshot, not a live key-validity test. It never displays keys.
 
 ## Provider behavior and limits
 
@@ -177,7 +189,7 @@ Each provider controls quotas and billing. Keys do not guarantee quota or price 
 
 Retrieval and judgment share a default **20-second** budget. Cleanup can take longer. Jev failures return unjudged evidence with warnings. Retrieval deadline expiry or caller cancellation fails the call.
 
-Check warnings and `/web-search-settings`. Use `/mcp` for Parallel connection issues.
+Check warnings and `/web-search`. Use `/mcp` for Parallel connection issues.
 
 ## Data handling
 

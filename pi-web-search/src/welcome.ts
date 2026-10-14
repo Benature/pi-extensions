@@ -65,8 +65,8 @@ export function setupBlurb(snap: WelcomeSnapshot): string {
 	return [
 		...welcomeGaps(snap),
 		"Existing Exa, GitHub, and Parallel credentials are reused. No second login.",
-		"Optional judgment: /web-search-settings on after a Pi classifier is available.",
-		"This prompt is shown once. /web-search-settings anytime.",
+		"Optional judgment: /web-search classifier after a Pi classifier is available.",
+		"This prompt is shown once. /web-search anytime.",
 	].join("\n");
 }
 
