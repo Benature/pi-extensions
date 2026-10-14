@@ -379,7 +379,7 @@ export async function listSupportedClassifiers(
 		provider: model.provider,
 		id: model.id,
 	}));
-	let available: AvailableClassifier[] = [];
+	let available: AvailableClassifier[];
 	try {
 		available = await availableClassifiers(registry, signal);
 	} catch {

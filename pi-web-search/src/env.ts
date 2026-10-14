@@ -280,7 +280,7 @@ async function readAuthObject(path: string): Promise<Record<string, unknown>> {
 			return {};
 		}
 		if (error instanceof SyntaxError) {
-			throw new Error("auth.json is malformed. It was not changed.");
+			throw new Error("auth.json is malformed. It was not changed.", { cause: error });
 		}
 		throw error;
 	}
