@@ -1,6 +1,7 @@
 import type { Config } from "./types.ts";
 import { keys, object } from "./validation.ts";
 
+export const MAX_RESUMES = 3;
 export const DEFAULT_CONFIG: Readonly<Config> = Object.freeze({
   maxConcurrent: 4, maxRuns: 32, timeoutMs: 1800000,
 });

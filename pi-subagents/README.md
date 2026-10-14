@@ -37,8 +37,8 @@ and print/RPC/standalone hosts are not supported.
 
 - Delegate bounded work from one agent session to worker and reviewer sub-agents
 - Fresh native Pi sessions, session-bound, no nested delegation
-- `subagent` tool: run (1–4 tasks), list, status, steer, stop, reply
-- `/subagents` to attach, steer, reply, or stop
+- `subagent` tool: run (1–4 tasks), list, status, resume, steer, stop, reply
+- `/subagents` to attach, resume, steer, reply, or stop
 - Focusable worker roster and dedicated conversations; settled runs leave the roster
 - Supports Markdown agent profiles
 - Local reports and transcripts
@@ -70,7 +70,8 @@ Run/session UUIDs and PID are not primary navigation labels.
   conversation and actions; **PageUp/PageDown** scrolls. **Esc/Back** returns.
 - **Details** exposes technical evidence; **Tools** expands tool output;
   **Older/Latest** pages conversation history. **Stop** requires confirmation and
-  stays available independently of an in-flight send.
+  stays available independently of an in-flight send. **Resume** appears only for
+  a transient provider failure with a saved transcript and also requires confirmation.
 
 The thread paints the whole conversation workspace, not a translucent diagnostic
 popup. With cooperative Slate and a compatible fullscreen Pi 1.1+ host, it borrows

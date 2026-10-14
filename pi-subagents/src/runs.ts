@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ArtifactStore } from "./artifacts.ts";
-import { errorText, isLive, PREVIEW_LINES, type SubAgent, type Config, type PreparedTask, type Question, type RunRecord } from "./types.ts";
+import { MAX_RESUMES } from "./config.ts";
+import { errorText, isLive, PREVIEW_LINES, RESUME_PROMPT, type FailureKind, type ResumeFrom, type ResumeState, type SubAgent, type Config, type PreparedTask, type Question, type RunRecord } from "./types.ts";
 import { overlaps } from "./workspace.ts";
 import { text } from "./validation.ts";
+
+function resumeState(attempts: number, eligible: boolean, kind?: FailureKind): ResumeState {
+  return { eligible, attempts, maxAttempts: MAX_RESUMES, ...(kind ? { kind } : {}) };
+}
 
 interface PendingQuestion {
   question: Question;
@@ -12,6 +17,7 @@ interface PendingQuestion {
 }
 interface Run {
   record: RunRecord;
+  plan: PreparedTask;
   preview: string[];
   controller: AbortController;
   subAgent?: SubAgent;
@@ -53,28 +59,28 @@ export class RunManager {
   live(): RunRecord[] { return [...this.runs.values()].filter(run => isLive(run.record.state)).map(run => this.snapshot(run)); }
   status(id: string): RunRecord { return this.snapshot(this.owned(id)); }
   preview(id: string): string[] { return this.owned(id).preview.slice(); }
-  get activeCount(): number { return [...this.runs.values()].filter(run => isLive(run.record.state)).length; }
+  get activeCount(): number { return this.liveRecords().length; }
 
   /** Serialize allocation and admission across concurrent model tool calls. */
-  async launch(plans: PreparedTask[], signal?: AbortSignal): Promise<string[]> {
+  private async serialized<T>(work: () => Promise<T>): Promise<T> {
     let release!: () => void;
     const previous = this.admission;
     this.admission = new Promise(resolve => { release = resolve; });
     await previous;
-    try {
+    try { return await work(); } finally { release(); }
+  }
+
+  async launch(plans: PreparedTask[], signal?: AbortSignal): Promise<string[]> {
+    return this.serialized(async () => {
       signal?.throwIfAborted();
       this.assertLaunchable();
       if (plans.length < 1 || plans.length > 4) throw new Error("A batch needs 1–4 tasks");
       if (this.activeCount + plans.length > this.options.config.maxConcurrent) throw new Error("Concurrent sub-agent limit reached; wait for existing results");
       if (this.admitted + plans.length > this.options.config.maxRuns) throw new Error("Session launch budget exhausted");
-      const live = [...this.runs.values()].filter(run => isLive(run.record.state)).map(run => run.record);
-      const all = [...live, ...plans];
-      for (let i = live.length; i < all.length; i++) {
-        for (let j = 0; j < i; j++) {
-          if ((all[i]!.mode === "edit" || all[j]!.mode === "edit") && await overlaps(all[i]!.workspace, all[j]!.workspace)) {
-            throw new Error("Conflicting delegated workspaces: writers cannot overlap other readers or writers. Use separate existing worktrees.");
-          }
-        }
+      const admitted: Pick<RunRecord, "mode" | "workspace">[] = this.liveRecords();
+      for (const plan of plans) {
+        await this.assertWorkspaceFree(plan, admitted);
+        admitted.push(plan);
       }
       const staged: Run[] = [];
       try {
@@ -86,7 +92,7 @@ export class RunManager {
             startedAt: new Date().toISOString(), elapsedMs: 0, pid: process.pid,
             metadataPath: path.join(this.options.store.directory(id), "run.json"),
           };
-          const run: Run = { record, preview: [], controller: new AbortController(), work: Promise.resolve(), writes: Promise.resolve(), notified: false, cleaned: false, pendingWrites: new Set() };
+          const run: Run = { record, plan, preview: [], controller: new AbortController(), work: Promise.resolve(), writes: Promise.resolve(), notified: false, cleaned: false, pendingWrites: new Set() };
           staged.push(run);
           await this.io(signal => this.options.store.create(record, signal));
         }
@@ -105,13 +111,65 @@ export class RunManager {
       }
       this.admitted += plans.length;
       for (const run of staged) this.runs.set(run.record.id, run);
-      for (const [index, run] of staged.entries()) {
+      for (const run of staged) {
         run.timer = setTimeout(() => { void this.stop(run.record.id, "Run deadline exceeded").catch(() => {}); }, this.options.config.timeoutMs);
-        run.work = this.execute(run, plans[index]!);
+        run.work = this.execute(run);
       }
       this.changed();
       return staged.map(run => run.record.id);
-    } finally { release(); }
+    });
+  }
+
+  async resume(id: string): Promise<void> {
+    return this.serialized(async () => {
+      const run = this.owned(id);
+      this.assertResumable(run);
+      await run.work;
+      if (run.finishing) await run.finishing.catch(() => {});
+      await run.writes;
+      this.assertResumable(run);
+      this.assertLaunchable();
+      if (this.activeCount + 1 > this.options.config.maxConcurrent) throw new Error("Concurrent sub-agent limit reached; wait for existing results");
+      const record = run.record;
+      await this.assertWorkspaceFree(record, this.liveRecords());
+      // Only the record and the controller swap precede the persist await, so a stop()
+      // interleaving during it acts on the new attempt. Everything else resets once the
+      // starting snapshot is durable, which keeps the rollback to two assignments.
+      const priorRecord = this.snapshot(run);
+      const priorController = run.controller;
+      record.resume = resumeState(record.resume!.attempts + 1, false);
+      record.state = "starting";
+      record.startedAt = new Date().toISOString();
+      record.endedAt = undefined;
+      record.currentTool = undefined;
+      record.question = undefined;
+      record.reportPath = undefined;
+      record.error = undefined;
+      record.notificationError = undefined;
+      record.usage = undefined;
+      record.toolErrors = undefined;
+      record.contextUsage = undefined;
+      run.controller = new AbortController();
+      try { await this.persist(run); }
+      catch (error) {
+        Object.assign(run.record, priorRecord);
+        run.controller = priorController;
+        await this.persist(run).catch(() => {});
+        throw error;
+      }
+      run.preview = [];
+      run.question = undefined;
+      run.subAgent = undefined;
+      run.notified = false;
+      run.cleaned = false;
+      run.stopping = undefined;
+      run.aborting = undefined;
+      run.finishing = undefined;
+      clearTimeout(run.timer);
+      run.timer = setTimeout(() => { void this.stop(record.id, "Run deadline exceeded").catch(() => {}); }, this.options.config.timeoutMs);
+      run.work = this.execute(run, { sessionPath: record.sessionPath!, launchHead: record.launchHead, sessionId: record.sessionId });
+      this.changed();
+    });
   }
 
   async steer(id: string, message: string): Promise<string> {
@@ -177,6 +235,24 @@ export class RunManager {
     if (this.blocked) throw new Error(this.blocked);
     this.options.assertLaunchable?.();
   }
+  private liveRecords(): RunRecord[] {
+    return [...this.runs.values()].filter(run => isLive(run.record.state)).map(run => run.record);
+  }
+  private async assertWorkspaceFree(candidate: Pick<RunRecord, "mode" | "workspace">, others: readonly Pick<RunRecord, "mode" | "workspace">[]): Promise<void> {
+    for (const other of others) {
+      if ((candidate.mode === "edit" || other.mode === "edit") && await overlaps(candidate.workspace, other.workspace)) {
+        throw new Error("Conflicting delegated workspaces: writers cannot overlap other readers or writers. Use separate existing worktrees.");
+      }
+    }
+  }
+  private assertResumable(run: Run): void {
+    const record = run.record;
+    const evidence = record.resume;
+    if (record.state !== "failed" || evidence?.kind !== "transient_provider" || !record.sessionPath) {
+      throw new Error("Resume requires a failed transient provider run with confirmed cleanup and a saved transcript");
+    }
+    if (!evidence.eligible || evidence.attempts >= evidence.maxAttempts) throw new Error("Resume allowance exhausted");
+  }
   private poison(run: Run, reason: string): void {
     if (run.record.state === "cleanup_unknown") return;
     run.record.state = "cleanup_unknown";
@@ -204,10 +280,12 @@ export class RunManager {
       .finally(() => { run.pendingWrites.delete(controller); });
   }
 
-  private async execute(run: Run, plan: PreparedTask): Promise<void> {
+  private async execute(run: Run, resumeFrom?: ResumeFrom): Promise<void> {
     let failed: string | undefined;
+    let failure: FailureKind | undefined;
+    const attempts = resumeFrom ? run.record.resume!.attempts : 0;
     try {
-      const subAgent = await plan.start({
+      const subAgent = await run.plan.start({
         signal: run.controller.signal, directory: this.options.store.directory(run.record.id),
         own: subAgent => {
           if (run.subAgent && run.subAgent !== subAgent) throw new Error("Startup transferred more than one sub-agent");
@@ -226,6 +304,7 @@ export class RunManager {
           run.record.contextUsage = { ...usage };
           this.changed(); // Cached UI update only; lifecycle writes persist the latest snapshot.
         },
+        baseline: head => { run.record.launchHead ??= head; },
         progress: tool => { if (!run.controller.signal.aborted) { run.record.currentTool = tool; this.changed(); } },
         preview: line => {
           run.preview.push(line.slice(0, 512));
@@ -234,7 +313,7 @@ export class RunManager {
         },
         transcript: file => { run.record.sessionPath = file; },
         ask: (message, signal) => this.ask(run, message, signal),
-      });
+      }, resumeFrom);
       if (run.subAgent && run.subAgent !== subAgent) throw new Error("Startup returned a different sub-agent than it owned");
       run.subAgent = subAgent;
       run.controller.signal.throwIfAborted();
@@ -242,12 +321,13 @@ export class RunManager {
       await this.persist(run);
       this.changed();
       run.controller.signal.throwIfAborted();
-      const result = await run.subAgent.prompt();
+      const result = await run.subAgent.prompt(resumeFrom ? RESUME_PROMPT : undefined);
       run.record.usage = result.usage;
       run.record.toolErrors = result.toolErrors;
       run.controller.signal.throwIfAborted();
       run.record.reportPath = await this.io(signal => this.options.store.report(run.record.id, result.report, signal));
     } catch (error) {
+      failure = run.subAgent?.failure?.();
       failed = errorText(error);
       run.record.error ??= failed;
     }
@@ -265,6 +345,15 @@ export class RunManager {
     run.cleaned = !unclean;
     if (run.cleaned) run.subAgent = undefined; // Do not retain SDK transcripts through settled wrappers.
     if (unclean) this.poison(run, `Cleanup not confirmed: ${unclean}`);
+    if (failed || failure) {
+      run.record.resume = resumeState(
+        attempts,
+        Boolean(failure === "transient_provider" && run.cleaned && run.record.sessionPath && !run.controller.signal.aborted && attempts < MAX_RESUMES),
+        failure,
+      );
+    } else if (resumeFrom) {
+      run.record.resume = resumeState(attempts, false);
+    }
     // A stop deadline may have published failure or uncertainty already. Never promote it later.
     if (run.record.state === "cleanup_unknown" || !isLive(run.record.state)) {
       clearTimeout(run.timer);

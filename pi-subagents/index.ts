@@ -155,6 +155,7 @@ export default function subagents(pi: ExtensionAPI): void {
       preview: id => manager.preview(id),
       steer: (id, message) => manager.steer(id, message),
       reply: (id, requestId, message) => manager.reply(id, requestId, message),
+      resume: id => manager.resume(id),
       stop: id => manager.stop(id),
       live: () => manager.live(),
       subscribe: listener => { inspectors.add(listener); return () => { inspectors.delete(listener); }; },
@@ -276,8 +277,9 @@ export default function subagents(pi: ExtensionAPI): void {
           break;
         }
         case "steer": await manager.steer(request.id, request.message); result = { ok: true }; break;
-        case "stop": {
-          await manager.stop(request.id);
+        case "stop":
+        case "resume": {
+          await (request.action === "stop" ? manager.stop(request.id) : manager.resume(request.id));
           const record = manager.status(request.id);
           details = record; result = presentRun(record);
           break;
@@ -325,7 +327,7 @@ export default function subagents(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("subagents", {
-    description: "Inspect or take control: /subagents [id | stop <id> | steer <id> <text> | reply <id> <text>]",
+    description: "Inspect or take control: /subagents [id | resume <id> | stop <id> | steer <id> <text> | reply <id> <text>]",
     async handler(args, ctx) {
       try {
         const state = await current(ctx);
@@ -348,7 +350,8 @@ export default function subagents(pi: ExtensionAPI): void {
           return;
         }
         const id = resolveRun(manager.list(), request.id).id;
-        if (request.action === "stop") await manager.stop(id);
+        if (request.action === "resume") await manager.resume(id);
+        else if (request.action === "stop") await manager.stop(id);
         else if (request.action === "steer") await manager.steer(id, request.message);
         else if (request.action === "reply") {
           const question = manager.status(id).question;
