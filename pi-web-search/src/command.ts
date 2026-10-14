@@ -2,6 +2,8 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionContext,
+	Theme,
+	ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import {
 	CREDENTIAL_ENV_ALIASES,
@@ -203,7 +205,7 @@ async function runProvider(
 async function pickProvider(
 	ctx: Pick<ExtensionCommandContext, "ui">,
 ): Promise<ProviderKind | undefined> {
-	const options = PROVIDER_KINDS.map((id) => providerOption(id));
+	const options = PROVIDER_KINDS.map((id) => providerOption(id, ctx.ui.theme));
 	const chosen = await ctx.ui.select("Search provider", options);
 	if (!chosen) {
 		return undefined;
@@ -211,13 +213,21 @@ async function pickProvider(
 	return PROVIDER_KINDS.find((id) => chosen.startsWith(`${id} `) || chosen === id);
 }
 
-function providerOption(id: ProviderKind): string {
+function providerOption(id: ProviderKind, theme: Theme | undefined): string {
 	const auth = PROVIDER_AUTH[id];
 	if (auth.key === "none") {
-		return `${id} · keyless`;
+		return `${id} · ${paint(theme, "muted", "keyless")}`;
 	}
 	const source = credentialSource(id as CredentialProviderId);
-	return `${id} · ${auth.key} · ${source ? `present (${source})` : "missing"}`;
+	const state = source
+		? paint(theme, "success", `present (${source})`)
+		: paint(theme, auth.key === "required" ? "error" : "warning", "missing");
+	return `${id} · ${auth.key} · ${state}`;
+}
+
+/** Theme-color picker text; plain when the host passes no theme (tests, headless). */
+function paint(theme: Theme | undefined, color: ThemeColor, text: string): string {
+	return theme ? theme.fg(color, text) : text;
 }
 
 /** Where the credential comes from, or undefined when absent. Never the key. */
@@ -292,7 +302,7 @@ async function pickClassifier(
 	const models = await listSupportedClassifiers(ctx.modelRegistry, ctx.signal);
 	const options = [
 		"None",
-		...models.map((model) => classifierOption(model, current)),
+		...models.map((model) => classifierOption(model, current, ctx.ui.theme)),
 	];
 	const chosen = await ctx.ui.select("Classifier", options);
 	if (!chosen) {
@@ -305,14 +315,14 @@ async function pickClassifier(
 	return match;
 }
 
-function classifierOption(model: ListedClassifier, current: string | undefined): string {
+function classifierOption(model: ListedClassifier, current: string | undefined, theme: Theme | undefined): string {
 	const pin = `${model.provider}/${model.id}`;
 	const ready = model.available === true
-		? "available"
+		? paint(theme, "success", "available")
 		: model.available === false
-			? "login required"
-			: "registered";
-	return current === pin ? `${pin} · current · ${ready}` : `${pin} · ${ready}`;
+			? paint(theme, "warning", "login required")
+			: paint(theme, "muted", "registered");
+	return current === pin ? `${pin} · ${paint(theme, "accent", "current")} · ${ready}` : `${pin} · ${ready}`;
 }
 
 interface ListedClassifier extends AvailableClassifier {
