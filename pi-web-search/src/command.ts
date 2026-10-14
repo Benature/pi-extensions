@@ -286,7 +286,12 @@ async function runClassifier(
 		selection,
 		selection === "on" ? () => availableClassifiers(ctx.modelRegistry, ctx.signal) : [],
 	);
-	return `Saved search settings to ${saved.path}. Run /reload to apply tool exposure changes.${saved.note ? `\n${saved.note}` : ""}\n\n${await buildSettingsReport(ctx.modelRegistry)}`;
+	const pinned = typeof selection === "object" ? selection : undefined;
+	const auth = pinned ? ctx.modelRegistry?.getProviderAuthStatus?.(pinned.provider) : undefined;
+	const login = pinned && auth && !auth.configured
+		? `\nPi has no ${pinned.provider} credentials. Run /login ${pinned.provider}, then /reload.`
+		: "";
+	return `Saved search settings to ${saved.path}. Run /reload to apply tool exposure changes.${saved.note ? `\n${saved.note}` : ""}${login}\n\n${await buildSettingsReport(ctx.modelRegistry)}`;
 }
 
 async function pickClassifier(
@@ -300,6 +305,8 @@ async function pickClassifier(
 		? `${resolved.jev.provider}/${resolved.jev.model}`
 		: undefined;
 	const models = await listSupportedClassifiers(ctx.modelRegistry, ctx.signal);
+	// Available classifiers first; stable within each group.
+	models.sort((a, b) => Number(b.available === true) - Number(a.available === true));
 	const options = [
 		"None",
 		...models.map((model) => classifierOption(model, current, ctx.ui.theme)),
@@ -317,12 +324,17 @@ async function pickClassifier(
 
 function classifierOption(model: ListedClassifier, current: string | undefined, theme: Theme | undefined): string {
 	const pin = `${model.provider}/${model.id}`;
-	const ready = model.available === true
-		? paint(theme, "success", "available")
-		: model.available === false
-			? paint(theme, "warning", "login required")
-			: paint(theme, "muted", "registered");
-	return current === pin ? `${pin} · ${paint(theme, "accent", "current")} · ${ready}` : `${pin} · ${ready}`;
+	// Available classifiers are the default case: bare pin, no suffix noise.
+	const marks: string[] = [];
+	if (current === pin) {
+		marks.push(paint(theme, "accent", "current"));
+	}
+	if (model.available === false) {
+		marks.push(paint(theme, "warning", "login required"));
+	} else if (model.available !== true) {
+		marks.push(paint(theme, "muted", "registered"));
+	}
+	return marks.length > 0 ? `${pin} · ${marks.join(" · ")}` : pin;
 }
 
 interface ListedClassifier extends AvailableClassifier {
@@ -401,8 +413,8 @@ export async function buildSettingsReport(registry: ExtensionContext["modelRegis
 		const registered = registry?.findOfType?.("classifier", resolved.jev.provider, resolved.jev.model);
 		lines.push(
 			"",
-			"Pinned classifier (Pi snapshot; not a live credential test):",
-			`- ${resolved.jev.provider}/${resolved.jev.model}: ${auth?.configured ? "Pi auth configured" : registry ? "Pi auth not configured" : "Pi auth status unavailable"}; ${registered ? "registered" : "not registered"}.`,
+			"Pinned classifier (Pi auth snapshot, not a live test):",
+			`- ${resolved.jev.provider}/${resolved.jev.model}: ${auth?.configured ? "logged in" : registry ? `not logged in — run /login ${resolved.jev.provider}` : "auth status unknown"}; ${registered ? "registered" : "not registered"}.`,
 		);
 	}
 	const envNames = CREDENTIAL_PROVIDER_IDS
