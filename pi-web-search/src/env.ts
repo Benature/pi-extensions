@@ -218,12 +218,13 @@ export async function storeApiKey(
 	if (trimmed === undefined) {
 		throw new Error("API key is empty.");
 	}
-	return mutateAuth(authPath, (current) => {
+	const result = await mutateAuth(authPath, (current) => {
 		const existing = current[providerId];
 		const replaced = isPlainObject(existing);
 		current[providerId] = { type: "api_key", key: trimmed };
-		return replaced;
+		return { write: true, flag: replaced };
 	});
+	return { path: result.path, replaced: result.flag };
 }
 
 /** Delete one stored retrieval credential. Leaves every other entry untouched. */
@@ -231,17 +232,20 @@ export async function removeStoredApiKey(
 	providerId: CredentialProviderId,
 	authPath?: string,
 ): Promise<{ path: string; removed: boolean }> {
-	return mutateAuth(authPath, (current) => {
+	const result = await mutateAuth(authPath, (current) => {
 		const removed = Object.hasOwn(current, providerId);
-		delete current[providerId];
-		return removed;
-	}).then(({ path, replaced }) => ({ path, removed: replaced }));
+		if (removed) {
+			delete current[providerId];
+		}
+		return { write: removed, flag: removed };
+	});
+	return { path: result.path, removed: result.flag };
 }
 
 async function mutateAuth(
 	authPath: string | undefined,
-	mutate: (current: Record<string, unknown>) => boolean,
-): Promise<{ path: string; replaced: boolean }> {
+	mutate: (current: Record<string, unknown>) => { write: boolean; flag: boolean },
+): Promise<{ path: string; flag: boolean }> {
 	const path = authPath ?? defaultAuthPath();
 	const targetPath = await realpath(path).catch((error) => {
 		if (isMissingFileError(error)) {
@@ -251,7 +255,10 @@ async function mutateAuth(
 	});
 	return withFileMutationQueue(targetPath, async () => {
 		const current = await readAuthObject(targetPath);
-		const replaced = mutate(current);
+		const { write, flag } = mutate(current);
+		if (!write) {
+			return { path, flag };
+		}
 		await mkdir(dirname(targetPath), { recursive: true });
 		const temporary = `${targetPath}.${randomUUID()}.tmp`;
 		try {
@@ -263,7 +270,7 @@ async function mutateAuth(
 		} finally {
 			await unlink(temporary).catch(() => {});
 		}
-		return { path, replaced };
+		return { path, flag };
 	});
 }
 

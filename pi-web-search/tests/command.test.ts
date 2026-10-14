@@ -21,7 +21,7 @@ test("parseWebSearchArgs routes menu, provider, classifier, and compat pins", ()
 	assert.deepEqual(parseWebSearchArgs("status"), { kind: "status" });
 	assert.deepEqual(parseWebSearchArgs("provider"), { kind: "provider" });
 	assert.deepEqual(parseWebSearchArgs("provider exa"), { kind: "provider", id: "exa" });
-	assert.deepEqual(parseWebSearchArgs("provider github remove"), { kind: "provider", id: "github", remove: true });
+	assert.deepEqual(parseWebSearchArgs("provider github remove"), { kind: "usage" });
 	assert.deepEqual(parseWebSearchArgs("classifier"), { kind: "classifier", action: "pick" });
 	assert.deepEqual(parseWebSearchArgs("classifier none"), { kind: "classifier", action: "off" });
 	assert.deepEqual(parseWebSearchArgs("classifier typesafe/jev-latest"), {
@@ -43,7 +43,7 @@ test("completions cover the new command surface", () => {
 	assert.deepEqual(webSearchCompletions("provider ").map((item) => item.value), [
 		"exa", "parallel", "grep", "sourcegraph", "github",
 	]);
-	assert.deepEqual(webSearchCompletions("provider github ").map((item) => item.value), ["remove"]);
+	assert.deepEqual(webSearchCompletions("provider github ").map((item) => item.value), []);
 	assert.deepEqual(webSearchCompletions("classifier ").map((item) => item.value), ["none"]);
 });
 
@@ -115,7 +115,7 @@ test("interactive menu stores a provider key in auth.json and never echoes it", 
 				hasUI: true,
 				ui: {
 					notify: (message) => { report = message; },
-					select: async () => "Add or update API key",
+					select: async () => "Add API key",
 					input: async () => "  exa-secret-value  ",
 					confirm: async () => true,
 				},
@@ -132,17 +132,34 @@ test("interactive menu stores a provider key in auth.json and never echoes it", 
 	}
 });
 
-test("provider remove deletes only the named stored key", async () => {
+test("logout is TUI-only and does not accept a remove argument", async () => {
 	await withCommand(async ({ handler, dir, messages }) => {
 		await handler("provider parallel remove", {
 			hasUI: false,
 			ui: { notify: () => { throw new Error("headless"); } },
 		});
 		const auth = JSON.parse(await readFile(join(dir, "auth.json"), "utf8"));
+		assert.deepEqual(auth.parallel, { type: "api_key", key: "keep-parallel" });
+		assert.equal(messages[0]?.content, WEB_SEARCH_USAGE);
+	}, { parallel: { type: "api_key", key: "keep-parallel" } });
+});
+
+test("interactive logout removes only the named stored key", async () => {
+	await withCommand(async ({ handler, dir }) => {
+		let report = "";
+		await handler("provider parallel", {
+			hasUI: true,
+			ui: {
+				notify: (message) => { report = message; },
+				select: async () => "Logout",
+				confirm: async () => true,
+			},
+		});
+		const auth = JSON.parse(await readFile(join(dir, "auth.json"), "utf8"));
 		assert.equal(auth.parallel, undefined);
 		assert.deepEqual(auth.github, { type: "api_key", key: "keep-github" });
-		assert.match(messages[0]?.content ?? "", /Removed the stored parallel key/);
-		assert.doesNotMatch(messages[0]?.content ?? "", /drop-me|keep-github/);
+		assert.match(report, /Logged out of parallel/);
+		assert.doesNotMatch(report, /keep-github|drop-me/);
 	}, {
 		parallel: { type: "api_key", key: "drop-me" },
 		github: { type: "api_key", key: "keep-github" },

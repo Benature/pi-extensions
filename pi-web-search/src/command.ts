@@ -27,7 +27,11 @@ import {
 import { awaitWithSignal, withTimeout } from "./providers/http.ts";
 
 export const WEB_SEARCH_USAGE =
-	"Usage: /web-search [status|provider [name] [remove]|classifier [none|provider/model]]. Keys are never accepted as arguments.";
+	"Usage: /web-search [status|provider [name]|classifier [none|provider/model]]. Keys are never accepted as arguments.";
+
+const LOGIN = "Login";
+const ADD_API_KEY = "Add API key";
+const LOGOUT = "Logout";
 
 export const WEB_SEARCH_COMMAND = "web-search";
 export const WEB_SEARCH_SETTINGS_ALIAS = "web-search-settings";
@@ -35,7 +39,7 @@ export const WEB_SEARCH_SETTINGS_ALIAS = "web-search-settings";
 export type WebSearchAction =
 	| { kind: "menu" }
 	| { kind: "status" }
-	| { kind: "provider"; id?: ProviderKind; remove?: boolean }
+	| { kind: "provider"; id?: ProviderKind }
 	| { kind: "classifier"; action: JudgmentAction | "pick" }
 	| { kind: "usage" };
 
@@ -74,9 +78,6 @@ export function parseWebSearchArgs(args: string): WebSearchAction {
 		if (rest.length === 1) {
 			return { kind: "provider", id: id as ProviderKind };
 		}
-		if (rest.length === 2 && rest[1] === "remove") {
-			return { kind: "provider", id: id as ProviderKind, remove: true };
-		}
 		return { kind: "usage" };
 	}
 	if (head === "classifier") {
@@ -104,12 +105,12 @@ export function webSearchCompletions(prefix: string): { value: string; label: st
 	const completing = prefix.endsWith(" ") ? "" : (parts.at(-1) ?? "");
 	const head = prefix.endsWith(" ") ? (parts[0] ?? "") : (parts.length > 1 ? parts[0] : "");
 	if (head === "provider") {
-		const id = prefix.endsWith(" ") ? parts[1] : parts[1] && parts.length > 2 ? parts[1] : undefined;
-		if (id && PROVIDER_KIND_SET.has(id) && KEYED_PROVIDER_IDS.has(id)) {
-			return filterCompletions(["remove"], completing);
+		const tokens = trimmed.split(/\s+/).filter(Boolean);
+		if (tokens.length === 1) {
+			return filterCompletions([...PROVIDER_KINDS], prefix.endsWith(" ") ? "" : completing);
 		}
-		if (!id) {
-			return filterCompletions([...PROVIDER_KINDS], completing);
+		if (tokens.length === 2 && !prefix.endsWith(" ")) {
+			return filterCompletions([...PROVIDER_KINDS], tokens[1] ?? "");
 		}
 		return [];
 	}
@@ -148,7 +149,7 @@ export async function handleWebSearchCommand(
 		} else if (parsed.kind === "status") {
 			report = await buildSettingsReport(ctx.modelRegistry);
 		} else if (parsed.kind === "provider") {
-			report = await runProvider(parsed.id, parsed.remove === true, ctx);
+			report = await runProvider(parsed.id, ctx);
 		} else {
 			report = await runClassifier(parsed.action, ctx);
 		}
@@ -179,7 +180,7 @@ async function runMenu(
 		return buildSettingsReport(ctx.modelRegistry);
 	}
 	if (setting === "Providers") {
-		return runProvider(undefined, false, ctx);
+		return runProvider(undefined, ctx);
 	}
 	if (setting === "Classifier") {
 		return runClassifier("pick", ctx);
@@ -189,28 +190,23 @@ async function runMenu(
 
 async function runProvider(
 	id: ProviderKind | undefined,
-	remove: boolean,
 	ctx: Pick<ExtensionCommandContext, "hasUI" | "ui" | "modelRegistry" | "signal">,
 ): Promise<string | undefined> {
 	const selected = id ?? (ctx.hasUI ? await pickProvider(ctx) : undefined);
 	if (!selected) {
-		return ctx.hasUI ? undefined : `${WEB_SEARCH_USAGE}\nInteractive Pi can store keys with /web-search provider.`;
+		return ctx.hasUI ? undefined : `${WEB_SEARCH_USAGE}\nInteractive Pi can log in with /web-search provider.`;
 	}
 	const auth = PROVIDER_AUTH[selected];
 	if (auth.key === "none") {
-		return `${selected}: keyless. No API key is used or stored.`;
-	}
-	if (remove) {
-		return removeProviderKey(selected as CredentialProviderId);
+		return `${selected}: keyless. No login or API key is used.`;
 	}
 	if (!ctx.hasUI) {
 		return [
-			`${selected}: ${keyRequirement(auth.key)} — ${auth.summary}.`,
-			"Keys cannot be collected without the TUI. Run /web-search provider in interactive Pi, set the environment variable, or merge auth.json.",
-			`Remove a stored key with /web-search provider ${selected} remove.`,
+			`${selected}: ${keyRequirement(auth.key)} — ${auth.summary} · ${presenceLabel(selected as CredentialProviderId)}.`,
+			"In interactive Pi: Login, Add API key, or Logout. Keys cannot be collected or removed without the TUI.",
 		].join("\n");
 	}
-	return editProviderKey(selected as CredentialProviderId, ctx);
+	return editProviderAuth(selected as CredentialProviderId, ctx);
 }
 
 async function pickProvider(
@@ -250,26 +246,33 @@ function presenceLabel(id: CredentialProviderId): string {
 	return "missing";
 }
 
-async function editProviderKey(
+async function editProviderAuth(
 	id: CredentialProviderId,
 	ctx: Pick<ExtensionCommandContext, "ui">,
 ): Promise<string | undefined> {
+	const action = await ctx.ui.select(
+		`${id} (${keyRequirement(PROVIDER_AUTH[id].key)} · ${presenceLabel(id)})`,
+		[LOGIN, ADD_API_KEY, LOGOUT],
+	);
+	if (action === LOGOUT) {
+		return logoutProvider(id, ctx);
+	}
+	if (action === LOGIN || action === ADD_API_KEY) {
+		return loginProvider(id, action === LOGIN ? "login" : "key", ctx);
+	}
+	return undefined;
+}
+
+async function loginProvider(
+	id: CredentialProviderId,
+	mode: "login" | "key",
+	ctx: Pick<ExtensionCommandContext, "ui">,
+): Promise<string | undefined> {
 	const stored = inspectStoredCredential(id);
-	const actions = ["Add or update API key"];
-	if (stored) {
-		actions.push("Remove stored key");
-	}
-	const action = await ctx.ui.select(`${id} (${keyRequirement(PROVIDER_AUTH[id].key)})`, actions);
-	if (action === "Remove stored key") {
-		if (!await ctx.ui.confirm("Remove stored key?", `Delete the ${id} entry from auth.json? The key is never shown.`)) {
-			return undefined;
-		}
-		return removeProviderKey(id);
-	}
-	if (action !== "Add or update API key") {
-		return undefined;
-	}
-	const key = await ctx.ui.input(`${id} API key (saved to auth.json; never shown again)`);
+	const title = mode === "login"
+		? `Log in to ${id} (API key saved to auth.json; never shown again)`
+		: `${id} API key (saved to auth.json; never shown again)`;
+	const key = await ctx.ui.input(title);
 	if (key === undefined) {
 		return undefined;
 	}
@@ -284,30 +287,43 @@ async function editProviderKey(
 		if (!replace) {
 			return undefined;
 		}
-	} else if (!await ctx.ui.confirm("Store API key?", `Save the ${id} key to auth.json? It will not be shown again.`)) {
+	} else if (!await ctx.ui.confirm(
+		mode === "login" ? `Log in to ${id}?` : "Store API key?",
+		`Save the ${id} key to auth.json? It will not be shown again.`,
+	)) {
 		return undefined;
 	}
 	const saved = await storeApiKey(id, key);
 	const env = resolveCredential(id, { env: process.env, readCredential: () => undefined });
 	const lines = [
-		`Stored ${id} key in ${saved.path}.`,
+		mode === "login" ? `Logged in to ${id}.` : `Stored ${id} key in ${saved.path}.`,
 		id === "parallel" ? "Run /reload so Parallel MCP picks up the new header." : undefined,
 		env ? `${env.name} is set and still takes precedence until you unset it.` : undefined,
 	].filter((line): line is string => line !== undefined);
 	return lines.join("\n");
 }
 
-async function removeProviderKey(id: CredentialProviderId): Promise<string> {
-	if (!KEYED_PROVIDER_IDS.has(id)) {
-		return `${id}: keyless. No stored key to remove.`;
+async function logoutProvider(
+	id: CredentialProviderId,
+	ctx: Pick<ExtensionCommandContext, "ui">,
+): Promise<string | undefined> {
+	const stored = inspectStoredCredential(id);
+	if (!stored) {
+		return `${id}: not logged in via auth.json. Environment and gh auth are unchanged.`;
+	}
+	if (!await ctx.ui.confirm(
+		`Log out of ${id}?`,
+		`Remove the stored ${id} entry from auth.json? The value is never shown.`,
+	)) {
+		return undefined;
 	}
 	const result = await removeStoredApiKey(id);
 	if (!result.removed) {
-		return `No stored ${id} key in ${result.path}.`;
+		return `${id}: not logged in via auth.json.`;
 	}
-	return result.path && id === "parallel"
-		? `Removed the stored ${id} key from ${result.path}. Run /reload so Parallel MCP drops the header.`
-		: `Removed the stored ${id} key from ${result.path}.`;
+	return id === "parallel"
+		? `Logged out of ${id}. Run /reload so Parallel MCP drops the header.`
+		: `Logged out of ${id}.`;
 }
 
 async function runClassifier(
@@ -456,7 +472,7 @@ export async function buildSettingsReport(registry: ExtensionContext["modelRegis
 		"",
 		"Setup:",
 		"- /web-search opens Status, Providers, and Classifier.",
-		"- /web-search provider stores retrieval keys in auth.json. Keys are never command arguments.",
+		"- /web-search provider: Login, Add API key, or Logout. Keys are never command arguments.",
 		"- /web-search classifier lists Pi classifiers, plus None. /model does not list them.",
 		"- Judgment uses one exact Pi classifier. No separate Jev key; provider billing applies.",
 		"- /web-search classifier none disables judgment. Nonsecret settings live in web-search.json.",

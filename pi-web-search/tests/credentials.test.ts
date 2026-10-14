@@ -134,6 +134,18 @@ test("storeApiKey merges one literal key and leaves other entries", async () => 
 	});
 });
 
+test("a no-op remove does not create auth.json", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "pi-web-search-auth-"));
+	const authPath = join(dir, "auth.json");
+	try {
+		const removed = await removeStoredApiKey("exa", authPath);
+		assert.equal(removed.removed, false);
+		await assert.rejects(readFile(authPath));
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
 test("removeStoredApiKey deletes only the named entry", async () => {
 	await tempAuthFile({
 		exa: { type: "api_key", key: "drop" },
