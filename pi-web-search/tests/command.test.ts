@@ -207,3 +207,59 @@ test("classifier picker lists Pi models plus None and can disable judgment", asy
 		assert.match(report, /jev: disabled/);
 	});
 });
+
+test("failed classifier discovery marks rows untested, not login required", async () => {
+	await withCommand(async ({ handler }) => {
+		const offered: string[][] = [];
+		await handler("classifier", {
+			hasUI: true,
+			ui: {
+				notify: () => {},
+				select: async (_title, options) => {
+					offered.push(options);
+					return "None";
+				},
+			},
+			modelRegistry: {
+				getModelsOfType: () => [
+					{ provider: "typesafe", id: "jev-latest" },
+					{ provider: "openai", id: "gpt-6-luna" },
+				],
+				getAvailableOfType: async () => { throw new Error("discovery blew up"); },
+			},
+		});
+		const rows = offered[0] ?? [];
+		assert.ok(rows.some((option) => option.startsWith("typesafe/jev-latest")));
+		assert.ok(rows.every((option) => !option.includes("login required")));
+		assert.ok(rows.some((option) => option.includes("untested")));
+	});
+});
+
+test("status report says auth status unknown when the registry cannot answer", async () => {
+	await withCommand(async ({ handler, dir }) => {
+		await writeFile(join(dir, "web-search.json"), JSON.stringify({
+			jev: { enabled: true, provider: "opencode", model: "jev-1.13" },
+		}));
+		let report = "";
+		await handler("status", {
+			hasUI: true,
+			ui: { notify: (message) => { report = message; } },
+			modelRegistry: {},
+		});
+		assert.match(report, /opencode\/jev-1\.13: auth status unknown; registration unknown\./);
+	});
+});
+
+test("pinning a classifier without Pi credentials says how to log in", async () => {
+	await withCommand(async ({ handler }) => {
+		let report = "";
+		await handler("classifier opencode/jev-1.13", {
+			hasUI: true,
+			ui: { notify: (message) => { report = message; } },
+			modelRegistry: {
+				getProviderAuthStatus: () => ({ configured: false }),
+			},
+		});
+		assert.match(report, /Pi has no opencode credentials\. Run \/login opencode, then \/reload\./);
+	});
+});

@@ -282,12 +282,13 @@ async function runClassifier(
 	if (selection === undefined) {
 		return ctx.hasUI ? undefined : `${WEB_SEARCH_USAGE}\nInteractive Pi can pick a classifier with /web-search classifier.`;
 	}
+	// Auth lookup runs before the write so a failure cannot misreport a saved pin.
+	const pinned = typeof selection === "object" ? selection : undefined;
+	const auth = pinned ? ctx.modelRegistry?.getProviderAuthStatus?.(pinned.provider) : undefined;
 	const saved = await configureJudgment(
 		selection,
 		selection === "on" ? () => availableClassifiers(ctx.modelRegistry, ctx.signal) : [],
 	);
-	const pinned = typeof selection === "object" ? selection : undefined;
-	const auth = pinned ? ctx.modelRegistry?.getProviderAuthStatus?.(pinned.provider) : undefined;
 	const login = pinned && auth && !auth.configured
 		? `\nPi has no ${pinned.provider} credentials. Run /login ${pinned.provider}, then /reload.`
 		: "";
@@ -332,7 +333,7 @@ function classifierOption(model: ListedClassifier, current: string | undefined, 
 	if (model.available === false) {
 		marks.push(paint(theme, "warning", "login required"));
 	} else if (model.available !== true) {
-		marks.push(paint(theme, "muted", "registered"));
+		marks.push(paint(theme, "muted", "untested"));
 	}
 	return marks.length > 0 ? `${pin} · ${marks.join(" · ")}` : pin;
 }
@@ -352,21 +353,22 @@ export async function listSupportedClassifiers(
 		provider: model.provider,
 		id: model.id,
 	}));
-	let available: AvailableClassifier[];
+	let available: AvailableClassifier[] | undefined;
 	try {
 		available = await availableClassifiers(registry, signal);
 	} catch {
-		available = [];
+		// Discovery failed (timeout, abort, network): availability is unknown, not missing.
+		available = undefined;
 	}
-	const ready = new Set(available.map((model) => `${model.provider}/${model.id}`));
+	const ready = new Set((available ?? []).map((model) => `${model.provider}/${model.id}`));
 	const listed = known.map((model) => ({
 		...model,
-		available: ready.has(`${model.provider}/${model.id}`),
+		available: available === undefined ? undefined : ready.has(`${model.provider}/${model.id}`),
 	}));
 	if (listed.length > 0) {
 		return listed;
 	}
-	return available.map((model) => ({ ...model, available: true }));
+	return (available ?? []).map((model) => ({ ...model, available: true }));
 }
 
 /**
@@ -411,10 +413,15 @@ export async function buildSettingsReport(registry: ExtensionContext["modelRegis
 	if (resolved.jev.provider && resolved.jev.model) {
 		const auth = registry?.getProviderAuthStatus?.(resolved.jev.provider);
 		const registered = registry?.findOfType?.("classifier", resolved.jev.provider, resolved.jev.model);
+		const authText = auth === undefined
+			? "auth status unknown"
+			: auth.configured
+				? "credentials configured"
+				: `no credentials — run /login ${resolved.jev.provider}`;
 		lines.push(
 			"",
 			"Pinned classifier (Pi auth snapshot, not a live test):",
-			`- ${resolved.jev.provider}/${resolved.jev.model}: ${auth?.configured ? "logged in" : registry ? `not logged in — run /login ${resolved.jev.provider}` : "auth status unknown"}; ${registered ? "registered" : "not registered"}.`,
+			`- ${resolved.jev.provider}/${resolved.jev.model}: ${authText}; ${registered === undefined ? "registration unknown" : registered ? "registered" : "not registered"}.`,
 		);
 	}
 	const envNames = CREDENTIAL_PROVIDER_IDS
