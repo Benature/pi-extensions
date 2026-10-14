@@ -19,9 +19,10 @@ Requires Pi **0.99.0 or newer**.
 
 | Command | What it does |
 | --- | --- |
-| `/web-search` | Status / Providers / Classifier menu, like `/slate`. Headless prints status. |
-| `/web-search provider` | Add or modify a retrieval API key. Labels say keyless, key optional, or key required. |
-| `/web-search classifier` | Pick a Pi classifier, or **None**. |
+| `/web-search` | Menu: status, provider keys, classifier. Headless prints status. |
+| `/web-search status` | Providers, credential presence (never keys), and the classifier pin. |
+| `/web-search provider [name]` | Add or modify a retrieval key. The picker is color-coded: keyless, optional, or required; present or missing. |
+| `/web-search classifier [none\|provider/model]` | Pin a classifier for judgment, pick from the list, or disable with `none`. |
 
 ## Classifier API
 
@@ -63,9 +64,9 @@ For OpenRouter:
 | OpenAI Decisions | `/web-search classifier openai/gpt-6-luna` | `gpt-6-luna` |
 | Cloudflare Workers AI | `/web-search classifier` and pick a listed Clef/Jev model | catalog |
 
-`/web-search classifier` lists every classifier Pi currently registers, plus **None**. Classifiers still do not appear in `/model`; this picker is the search-specific pin, not a second catalog. The command enables multi-source search and judgment in `web-search.json`, preserving your other settings. **No second API key is needed.** Pi reuses its stored, environment, runtime, or model authentication. If needed, use Pi's `/login` for that provider.
+`/web-search classifier` lists every classifier Pi currently registers, plus **None**. Classifiers do not appear in `/model`; this picker is the search-specific pin. Pinning enables multi-source search and judgment in `web-search.json`, preserving your other settings. **No second API key is needed.** Pi reuses its stored, environment, runtime, or model authentication. If needed, use Pi's `/login` for that provider.
 
-`/web-search` shows status from the menu; `/web-search classifier none` disables judgment but keeps search enabled. There is no gateway ladder or default classifier. Hosted classification is billed to the pinned account.
+`/web-search classifier none` disables judgment; search stays on. Hosted classification is billed to the pinned account.
 
 Classification is off by default. Failures keep retrieved evidence with warnings. Hosted classifiers receive excerpts before output clipping; safety judgments are not a security boundary. See [all settings and limits](docs/research.md).
 
