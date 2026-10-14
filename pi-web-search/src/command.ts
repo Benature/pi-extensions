@@ -100,13 +100,9 @@ export function webSearchCompletions(prefix: string): { value: string; label: st
 	const head = prefix.endsWith(" ") ? (parts[0] ?? "") : (parts.length > 1 ? parts[0] : "");
 	if (head === "provider") {
 		const tokens = trimmed.split(/\s+/).filter(Boolean);
-		if (tokens.length === 1) {
-			return filterCompletions([...PROVIDER_KINDS], prefix.endsWith(" ") ? "" : completing);
-		}
-		if (tokens.length === 2 && !prefix.endsWith(" ")) {
-			return filterCompletions([...PROVIDER_KINDS], tokens[1] ?? "");
-		}
-		return [];
+		return tokens.length === 1 || (tokens.length === 2 && !prefix.endsWith(" "))
+			? filterCompletions([...PROVIDER_KINDS], completing)
+			: [];
 	}
 	if (head === "classifier") {
 		return filterCompletions(["none"], completing);
@@ -307,7 +303,7 @@ async function pickClassifier(
 	if (!chosen) {
 		return undefined;
 	}
-	if (chosen === "None" || chosen === "None (default)") {
+	if (chosen === "None") {
 		return "off";
 	}
 	const match = models.find((model) => chosen.startsWith(`${model.provider}/${model.id} `) || chosen === `${model.provider}/${model.id}`);
@@ -321,8 +317,7 @@ function classifierOption(model: ListedClassifier, current: string | undefined):
 		: model.available === false
 			? "login required"
 			: "registered";
-	const mark = current === pin ? "current" : ready;
-	return current === pin ? `${pin} · current · ${ready}` : `${pin} · ${mark}`;
+	return current === pin ? `${pin} · current · ${ready}` : `${pin} · ${ready}`;
 }
 
 interface ListedClassifier extends AvailableClassifier {

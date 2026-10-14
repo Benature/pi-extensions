@@ -10,9 +10,7 @@ import {
 	enableStoredCredentials,
 	exaApiKey,
 	githubToken,
-	inspectStoredCredential,
 	parallelApiKey,
-	removeStoredApiKey,
 	resolveCredential,
 	storeApiKey,
 } from "../src/env.ts";
@@ -129,32 +127,6 @@ test("storeApiKey merges one literal key and leaves other entries", async () => 
 		assert.deepEqual(JSON.parse(await readFile(authPath, "utf8")), {
 			openai: { type: "api_key", key: "keep" },
 			exa: { type: "api_key", key: "new-key" },
-		});
-		assert.deepEqual(inspectStoredCredential("exa", authPath), { type: "api_key", hasKey: true });
-	});
-});
-
-test("a no-op remove does not create auth.json", async () => {
-	const dir = await mkdtemp(join(tmpdir(), "pi-web-search-auth-"));
-	const authPath = join(dir, "auth.json");
-	try {
-		const removed = await removeStoredApiKey("exa", authPath);
-		assert.equal(removed.removed, false);
-		await assert.rejects(readFile(authPath));
-	} finally {
-		await rm(dir, { recursive: true, force: true });
-	}
-});
-
-test("removeStoredApiKey deletes only the named entry", async () => {
-	await tempAuthFile({
-		exa: { type: "api_key", key: "drop" },
-		github: { type: "api_key", key: "keep" },
-	}, async (authPath) => {
-		const removed = await removeStoredApiKey("exa", authPath);
-		assert.equal(removed.removed, true);
-		assert.deepEqual(JSON.parse(await readFile(authPath, "utf8")), {
-			github: { type: "api_key", key: "keep" },
 		});
 	});
 });

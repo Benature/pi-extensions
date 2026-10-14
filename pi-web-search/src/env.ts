@@ -177,35 +177,8 @@ function readerForPath(authPath: string): CredentialReader {
 	};
 }
 
-export const AUTH_FILE_NAME = "auth.json";
-
 export function defaultAuthPath(): string {
-	return join(getAgentDir(), AUTH_FILE_NAME);
-}
-
-export interface StoredCredentialMeta {
-	type?: string;
-	hasKey: boolean;
-}
-
-/** Presence and type only. Never returns the secret. */
-export function inspectStoredCredential(
-	providerId: CredentialProviderId,
-	authPath?: string,
-): StoredCredentialMeta | undefined {
-	try {
-		const stored = readStoredCredential(providerId, authPath ?? defaultAuthPath());
-		if (!stored || typeof stored !== "object") {
-			return undefined;
-		}
-		const key = "key" in stored && typeof stored.key === "string" ? stored.key : undefined;
-		return {
-			type: typeof stored.type === "string" ? stored.type : undefined,
-			hasKey: trim(key) !== undefined,
-		};
-	} catch {
-		return undefined;
-	}
+	return join(getAgentDir(), "auth.json");
 }
 
 /** Merge a literal API key into auth.json. Never logs the key. */
@@ -225,21 +198,6 @@ export async function storeApiKey(
 		return { write: true, flag: replaced };
 	});
 	return { path: result.path, replaced: result.flag };
-}
-
-/** Delete one stored retrieval credential. Leaves every other entry untouched. */
-export async function removeStoredApiKey(
-	providerId: CredentialProviderId,
-	authPath?: string,
-): Promise<{ path: string; removed: boolean }> {
-	const result = await mutateAuth(authPath, (current) => {
-		const removed = Object.hasOwn(current, providerId);
-		if (removed) {
-			delete current[providerId];
-		}
-		return { write: removed, flag: removed };
-	});
-	return { path: result.path, removed: result.flag };
 }
 
 async function mutateAuth(
