@@ -21,6 +21,6 @@ for (const researchEnabled of [false, true]) {
 	assert.deepEqual([...extension.tools.keys()], researchEnabled
 		? ["web_search", "code_search", "multi_search"] : ["web_search", "code_search"]);
 	assert.ok(extension.commands.has("web-search"));
-	assert.ok(extension.commands.has("web-search-settings"));
+	assert.equal(extension.commands.has("web-search-settings"), false);
 }
 console.log("Packed TypeScript entrypoint loads in Pi without local dependencies; default and research registrations pass.");

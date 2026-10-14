@@ -8,7 +8,6 @@ import { VERSION } from "@earendil-works/pi-coding-agent";
 import {
 	handleWebSearchCommand,
 	WEB_SEARCH_COMMAND,
-	WEB_SEARCH_SETTINGS_ALIAS,
 	webSearchCompletions,
 } from "./command.ts";
 import { enableStoredCredentials, parallelApiKey } from "./env.ts";
@@ -167,10 +166,6 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 		handler: (args: string, ctx: ExtensionContext) => handleWebSearchCommand(args, ctx, pi),
 	};
 	pi.registerCommand(WEB_SEARCH_COMMAND, command);
-	pi.registerCommand(WEB_SEARCH_SETTINGS_ALIAS, {
-		...command,
-		description: "Alias for /web-search",
-	});
 }
 
 export { availableClassifiers } from "./command.ts";

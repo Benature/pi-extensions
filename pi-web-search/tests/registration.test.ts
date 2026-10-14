@@ -132,7 +132,7 @@ test("a missing config registers web_search and code_search, not multi_search", 
 		assert.equal(servers[0]?.name, PARALLEL_MCP_SERVER);
 		assert.deepEqual(names({ tools, commands }), ["web_search", "code_search"]);
 		assert.ok(commands.some((command) => command.name === "web-search"));
-		assert.ok(commands.some((command) => command.name === "web-search-settings"));
+		assert.equal(commands.some((command) => command.name === "web-search-settings"), false);
 		for (const tool of tools) {
 			assert.ok(tool.promptSnippet, `${tool.name} must set promptSnippet`);
 			assert.ok(

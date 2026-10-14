@@ -22,7 +22,6 @@ Requires Pi **0.99.0 or newer**.
 | `/web-search` | Status / Providers / Classifier menu, like `/slate`. Headless prints status. |
 | `/web-search provider` | Add or modify a retrieval API key. Labels say keyless, key optional, or key required. |
 | `/web-search classifier` | Pick a Pi classifier, or **None**. |
-| `/web-search-settings` | Alias for `/web-search`. |
 
 ## Classifier API
 

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Rename `/web-search-settings` to `/web-search` (alias kept). Empty invocation opens a Status / Providers / Classifier menu.
+- Replace `/web-search-settings` with `/web-search`. Empty invocation opens a Status / Providers / Classifier menu.
 - `/web-search provider` adds or modifies a retrieval API key and links to the provider's key page.
 - `/web-search classifier` lists Pi's registered classifiers plus None. Pins require the `classifier` keyword so pasted secrets are not written to `web-search.json`.
 

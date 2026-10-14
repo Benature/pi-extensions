@@ -29,7 +29,6 @@ export const WEB_SEARCH_USAGE =
 
 
 export const WEB_SEARCH_COMMAND = "web-search";
-export const WEB_SEARCH_SETTINGS_ALIAS = "web-search-settings";
 
 export type WebSearchAction =
 	| { kind: "menu" }
