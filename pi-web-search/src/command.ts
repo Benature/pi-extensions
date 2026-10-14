@@ -8,8 +8,6 @@ import {
 	CREDENTIAL_PROVIDER_IDS,
 	type CredentialProviderId,
 	githubToken,
-	inspectStoredCredential,
-	removeStoredApiKey,
 	resolveCredential,
 	storeApiKey,
 } from "./env.ts";
@@ -29,9 +27,6 @@ import { awaitWithSignal, withTimeout } from "./providers/http.ts";
 export const WEB_SEARCH_USAGE =
 	"Usage: /web-search [status|provider [name]|classifier [none|provider/model]]. Keys are never accepted as arguments.";
 
-const LOGIN = "Login";
-const ADD_API_KEY = "Add API key";
-const LOGOUT = "Logout";
 
 export const WEB_SEARCH_COMMAND = "web-search";
 export const WEB_SEARCH_SETTINGS_ALIAS = "web-search-settings";
@@ -48,13 +43,13 @@ const KEYED_PROVIDER_IDS = new Set<string>(CREDENTIAL_PROVIDER_IDS);
 
 export const PROVIDER_AUTH: Record<
 	ProviderKind,
-	{ key: "none" | "optional" | "required"; summary: string }
+	{ key: "none" | "optional" | "required"; summary: string; keyUrl?: string }
 > = {
-	exa: { key: "optional", summary: "keyless MCP; key selects REST" },
-	parallel: { key: "optional", summary: "keyless MCP; key raises limits" },
+	exa: { key: "optional", summary: "keyless MCP; key selects REST", keyUrl: "https://dashboard.exa.ai/api-keys" },
+	parallel: { key: "optional", summary: "keyless MCP; key raises limits", keyUrl: "https://platform.parallel.ai" },
 	grep: { key: "none", summary: "keyless" },
 	sourcegraph: { key: "none", summary: "keyless" },
-	github: { key: "required", summary: "token or gh auth" },
+	github: { key: "required", summary: "token or gh auth", keyUrl: "https://github.com/settings/tokens" },
 };
 
 export function parseWebSearchArgs(args: string): WebSearchAction {
@@ -194,19 +189,20 @@ async function runProvider(
 ): Promise<string | undefined> {
 	const selected = id ?? (ctx.hasUI ? await pickProvider(ctx) : undefined);
 	if (!selected) {
-		return ctx.hasUI ? undefined : `${WEB_SEARCH_USAGE}\nInteractive Pi can log in with /web-search provider.`;
+		return ctx.hasUI ? undefined : `${WEB_SEARCH_USAGE}\nInteractive Pi can add a key with /web-search provider.`;
 	}
 	const auth = PROVIDER_AUTH[selected];
 	if (auth.key === "none") {
-		return `${selected}: keyless. No login or API key is used.`;
+		return `${selected}: keyless. No API key is used.`;
 	}
 	if (!ctx.hasUI) {
 		return [
 			`${selected}: ${keyRequirement(auth.key)} — ${auth.summary} · ${presenceLabel(selected as CredentialProviderId)}.`,
-			"In interactive Pi: Login, Add API key, or Logout. Keys cannot be collected or removed without the TUI.",
-		].join("\n");
+			auth.keyUrl ? `Get a key: ${auth.keyUrl}` : undefined,
+			"Add or modify a key in interactive Pi with /web-search provider.",
+		].filter((line): line is string => line !== undefined).join("\n");
 	}
-	return editProviderAuth(selected as CredentialProviderId, ctx);
+	return addOrModifyApiKey(selected as CredentialProviderId, ctx);
 }
 
 async function pickProvider(
@@ -246,84 +242,34 @@ function presenceLabel(id: CredentialProviderId): string {
 	return "missing";
 }
 
-async function editProviderAuth(
+async function addOrModifyApiKey(
 	id: CredentialProviderId,
 	ctx: Pick<ExtensionCommandContext, "ui">,
 ): Promise<string | undefined> {
-	const action = await ctx.ui.select(
-		`${id} (${keyRequirement(PROVIDER_AUTH[id].key)} · ${presenceLabel(id)})`,
-		[LOGIN, ADD_API_KEY, LOGOUT],
+	const url = PROVIDER_AUTH[id].keyUrl;
+	if (url) {
+		ctx.ui.notify(`Get a ${id} API key: ${url}`, "info");
+	}
+	const key = await ctx.ui.input(
+		url ? `Add or modify ${id} API key — ${url}` : `Add or modify ${id} API key`,
 	);
-	if (action === LOGOUT) {
-		return logoutProvider(id, ctx);
-	}
-	if (action === LOGIN || action === ADD_API_KEY) {
-		return loginProvider(id, action === LOGIN ? "login" : "key", ctx);
-	}
-	return undefined;
-}
-
-async function loginProvider(
-	id: CredentialProviderId,
-	mode: "login" | "key",
-	ctx: Pick<ExtensionCommandContext, "ui">,
-): Promise<string | undefined> {
-	const stored = inspectStoredCredential(id);
-	const title = mode === "login"
-		? `Log in to ${id} (API key saved to auth.json; never shown again)`
-		: `${id} API key (saved to auth.json; never shown again)`;
-	const key = await ctx.ui.input(title);
 	if (key === undefined) {
 		return undefined;
 	}
 	if (key.trim().length === 0) {
 		return "API key is empty. Nothing was stored.";
 	}
-	if (stored?.type === "oauth") {
-		const replace = await ctx.ui.confirm(
-			"Replace OAuth credential?",
-			`auth.json already has an OAuth entry for ${id}. Replace it with an API key?`,
-		);
-		if (!replace) {
-			return undefined;
-		}
-	} else if (!await ctx.ui.confirm(
-		mode === "login" ? `Log in to ${id}?` : "Store API key?",
-		`Save the ${id} key to auth.json? It will not be shown again.`,
-	)) {
+	if (!await ctx.ui.confirm(`Save ${id} API key?`, "The key is written to auth.json and will not be shown again.")) {
 		return undefined;
 	}
-	const saved = await storeApiKey(id, key);
+	await storeApiKey(id, key);
 	const env = resolveCredential(id, { env: process.env, readCredential: () => undefined });
 	const lines = [
-		mode === "login" ? `Logged in to ${id}.` : `Stored ${id} key in ${saved.path}.`,
+		`Saved ${id} API key.`,
 		id === "parallel" ? "Run /reload so Parallel MCP picks up the new header." : undefined,
 		env ? `${env.name} is set and still takes precedence until you unset it.` : undefined,
 	].filter((line): line is string => line !== undefined);
 	return lines.join("\n");
-}
-
-async function logoutProvider(
-	id: CredentialProviderId,
-	ctx: Pick<ExtensionCommandContext, "ui">,
-): Promise<string | undefined> {
-	const stored = inspectStoredCredential(id);
-	if (!stored) {
-		return `${id}: not logged in via auth.json. Environment and gh auth are unchanged.`;
-	}
-	if (!await ctx.ui.confirm(
-		`Log out of ${id}?`,
-		`Remove the stored ${id} entry from auth.json? The value is never shown.`,
-	)) {
-		return undefined;
-	}
-	const result = await removeStoredApiKey(id);
-	if (!result.removed) {
-		return `${id}: not logged in via auth.json.`;
-	}
-	return id === "parallel"
-		? `Logged out of ${id}. Run /reload so Parallel MCP drops the header.`
-		: `Logged out of ${id}.`;
 }
 
 async function runClassifier(
@@ -472,7 +418,7 @@ export async function buildSettingsReport(registry: ExtensionContext["modelRegis
 		"",
 		"Setup:",
 		"- /web-search opens Status, Providers, and Classifier.",
-		"- /web-search provider: Login, Add API key, or Logout. Keys are never command arguments.",
+		"- /web-search provider adds or modifies a retrieval key in auth.json.",
 		"- /web-search classifier lists Pi classifiers, plus None. /model does not list them.",
 		"- Judgment uses one exact Pi classifier. No separate Jev key; provider billing applies.",
 		"- /web-search classifier none disables judgment. Nonsecret settings live in web-search.json.",

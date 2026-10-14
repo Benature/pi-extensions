@@ -110,21 +110,24 @@ test("interactive menu stores a provider key in auth.json and never echoes it", 
 	delete process.env.EXA_API_KEY;
 	try {
 		await withCommand(async ({ handler, dir }) => {
-			let report = "";
+			const notes: string[] = [];
 			await handler("provider exa", {
 				hasUI: true,
 				ui: {
-					notify: (message) => { report = message; },
-					select: async () => "Add API key",
-					input: async () => "  exa-secret-value  ",
+					notify: (message) => { notes.push(message); },
+					input: async (title) => {
+						assert.match(title, /dashboard\.exa\.ai/);
+						return "  exa-secret-value  ";
+					},
 					confirm: async () => true,
 				},
 			});
 			const auth = JSON.parse(await readFile(join(dir, "auth.json"), "utf8"));
 			assert.deepEqual(auth.exa, { type: "api_key", key: "exa-secret-value" });
 			assert.deepEqual(auth.openai, { type: "api_key", key: "keep-me" });
-			assert.match(report, /Stored exa key/);
-			assert.doesNotMatch(report, /exa-secret-value|keep-me/);
+			assert.match(notes.join("\n"), /dashboard\.exa\.ai/);
+			assert.match(notes.join("\n"), /Saved exa API key/);
+			assert.doesNotMatch(notes.join("\n"), /exa-secret-value|keep-me/);
 		}, { openai: { type: "api_key", key: "keep-me" } });
 	} finally {
 		if (previous === undefined) delete process.env.EXA_API_KEY;
@@ -132,7 +135,7 @@ test("interactive menu stores a provider key in auth.json and never echoes it", 
 	}
 });
 
-test("logout is TUI-only and does not accept a remove argument", async () => {
+test("a remove argument is usage and does not change auth.json", async () => {
 	await withCommand(async ({ handler, dir, messages }) => {
 		await handler("provider parallel remove", {
 			hasUI: false,
@@ -142,28 +145,6 @@ test("logout is TUI-only and does not accept a remove argument", async () => {
 		assert.deepEqual(auth.parallel, { type: "api_key", key: "keep-parallel" });
 		assert.equal(messages[0]?.content, WEB_SEARCH_USAGE);
 	}, { parallel: { type: "api_key", key: "keep-parallel" } });
-});
-
-test("interactive logout removes only the named stored key", async () => {
-	await withCommand(async ({ handler, dir }) => {
-		let report = "";
-		await handler("provider parallel", {
-			hasUI: true,
-			ui: {
-				notify: (message) => { report = message; },
-				select: async () => "Logout",
-				confirm: async () => true,
-			},
-		});
-		const auth = JSON.parse(await readFile(join(dir, "auth.json"), "utf8"));
-		assert.equal(auth.parallel, undefined);
-		assert.deepEqual(auth.github, { type: "api_key", key: "keep-github" });
-		assert.match(report, /Logged out of parallel/);
-		assert.doesNotMatch(report, /keep-github|drop-me/);
-	}, {
-		parallel: { type: "api_key", key: "drop-me" },
-		github: { type: "api_key", key: "keep-github" },
-	});
 });
 
 test("a pasted key after provider is usage, not storage", async () => {

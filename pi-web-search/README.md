@@ -20,7 +20,7 @@ Requires Pi **0.99.0 or newer**.
 | Command | What it does |
 | --- | --- |
 | `/web-search` | Status / Providers / Classifier menu, like `/slate`. Headless prints status. |
-| `/web-search provider` | Pick a source, then Login, Add API key, or Logout. Labels say keyless, key optional, or key required. |
+| `/web-search provider` | Add or modify a retrieval API key. Labels say keyless, key optional, or key required. |
 | `/web-search classifier` | Pick a Pi classifier, or **None**. |
 | `/web-search-settings` | Alias for `/web-search`. |
 
@@ -169,7 +169,7 @@ Merge this entry into existing `auth.json` without replacing other credentials:
 
 The [retrieval credential resolver](src/env.ts) reads literal `.key` strings, not shell commands, embedded environment references, or OAuth refresh credentials. Unreadable/malformed auth means no stored key.
 
-`/web-search provider` opens Login, Add API key, or Logout for that source. Logout only removes the `auth.json` entry after a TUI confirm. There is no `/web-search provider <name> remove` argument. Keys are never command arguments, never written to `web-search.json`, and never displayed after you type them. Environment aliases still win over the stored value.
+`/web-search provider` adds or modifies a retrieval key in `auth.json` and shows where to create one. Keys are never command arguments, never written to `web-search.json`, and never displayed after you type them. Environment aliases still win over the stored value.
 
 Pi supplies optional host peers. This package does not install another Pi copy. See the [npm advisory notes](docs/release-validation.md#npm-advisory-and-host-dependencies).
 

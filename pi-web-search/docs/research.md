@@ -32,7 +32,7 @@ Authenticate a classifier in Pi, then pin that exact catalog pair:
 
 The picker lists Pi's registered classifiers plus **None**. `/web-search classifier typesafe/jev-latest` pins that exact pair without discovery. `/web-search on` still enables judgment and auto-pins only when Pi reports exactly one available classifier. Discovery stops after three seconds; a failure leaves settings unchanged.
 
-`/web-search classifier none` disables judgment only. The command atomically merges nonsecret settings, preserves tuning, and refuses malformed files. Retrieval keys are stored separately through `/web-search provider` (Login / Add API key / Logout) into `auth.json`.
+`/web-search classifier none` disables judgment only. The command atomically merges nonsecret settings, preserves tuning, and refuses malformed files. Retrieval keys are stored separately through `/web-search provider` into `auth.json`.
 
 ```json
 {
