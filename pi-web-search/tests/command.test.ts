@@ -204,7 +204,7 @@ test("classifier picker lists Pi models plus None and can disable judgment", asy
 		assert.ok(offered[0]?.some((option) => option.includes("openai/gpt-6-luna") && option.includes("login required")));
 		const saved = JSON.parse(await readFile(join(dir, "web-search.json"), "utf8"));
 		assert.equal(saved.jev.enabled, false);
-		assert.match(report, /jev: disabled/);
+		assert.match(report, /Classifier disabled\. Saved to .* — run \/reload to apply\./);
 	});
 });
 

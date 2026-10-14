@@ -289,10 +289,15 @@ async function runClassifier(
 		selection,
 		selection === "on" ? () => availableClassifiers(ctx.modelRegistry, ctx.signal) : [],
 	);
+	const what = selection === "off"
+		? "Classifier disabled"
+		: pinned
+			? `Classifier pinned: ${pinned.provider}/${pinned.id}`
+			: "Classifier enabled";
 	const login = pinned && auth && !auth.configured
 		? `\nPi has no ${pinned.provider} credentials. Run /login ${pinned.provider}, then /reload.`
 		: "";
-	return `Saved search settings to ${saved.path}. Run /reload to apply tool exposure changes.${saved.note ? `\n${saved.note}` : ""}${login}\n\n${await buildSettingsReport(ctx.modelRegistry)}`;
+	return `${what}. Saved to ${saved.path} — run /reload to apply.${login}${saved.note ? `\n${saved.note}` : ""}`;
 }
 
 async function pickClassifier(
@@ -306,8 +311,12 @@ async function pickClassifier(
 		? `${resolved.jev.provider}/${resolved.jev.model}`
 		: undefined;
 	const models = await listSupportedClassifiers(ctx.modelRegistry, ctx.signal);
-	// Available classifiers first; stable within each group.
+	// Available classifiers first, current pin at the very top; stable otherwise.
 	models.sort((a, b) => Number(b.available === true) - Number(a.available === true));
+	const currentIndex = models.findIndex((model) => `${model.provider}/${model.id}` === current);
+	if (currentIndex > 0) {
+		models.unshift(...models.splice(currentIndex, 1));
+	}
 	const options = [
 		"None",
 		...models.map((model) => classifierOption(model, current, ctx.ui.theme)),
@@ -316,26 +325,28 @@ async function pickClassifier(
 	if (!chosen) {
 		return undefined;
 	}
-	if (chosen === "None") {
+	const plain = chosen.replace(/\x1b\[[0-9;]*m/g, "");
+	if (plain === "None") {
 		return "off";
 	}
-	const match = models.find((model) => chosen.startsWith(`${model.provider}/${model.id} `) || chosen === `${model.provider}/${model.id}`);
+	const unprefixed = plain.startsWith(CURRENT_PREFIX) ? plain.slice(CURRENT_PREFIX.length) : plain;
+	const match = models.find((model) => unprefixed.startsWith(`${model.provider}/${model.id} `) || unprefixed === `${model.provider}/${model.id}`);
 	return match;
 }
 
+const CURRENT_PREFIX = "[current] ";
+
 function classifierOption(model: ListedClassifier, current: string | undefined, theme: Theme | undefined): string {
 	const pin = `${model.provider}/${model.id}`;
+	const name = current === pin ? `${paint(theme, "accent", "[current]")} ${pin}` : pin;
 	// Available classifiers are the default case: bare pin, no suffix noise.
-	const marks: string[] = [];
-	if (current === pin) {
-		marks.push(paint(theme, "accent", "current"));
+	if (model.available === true) {
+		return name;
 	}
-	if (model.available === false) {
-		marks.push(paint(theme, "warning", "login required"));
-	} else if (model.available !== true) {
-		marks.push(paint(theme, "muted", "untested"));
-	}
-	return marks.length > 0 ? `${pin} · ${marks.join(" · ")}` : pin;
+	const state = model.available === false
+		? paint(theme, "warning", "login required")
+		: paint(theme, "muted", "untested");
+	return `${name} · ${state}`;
 }
 
 interface ListedClassifier extends AvailableClassifier {

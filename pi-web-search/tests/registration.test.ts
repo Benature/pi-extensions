@@ -332,7 +332,7 @@ test("setup selects an explicit provider, preserves tuning/search settings, and 
 			assert.equal(saved.timeoutMs, initial.timeoutMs);
 			assert.equal(saved.research.enabled, true);
 			assert.deepEqual(saved.jev, { ...initial.jev, enabled: true, provider: pin.provider, model: pin.id });
-			assert.match(report, /Saved search settings.*Run \/reload/);
+			assert.match(report, new RegExp(`Classifier pinned: ${pin.provider}/${pin.id}\\. Saved to .* — run /reload to apply\\.`));
 			assert.doesNotMatch(report, /existing-harness-secret/);
 		}
 		await commands[0].handler("off", { hasUI: false, ui: { notify: () => { throw new Error("headless"); } } });
@@ -353,7 +353,7 @@ test("first-time headless setup creates the overridden config path without any k
 			research: { enabled: true }, jev: { enabled: true, provider: "openrouter", model: "~typesafe/jev-latest" },
 		});
 		assert.equal(messages.length, 1);
-		assert.match(messages[0].content, /the pinned provider's billing applies/);
+		assert.match(messages[0].content, /Classifier pinned: openrouter\/~typesafe\/jev-latest\. Saved to .* — run \/reload to apply\./);
 		assert.deepEqual(await readdir(dir), ["nested"]);
 	});
 });
