@@ -33,7 +33,7 @@ test("headless settings uses host messages rather than corrupting stdout", async
 		try {
 			await registration.commands[0].handler("", { hasUI: false, ui: { notify: () => { throw new Error("no UI"); } } });
 			assert.equal(registration.messages.length, 1);
-			assert.equal(registration.messages[0].customType, "web-search-settings");
+			assert.equal(registration.messages[0].customType, "web-search");
 			assert.match(registration.messages[0].content, /pi-web-search settings/);
 		} finally { disableStoredCredentials(); }
 	});
@@ -131,6 +131,7 @@ test("a missing config registers web_search and code_search, not multi_search", 
 	await loadExtension(undefined, ({ tools, commands, servers }) => {
 		assert.equal(servers[0]?.name, PARALLEL_MCP_SERVER);
 		assert.deepEqual(names({ tools, commands }), ["web_search", "code_search"]);
+		assert.ok(commands.some((command) => command.name === "web-search"));
 		assert.ok(commands.some((command) => command.name === "web-search-settings"));
 		for (const tool of tools) {
 			assert.ok(tool.promptSnippet, `${tool.name} must set promptSnippet`);
@@ -179,8 +180,8 @@ test("Parallel registration is anonymous by default, or Bearer when a key alread
 		await loadExtension("{}", async ({ servers, commands }) => {
 			assert.deepEqual(servers, [{ name: PARALLEL_MCP_SERVER, config: { url: PARALLEL_MCP_URL, exposure: "codemode" } }]);
 			let report = "";
-			await commands[0].handler("", { hasUI: true, ui: { notify: (text) => { report = text; } } });
-			assert.match(report, /parallel: anonymous MCP needs no key/);
+			await commands[0].handler("status", { hasUI: true, ui: { notify: (text) => { report = text; } } });
+			assert.match(report, /parallel: key optional — keyless MCP; key raises limits/);
 			assert.match(report, /jev: disabled/);
 			assert.doesNotMatch(report, /JEV_API_KEY|package-visible|Classifier authentication/);
 			assert.match(report, /\/reload after changing.*Parallel credential/);
@@ -239,7 +240,7 @@ test("invalid configuration is a structured failed tool call", async () => {
 	});
 });
 
-test("the /web-search-settings command reports presence without keys", async () => {
+test("the /web-search command reports presence without keys", async () => {
 	await loadExtension(
 		JSON.stringify({ research: { enabled: true } }),
 		async ({ commands }, dir) => {
@@ -261,10 +262,10 @@ test("the /web-search-settings command reports presence without keys", async () 
 			let report = "";
 			try {
 				const command = commands.find(
-					(entry) => entry.name === "web-search-settings",
+					(entry) => entry.name === "web-search",
 				);
 				assert.ok(command);
-				await command.handler("", {
+				await command.handler("status", {
 					hasUI: true,
 					ui: {
 						notify: (message) => {
@@ -284,8 +285,8 @@ test("the /web-search-settings command reports presence without keys", async () 
 
 			assert.match(report, /pi-web-search settings/);
 			assert.match(report, /multi_search: enabled/);
-			assert.match(report, /github: present via auth\.json/);
-			assert.match(report, /parallel: present via PARALLEL_API_KEY/);
+			assert.match(report, /github: key required — present via auth\.json/);
+			assert.match(report, /parallel: key optional — present via PARALLEL_API_KEY/);
 			assert.match(report, /Install from a repository checkout: pi install \.\/pi-web-search/);
 			assert.match(report, /After an npm release is available:/);
 			assert.doesNotMatch(report, /gh-secret-value/);
@@ -307,7 +308,7 @@ test("classifier diagnostics use Pi's auth snapshot, including stored/runtime au
 			getProviderAuth: () => { throw new Error("must not resolve credentials for diagnostics"); },
 			getAvailableOfType: () => { throw new Error("must not probe availability for diagnostics"); },
 		} as unknown as ExtensionContext["modelRegistry"];
-		await commands[0].handler("", { hasUI: true, ui: { notify: (message) => { report = message; } }, modelRegistry });
+		await commands[0].handler("status", { hasUI: true, ui: { notify: (message) => { report = message; } }, modelRegistry });
 		assert.deepEqual(checked, []);
 		assert.match(report, /jev: disabled/);
 		assert.doesNotMatch(report, /classifier-secret|JEV_API_KEY|package-visible|typesafe:/);
@@ -326,7 +327,7 @@ test("setup selects an explicit provider, preserves tuning/search settings, and 
 		];
 		for (const pin of pins) {
 			let report = "";
-			await commands[0].handler(`${pin.provider}/${pin.id}`, { hasUI: true, ui: { notify: (message) => { report = message; } } });
+			await commands[0].handler(`classifier ${pin.provider}/${pin.id}`, { hasUI: true, ui: { notify: (message) => { report = message; } } });
 			const saved = JSON.parse(await readFile(join(dir, "web-search.json"), "utf8"));
 			assert.deepEqual(saved.web, initial.web);
 			assert.equal(saved.timeoutMs, initial.timeoutMs);
@@ -348,7 +349,7 @@ test("first-time headless setup creates the overridden config path without any k
 	await loadExtension(undefined, async ({ commands, messages }, dir) => {
 		const path = join(dir, "nested", "web-search.json");
 		process.env[CONFIG_PATH_ENV_VAR] = path;
-		await commands[0].handler("openrouter/~typesafe/jev-latest", { hasUI: false, ui: { notify: () => { throw new Error("headless"); } } });
+		await commands[0].handler("classifier openrouter/~typesafe/jev-latest", { hasUI: false, ui: { notify: () => { throw new Error("headless"); } } });
 		assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
 			research: { enabled: true }, jev: { enabled: true, provider: "openrouter", model: "~typesafe/jev-latest" },
 		});
@@ -362,17 +363,19 @@ test("setup refuses malformed config and unknown arguments without leaking their
 	for (const config of ["{ broken", JSON.stringify({ unrelated: "private-config-value" })]) {
 		await loadExtension(config, async ({ commands }, dir) => {
 			let report = "";
-			await commands[0].handler("typesafe/jev-latest", { hasUI: true, ui: { notify: (message) => { report = message; } } });
+			await commands[0].handler("classifier typesafe/jev-latest", { hasUI: true, ui: { notify: (message) => { report = message; } } });
 			assert.match(report, /Malformed configuration is never overwritten/);
 			assert.equal(await readFile(join(dir, "web-search.json"), "utf8"), config);
 			assert.doesNotMatch(report, /private-config-value/);
 		});
 	}
 	await loadExtension("{}", async ({ commands }, dir) => {
-		let report = "";
-		await commands[0].handler("accidentally-pasted-secret", { hasUI: true, ui: { notify: (message) => { report = message; } } });
-		assert.match(report, /^Usage:/);
-		assert.doesNotMatch(report, /accidentally-pasted-secret/);
+		for (const leaked of ["accidentally-pasted-secret", "sk-abc/def", "abcd efgh"]) {
+			let report = "";
+			await commands[0].handler(leaked, { hasUI: true, ui: { notify: (message) => { report = message; } } });
+			assert.match(report, /^Usage:/);
+			assert.equal(report.includes(leaked), false);
+		}
 		assert.equal(await readFile(join(dir, "web-search.json"), "utf8"), "{}");
 	});
 });

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rename `/web-search-settings` to `/web-search` (alias kept). Empty invocation opens a Status / Providers / Classifier menu.
+- `/web-search provider` stores or removes retrieval keys in Pi's `auth.json`. Keys are never command arguments and are never shown again.
+- `/web-search classifier` lists Pi's registered classifiers plus None. Pins require the `classifier` keyword so pasted secrets are not written to `web-search.json`.
+
 ## 0.2.1
 
 Maintenance release: refresh the Pi, TypeScript, and GitHub Actions pins.
