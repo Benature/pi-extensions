@@ -38,7 +38,6 @@ export type WebSearchAction =
 	| { kind: "usage" };
 
 const PROVIDER_KIND_SET = new Set<string>(PROVIDER_KINDS);
-const KEYED_PROVIDER_IDS = new Set<string>(CREDENTIAL_PROVIDER_IDS);
 
 export const PROVIDER_AUTH: Record<
 	ProviderKind,
@@ -188,11 +187,12 @@ async function runProvider(
 	}
 	const auth = PROVIDER_AUTH[selected];
 	if (auth.key === "none") {
-		return `${selected}: keyless. No API key is used.`;
+		return `${selected}: keyless.`;
 	}
 	if (!ctx.hasUI) {
+		const source = credentialSource(selected as CredentialProviderId);
 		return [
-			`${selected}: ${keyRequirement(auth.key)} — ${auth.summary} · ${presenceLabel(selected as CredentialProviderId)}.`,
+			`${selected}: ${auth.key} key — ${auth.summary}; ${source ? `present (${source})` : "missing"}.`,
 			auth.keyUrl ? `Get a key: ${auth.keyUrl}` : undefined,
 			"Add or modify a key in interactive Pi with /web-search provider.",
 		].filter((line): line is string => line !== undefined).join("\n");
@@ -213,28 +213,23 @@ async function pickProvider(
 
 function providerOption(id: ProviderKind): string {
 	const auth = PROVIDER_AUTH[id];
-	const presence = KEYED_PROVIDER_IDS.has(id)
-		? presenceLabel(id as CredentialProviderId)
-		: "no key";
-	return `${id} · ${keyRequirement(auth.key)} · ${auth.summary} · ${presence}`;
-}
-
-function keyRequirement(kind: "none" | "optional" | "required"): string {
-	if (kind === "none") {
-		return "keyless";
+	if (auth.key === "none") {
+		return `${id} · keyless`;
 	}
-	return kind === "required" ? "key required" : "key optional";
+	const source = credentialSource(id as CredentialProviderId);
+	return `${id} · ${auth.key} · ${source ? `present (${source})` : "missing"}`;
 }
 
-function presenceLabel(id: CredentialProviderId): string {
+/** Where the credential comes from, or undefined when absent. Never the key. */
+function credentialSource(id: CredentialProviderId): string | undefined {
 	const found = resolveCredential(id);
 	if (found) {
-		return found.source === "env" ? `present via ${found.name}` : "present via auth.json";
+		return found.source === "env" ? found.name : "auth.json";
 	}
 	if (id === "github" && githubToken() !== undefined) {
-		return "present via gh auth";
+		return "gh auth";
 	}
-	return "missing";
+	return undefined;
 }
 
 async function addOrModifyApiKey(
@@ -388,16 +383,8 @@ export async function buildSettingsReport(registry: ExtensionContext["modelRegis
 			lines.push(`- ${id}: keyless`);
 			continue;
 		}
-		const found = resolveCredential(id as CredentialProviderId);
-		const aliases = CREDENTIAL_ENV_ALIASES[id as CredentialProviderId].join(" or ");
-		const viaGh = id === "github" && found === undefined && githubToken() !== undefined;
-		lines.push(
-			found
-				? `- ${id}: ${keyRequirement(auth.key)} — present via ${found.source === "env" ? found.name : "auth.json"}`
-				: viaGh
-					? `- github: ${keyRequirement(auth.key)} — present via gh auth`
-					: `- ${id}: ${keyRequirement(auth.key)} — ${auth.summary}; set ${aliases}, ${id === "github" ? "run gh auth login, " : ""}add "${id}" to auth.json, or /web-search provider ${id}`,
-		);
+		const source = credentialSource(id as CredentialProviderId);
+		lines.push(`- ${id}: ${source ? `present (${source})` : `missing (${auth.key} key)`}`);
 	}
 	if (resolved.jev.provider && resolved.jev.model) {
 		const auth = registry?.getProviderAuthStatus?.(resolved.jev.provider);
@@ -408,17 +395,17 @@ export async function buildSettingsReport(registry: ExtensionContext["modelRegis
 			`- ${resolved.jev.provider}/${resolved.jev.model}: ${auth?.configured ? "Pi auth configured" : registry ? "Pi auth not configured" : "Pi auth status unavailable"}; ${registered ? "registered" : "not registered"}.`,
 		);
 	}
+	const envNames = CREDENTIAL_PROVIDER_IDS
+		.map((id) => CREDENTIAL_ENV_ALIASES[id].join("/"))
+		.join(", ");
 	lines.push(
 		"",
 		"Setup:",
-		"- /web-search opens Status, Providers, and Classifier.",
-		"- /web-search provider adds or modifies a retrieval key in auth.json.",
-		"- /web-search classifier lists Pi classifiers, plus None. /model does not list them.",
-		"- Judgment uses one exact Pi classifier. No separate Jev key; provider billing applies.",
-		"- /web-search classifier none disables judgment. Nonsecret settings live in web-search.json.",
-		"- Run /reload after changing multi_search exposure or a Parallel credential (its MCP header is captured at registration).",
-		"- Install from a repository checkout: pi install ./pi-web-search",
-		"- After an npm release is available: pi install npm:@gagansd/pi-web-search",
+		`- /web-search provider <name>: add or modify a key in auth.json. Env vars also work: ${envNames}.`,
+		"- /web-search classifier: pick a Pi classifier, or none to disable. /model does not list classifiers; the pinned provider's billing applies.",
+		"- Nonsecret settings live in web-search.json.",
+		"- Run /reload after changing multi_search or a Parallel key (its MCP header is captured at registration).",
+		"- Install: pi install ./pi-web-search (checkout) or pi install npm:@gagansd/pi-web-search (release).",
 	);
 	return lines.join("\n");
 }

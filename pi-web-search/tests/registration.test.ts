@@ -181,10 +181,10 @@ test("Parallel registration is anonymous by default, or Bearer when a key alread
 			assert.deepEqual(servers, [{ name: PARALLEL_MCP_SERVER, config: { url: PARALLEL_MCP_URL, exposure: "codemode" } }]);
 			let report = "";
 			await commands[0].handler("status", { hasUI: true, ui: { notify: (text) => { report = text; } } });
-			assert.match(report, /parallel: key optional — keyless MCP; key raises limits/);
+			assert.match(report, /parallel: missing \(optional key\)/);
 			assert.match(report, /jev: disabled/);
 			assert.doesNotMatch(report, /JEV_API_KEY|package-visible|Classifier authentication/);
-			assert.match(report, /\/reload after changing.*Parallel credential/);
+			assert.match(report, /\/reload after changing.*Parallel key/);
 		});
 		process.env.PARALLEL_API_KEY = "  configured-key  ";
 		await loadExtension("{}", ({ servers }) => {
@@ -285,10 +285,9 @@ test("the /web-search command reports presence without keys", async () => {
 
 			assert.match(report, /pi-web-search settings/);
 			assert.match(report, /multi_search: enabled/);
-			assert.match(report, /github: key required — present via auth\.json/);
-			assert.match(report, /parallel: key optional — present via PARALLEL_API_KEY/);
-			assert.match(report, /Install from a repository checkout: pi install \.\/pi-web-search/);
-			assert.match(report, /After an npm release is available:/);
+			assert.match(report, /github: present \(auth\.json\)/);
+			assert.match(report, /parallel: present \(PARALLEL_API_KEY\)/);
+			assert.match(report, /Install: pi install \.\/pi-web-search \(checkout\) or pi install npm:@gagansd\/pi-web-search \(release\)/);
 			assert.doesNotMatch(report, /gh-secret-value/);
 			assert.doesNotMatch(report, /parallel-secret-value/);
 		},
@@ -354,7 +353,7 @@ test("first-time headless setup creates the overridden config path without any k
 			research: { enabled: true }, jev: { enabled: true, provider: "openrouter", model: "~typesafe/jev-latest" },
 		});
 		assert.equal(messages.length, 1);
-		assert.match(messages[0].content, /Judgment uses one exact Pi classifier/);
+		assert.match(messages[0].content, /the pinned provider's billing applies/);
 		assert.deepEqual(await readdir(dir), ["nested"]);
 	});
 });
