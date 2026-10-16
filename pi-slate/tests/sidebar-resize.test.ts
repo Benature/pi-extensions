@@ -186,6 +186,7 @@ class MouseTerminal implements Terminal {
   clearScreen(): void {}
   setTitle(_title: string): void {}
   setProgress(_active: boolean): void {}
+  setProgramStatus(): void {}
   send(data: string): void {
     this.input?.(data);
   }

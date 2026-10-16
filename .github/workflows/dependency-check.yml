@@ -1,0 +1,53 @@
+name: Dependency check
+
+on:
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: dependency-check
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install npm-check-updates
+        run: npm install --global npm-check-updates@23.1.1 --ignore-scripts --no-audit --no-fund
+      - name: Collect dependency updates
+        id: collect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/dependency-check.mjs "$RUNNER_TEMP/dependency-check.md"
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_UPDATES: ${{ steps.collect.outputs.has_updates }}
+          BODY: ${{ runner.temp }}/dependency-check.md
+        run: |
+          set -euo pipefail
+          number="$(gh issue list --state open --limit 100 --json number,title --jq '[.[] | select(.title == "Dependency updates available") | .number] | first // empty')"
+          if [[ "$HAS_UPDATES" == "true" ]]; then
+            gh label create dependencies --color 0366d6 --description "Automated dependency update report" --force >/dev/null 2>&1 || true
+            if [[ -n "$number" ]]; then
+              gh issue edit "$number" --body-file "$BODY"
+            else
+              gh issue create --title "Dependency updates available" --body-file "$BODY" --label dependencies
+            fi
+          elif [[ -n "$number" ]]; then
+            gh issue comment "$number" --body "No dependency updates are available. Closing this tracking issue."
+            gh issue close "$number"
+          fi

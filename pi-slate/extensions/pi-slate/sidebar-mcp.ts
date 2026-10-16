@@ -11,9 +11,9 @@ export type SidebarMcpHost = {
 export async function loadSidebarMcpHost(packageDir: string, version: string): Promise<SidebarMcpHost | undefined> {
   try {
     // Modern semantics are checked against the running native file parser.
-    // 1.1.0 retains 1.0.4 overrides/namespaces; unknown formats still fail closed.
+    // 1.1.0 and 1.3.0 retain 1.0.4 overrides/namespaces; unknown formats still fail closed.
     const patch = /^1\.0\.(\d+)$/.exec(version);
-    const modern = version === "1.1.0" || (patch !== null && Number(patch[1]) >= 4);
+    const modern = version === "1.1.0" || version === "1.3.0" || (patch !== null && Number(patch[1]) >= 4);
     const legacy = version === "0.99.0" || version === "1.0.0";
     if (!legacy && !modern) return undefined;
     const native = await import(pathToFileURL(join(packageDir, "dist/core/mcp-servers.js")).href) as {
