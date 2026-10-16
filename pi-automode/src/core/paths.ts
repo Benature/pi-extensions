@@ -55,6 +55,7 @@ export function isWithinOrEqual(parent: string, child: string): boolean {
 export async function realpathNearest(absPath: string): Promise<string> {
   let current = path.resolve(absPath);
   const missing: string[] = [];
+  let links = 0;
   for (;;) {
     try {
       const real = await fs.realpath(current);
@@ -66,6 +67,17 @@ export async function realpathNearest(absPath: string): Promise<string> {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === "ENOENT") {
+        // A dangling link exists lexically: follow its destination before
+        // climbing, or a protected missing target is misclassified as the alias.
+        const stat = await fs.lstat(current).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        });
+        if (stat?.isSymbolicLink()) {
+          if (++links > 40) throw new Error("too many symbolic links while resolving target", { cause: err });
+          current = path.resolve(path.dirname(current), await fs.readlink(current));
+          continue;
+        }
         const parent = path.dirname(current);
         if (parent === current) throw err;
         missing.push(path.basename(current));

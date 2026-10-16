@@ -54,6 +54,49 @@ test("unknown/custom tools are blocked; one-shot approval cannot lift that", asy
   assert.equal(codemode.decision.outcome, "block");
 });
 
+test("dangling symlinks cannot turn protected writes into approvable actions", async () => {
+  const fx = await fixture();
+  for (const [index, target] of [
+    path.join(fx.workspace, ".env"),
+    path.join(fx.workspace, ".git", "config"),
+    path.join(fx.agentDir, "absent.json"),
+  ].entries()) {
+    const link = path.join(fx.workspace, `notes-${index}.txt`);
+    await fs.symlink(path.relative(fx.workspace, target), link);
+    const { decision, evidence } = await decide(fx, "write", { path: link, content: "blocked" }, settings());
+    assert.equal(evidence.canonicalPath, target);
+    assert.equal(decision.outcome, "block");
+    assert.equal(decision.source, "policy:protected-write");
+    await assert.rejects(fs.stat(target), { code: "ENOENT" });
+  }
+});
+
+test("shell PATH preserves an existing agent-bin entry instead of moving it first", async () => {
+  const fx = await fixture();
+  const bin = path.join(fx.agentDir, "bin");
+  const earlier = path.join(fx.homeDir, "bin");
+  await fs.mkdir(bin);
+  await fs.mkdir(earlier);
+  await fs.symlink("/bin/ls", path.join(bin, "ls"));
+  await fs.writeFile(path.join(earlier, "ls"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  const alias = path.join(fx.homeDir, "agent-alias");
+  await fs.symlink(fx.agentDir, alias, "dir");
+  const savedPath = process.env.PATH;
+  try {
+    for (const agentDir of [fx.agentDir, alias]) {
+      process.env.PATH = [earlier, "/usr/bin", path.join(agentDir, "bin")].join(path.delimiter);
+      const { decision, evidence } = await decide({ ...fx, agentDir }, "bash", { command: "ls -la" }, settings({
+        allowlist: [{ type: "command", text: "ls -la" }],
+      }));
+      assert.equal(evidence.shell?.resolvedExecutable, path.join(earlier, "ls"));
+      assert.equal(decision.outcome, "ask");
+    }
+  } finally {
+    if (savedPath === undefined) delete process.env.PATH;
+    else process.env.PATH = savedPath;
+  }
+});
+
 test("protected writes block; protected reads are a local Ask", async () => {
   const fx = await fixture();
   const write = await decide(fx, "write", { path: ".env", content: "x" }, settings());

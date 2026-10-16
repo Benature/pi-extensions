@@ -27,6 +27,30 @@ async function modeOf(p: string): Promise<number> {
 
 const VALID_MINIMAL = { version: 1, enabled: true };
 
+test("oversized updates preserve the readable file, current settings and epoch", async () => {
+  const dir = await tempDir();
+  try {
+    const file = path.join(dir, "automode.json");
+    const store = new SettingsStore(file);
+    await store.update(validateSettings(VALID_MINIMAL));
+    const before = await fs.readFile(file);
+    const epoch = store.epoch;
+    const current = store.current;
+    for (const text of ["x".repeat(4000), "界".repeat(1500)]) {
+      const next = { ...current, allowlist: Array.from({ length: 300 }, () => ({ type: "command" as const, text })) };
+      assert.ok(Buffer.byteLength(`${JSON.stringify(next, null, 2)}\n`) > SETTINGS_MAX_BYTES);
+      await assert.rejects(store.update(next), /byte bound/);
+      assert.deepEqual(await fs.readFile(file), before);
+      assert.deepEqual(store.current, current);
+      assert.equal(store.epoch, epoch);
+      assert.equal(await store.reload(), false);
+      assert.equal(store.error, null);
+    }
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("validateSettings accepts a minimal valid document and applies defaults", () => {
   const s = validateSettings(VALID_MINIMAL);
   assert.equal(s.enabled, true);
