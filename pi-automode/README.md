@@ -119,8 +119,11 @@ than loading your other executable extensions; see [launcher details](docs/launc
 A successful check verifies that the gate loaded, **not** that checks are on.
 
 In ordinary Pi, Automode uses the `tool_call` hook alongside other extensions.
-A later hook can still change arguments after review. Use a trusted extension
-stack or the verified launcher; neither is a security sandbox.
+A later hook can still change arguments after review, and an extension that
+dispatches a command in the interactive session can apply `/automode on` or
+`/automode off` in one step, because the live TUI dispatch is the toggle
+decision. Use a trusted extension stack or the verified launcher; neither is a
+security sandbox.
 
 ## Local data
 

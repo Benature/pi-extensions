@@ -3,7 +3,9 @@
 ## Unreleased
 
 - Apply `/automode on` and `/automode off` in a single step from Pi's
-  interactive terminal; the toggle confirmation dialog is gone.
+  interactive terminal; the toggle confirmation dialog is gone. The live TUI
+  dispatch is the decision, so any extension able to dispatch a command in
+  that session can apply it; use a trusted extension stack.
 - Color-code the status line and panel header: On green, Off yellow, Halted
   red.
 - List every classifier in Pi's registry in the picker, with `login required`
