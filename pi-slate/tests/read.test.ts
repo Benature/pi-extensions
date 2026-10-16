@@ -18,7 +18,7 @@ function renderContext(id: string, args: { path: string; offset?: number; limit?
   return {
     cwd: process.cwd(), args, toolCallId: id, invalidate, lastComponent: undefined, state: {},
     executionStarted: true, argsComplete: true, isPartial: false, expanded: false,
-    showImages: false, isError: false,
+    showImages: false, isError: false, durationMs: undefined, outputPad: 0,
   };
 }
 

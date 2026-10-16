@@ -141,7 +141,7 @@ test("MCP file cache follows changes/removal and refuses untrusted project confi
   await writeFile(join(cwd, ".pi", "mcp.json"), '{"mcpServers":{"a":{"enabled":false}}}');
   const cache = new SidebarMcpFiles(); cache.setHost(host);
   assert.equal(cache.snapshot(agent, cwd, false, []).mcp[0]!.enabled, true);
-  assert.equal(cache.snapshot(agent, cwd, true, []).mcp[0]!.enabled, true, "pinned 0.99.0 rejects partial overrides");
+  assert.equal(cache.snapshot(agent, cwd, true, []).mcp[0]!.enabled, false, "pinned 1.3.0 merges partial project overrides");
   await writeFile(global, '{"mcpServers":{"b":{"command":"b"}}}');
   assert.equal(cache.snapshot(agent, cwd, false, []).mcp[0]!.name, "b");
   await rm(global); assert.deepEqual(cache.snapshot(agent, cwd, false, []).mcp, []);

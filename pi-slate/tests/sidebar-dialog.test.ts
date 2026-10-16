@@ -9,7 +9,7 @@ class NullTerminal implements Terminal {
   columns = 100; rows: number; kittyProtocolActive = false;
   constructor(rows: number) { this.rows = rows; }
   start() {} stop() {} async drainInput() {} write() {} moveBy() {} hideCursor() {} showCursor() {}
-  clearLine() {} clearFromCursor() {} clearScreen() {} setTitle() {} setProgress() {}
+  clearLine() {} clearFromCursor() {} clearScreen() {} setTitle() {} setProgress() {} setProgramStatus() {}
 }
 function overlay(rows: number) {
   const tui = new TuiAltScreen(new NullTerminal(rows));

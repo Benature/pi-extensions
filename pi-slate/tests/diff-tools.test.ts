@@ -40,7 +40,7 @@ function renderContext<TArgs>(cwd: string, args: TArgs, overrides: Partial<Rende
   return {
     cwd, args, toolCallId: "render", invalidate() {}, lastComponent: undefined, state: {},
     executionStarted: true, argsComplete: true, isPartial: false, expanded: false,
-    showImages: false, isError: false, ...overrides,
+    showImages: false, isError: false, durationMs: undefined, outputPad: 0, ...overrides,
   };
 }
 
