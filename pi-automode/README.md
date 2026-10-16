@@ -1,5 +1,7 @@
 # pi-automode
 
+[currently in beta]
+
 A local permission gate for [Pi](https://pi.dev). Let ordinary workspace file
 operations run; approve other actions one at a time.
 
