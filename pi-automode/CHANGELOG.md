@@ -2,11 +2,20 @@
 
 ## Unreleased
 
+- Apply `/automode on` and `/automode off` in a single step from Pi's
+  interactive terminal; the toggle confirmation dialog is gone.
+- Color-code the status line and panel header: On green, Off yellow, Halted
+  red.
+- List every classifier in Pi's registry in the picker, with `login required`
+  and `untested` availability markers and the current selection pinned as
+  `[current]`. Selecting a classifier is the whole setup—no separate
+  disclosure-consent dialog—and **Rules only (no classifier)** clears the
+  selection in one step.
 - Simplify the panel and footer, move diagnostics into Details, remove trailing
   ellipses, and combine rule type/effect into one step. Empty lists no longer
   contain selectable placeholder rows.
-- Keep classifier selection unchanged when consent is cancelled or the endpoint
-  is invalid. Distinguish duplicate log summaries so each opens its own record.
+- Keep classifier selection unchanged when the endpoint is invalid. Distinguish
+  duplicate log summaries so each opens its own record.
 - Escape halt reasons, classifier disclosure fields, and approval reasons before
   terminal display. Keep internal decision sources in approval details.
 - Match Pi's PATH ordering when its agent-bin directory is already present,

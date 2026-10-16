@@ -17,15 +17,17 @@ Restart Pi or run `/reload`, then:
 /automode on
 ```
 
-Confirm **Turn on** in the terminal. No API key, classifier, or rules are
-required. Automode starts **off** on first install; your choice is saved.
+It applies immediately from Pi's interactive terminal—there is no
+confirmation step. No API key, classifier, or rules are required. Automode
+starts **off** on first install; your choice is saved.
 
 When an action needs permission, choose **Allow once**, **Decline**, or
 **Inspect details**. Escape cancels without granting permission. An explicit
 Decline also suppresses identical retries for the rest of that session.
 
-To stop checking, run `/automode off` and confirm. Pending approvals are
-cancelled, not executed. New calls then run without Automode checks.
+To stop checking, run `/automode off`; it also applies immediately. Pending
+approvals are cancelled, not executed. New calls then run without Automode
+checks.
 
 ## What happens while on
 
@@ -51,13 +53,14 @@ Automode cannot undo actions already started.
 | Command | Use |
 |---|---|
 | `/automode` | Open the compact panel: toggle, rules, logs, optional classifier, details |
-| `/automode on` | Enable checks after confirmation |
-| `/automode off` | Disable checks after confirmation |
+| `/automode on` | Enable checks immediately (interactive terminal) |
+| `/automode off` | Disable checks immediately (pending approvals cancelled) |
 | `/automode rules` | Add or manage rules |
 | `/automode logs` | View recorded decisions, newest first |
 
-The footer shows only on, off, or halted. **Details** contains coverage,
-queue counts, settings location, and log limits.
+The status line and panel header are color-coded: **Automode: On** green,
+**Automode: Off** yellow, **Automode: Halted** red. **Details** contains
+coverage, queue counts, settings location, and log limits.
 If configuration changes unexpectedly, checks halt; inspect the settings,
 then choose **Re-verify configuration** in the panel. Changes and approvals
 require Pi's interactive terminal, not RPC or print mode.
@@ -86,15 +89,20 @@ Rules can be edited, disabled, moved between allow/block, or deleted.
 
 You can skip this entirely. It adds **shadow review**, not automatic approval.
 
-In `/automode`, choose **Classifier (optional)** and select an authenticated,
-classifier-typed model from Pi's registry. Your coding model does not change.
-Before any request is sent, approve disclosure for that exact model,
-endpoint, and workspace. Escape leaves the previous selection unchanged.
+In `/automode`, choose **Classifier (optional)** to open a picker that lists
+every classifier in Pi's registry—including models such as
+vercel-ai-gateway's Jev (`typesafe-ai/jev`). Entries are marked
+`login required` when that provider is not authenticated and `untested` when
+availability is unknown; the current selection is pinned at the top with a
+`[current]` marker. Selecting a classifier is the whole setup: it applies
+immediately, with no separate disclosure dialog. **Rules only (no
+classifier)** clears the selection in one step. Your coding model does not
+change.
 
-Reviews send bounded metadata: tool name, argument key names, path metadata,
-and message-rule text—not argument values or file bodies. Provider retention
-terms apply. Classifier results never grant permission or override a block.
-Choose **Rules only (no classifier)** to return to local-only checks.
+The picker states that only bounded metadata—tool name, argument key names,
+path metadata, and message-rule text, never argument values or file
+bodies—may go to the selected endpoint. Provider retention terms apply, and
+shadow reviews never approve actions or override a block.
 
 ## Verified startup
 
