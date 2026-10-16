@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 
-import { createCommandHandler, statusText, type CommandCtx, type UiDeps } from "../src/ui.js";
+import { createCommandHandler, refreshStatus, statusText, type CommandCtx, type UiDeps } from "../src/ui.js";
 import { DEFAULT_SETTINGS, type AutomodeSettings, type DecisionLog } from "../src/types.js";
 import type { AutomodeHealth } from "../src/runtime/health.js";
 
@@ -525,6 +525,62 @@ test("a classifier choice made in a stale epoch is discarded, not applied", asyn
 	assert.match(ctx.notifications.at(-1)?.message ?? "", /changed while you were deciding/);
 });
 
+test("escaped-pin collisions still map a row to its own model", async () => {
+	const h = makeHarness({ enabled: true });
+	const models = [
+		{ provider: "test", id: "x\u001b", baseUrl: "https://example.com" },
+		{ provider: "test", id: "x\\e", baseUrl: "https://example.com" },
+	];
+	let labels: string[] = [];
+	const ctx = h.makeCtx([
+		"Classifier (optional)",
+		(_title, options) => {
+			labels = options.map(stripAnsi);
+			return options[2]; // the second model row
+		},
+		"Close",
+	]);
+	ctx.modelRegistry = {
+		getModelsOfType() {
+			return models;
+		},
+		async getAvailableOfType() {
+			return models;
+		},
+	};
+	await createCommandHandler(h.deps)("", ctx);
+	assert.deepEqual(labels.slice(1), ["test/x\\e", "test/x\\e (2)"]);
+	assert.equal(h.settings.current.classifier?.model, "x\\e", "row 2 must save its own model");
+});
+
+test("suffix collisions never fall back to a different classifier", async () => {
+	const h = makeHarness({ enabled: true });
+	const registered = [
+		{ provider: "test", id: "jev", baseUrl: "https://example.com" },
+		{ provider: "test", id: "jev · login required", baseUrl: "https://example.com" },
+	];
+	let labels: string[] = [];
+	const ctx = h.makeCtx([
+		"Classifier (optional)",
+		(_title, options) => {
+			labels = options.map(stripAnsi);
+			return options[2]; // the unavailable row, whose suffix repeats the marker
+		},
+		"Close",
+	]);
+	ctx.modelRegistry = {
+		getModelsOfType() {
+			return registered;
+		},
+		async getAvailableOfType() {
+			return [{ provider: "test", id: "jev", baseUrl: "https://example.com" }];
+		},
+	};
+	await createCommandHandler(h.deps)("", ctx);
+	assert.deepEqual(labels.slice(1), ["test/jev", "test/jev · login required · login required"]);
+	assert.equal(h.settings.current.classifier?.model, "jev · login required");
+});
+
 test("classifier labels stay distinct and never emit raw control bytes", async () => {
 	const h = makeHarness({ enabled: true });
 	const prefix = "x".repeat(240);
@@ -601,6 +657,20 @@ test("clearing logs requires local TUI confirmation; rpc can view but not clear"
 });
 
 // ------------------------------------------------------------------ status / panel
+
+test("RPC status and panel stay plain even when a theme is provided", async () => {
+	const h = makeHarness({ enabled: true });
+	const rpc = h.makeCtx([], "rpc", true, STUB_THEME);
+	refreshStatus(h.deps, rpc);
+	assert.equal(rpc.statuses.at(-1), "Automode: On");
+	assert.ok(!(rpc.statuses.at(-1) ?? "").includes("\x1b"), "no ANSI over the RPC protocol");
+	const tui = h.makeCtx([], "tui", true, STUB_THEME);
+	refreshStatus(h.deps, tui);
+	assert.match(tui.statuses.at(-1) ?? "", /\x1b\[32mAutomode: On/);
+	const panel = h.makeCtx(["Close"], "rpc", true, STUB_THEME);
+	await createCommandHandler(h.deps)("", panel);
+	assert.ok(!(panel.calls[0]?.title ?? "").includes("\x1b"), "panel header paints only in the TUI");
+});
 
 test("status text paints On green, Off yellow and Halted red with a theme", () => {
 	const off = makeHarness({ enabled: false });

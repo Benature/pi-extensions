@@ -10,15 +10,15 @@ import type { AutomodeHealth } from "./runtime/health.js";
  *
  * Authority rules (IMPLEMENTATION.md invariant 6 + B1):
  * - Pi dispatches slash commands BEFORE input hooks and provides no command
- *   origin authentication, so a command invocation alone never authorizes
- *   anything. Every authority change requires a live local TUI
- *   (ctx.mode === "tui" && ctx.hasUI). Rule save/delete, log clear and
- *   re-verify additionally require an explicit host-owned terminal
- *   confirmation whose default is Cancel. Toggle and classifier selection are
- *   single-step: the invocation or the selected option is itself the
- *   decision. RPC (hasUI=true) cannot authorize.
- * - No user data or agent output can approve a rule, toggle the gate or clear
- *   logs: those paths never reach settings.update without a live operator.
+ *   origin authentication. Authority is the live local TUI dispatch itself
+ *   (ctx.mode === "tui" && ctx.hasUI): the on/off toggle and classifier
+ *   selection are single-step by operator decision, so any TUI-context
+ *   command dispatch can apply them with no dialog. Rule save/delete, log
+ *   clear and re-verify additionally require an explicit host-owned
+ *   confirmation whose default is Cancel. RPC (hasUI=true) and print/json
+ *   never authorize.
+ * - No message content, tool result or pi-ask answer is parsed as authority;
+ *   only the host dispatch path reaches settings.update.
  */
 
 const USAGE = "Usage: /automode [on|off|rules|logs]";
@@ -102,6 +102,11 @@ function paint(theme: Theme | undefined, color: ThemeColor, text: string): strin
 	return theme ? theme.fg(color, text) : text;
 }
 
+/** Color only the real terminal: RPC clients may render status text verbatim. */
+function themeFor(ctx: CommandCtx): Theme | undefined {
+	return ctx.mode === "tui" ? ctx.ui.theme : undefined;
+}
+
 export function createCommandHandler(deps: UiDeps): (args: string, ctx: CommandCtx) => Promise<void> {
 	return async (args: string, ctx: CommandCtx) => {
 		const sub = args.trim();
@@ -133,7 +138,7 @@ export function statusText(deps: UiDeps, theme?: Theme): string {
 
 export function refreshStatus(deps: UiDeps, ctx: CommandCtx): void {
 	try {
-		ctx.ui.setStatus?.("automode", statusText(deps, ctx.ui.theme));
+		ctx.ui.setStatus?.("automode", statusText(deps, themeFor(ctx)));
 	} catch {
 		// Status display is best-effort and never authority.
 	}
@@ -224,11 +229,12 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		const settings = deps.settings.current;
 		const state = deps.gate.state;
 		const halted = state === "halted";
+		const theme = themeFor(ctx);
 		const label = halted
-			? paint(ctx.ui.theme, "error", "Automode: Halted")
+			? paint(theme, "error", "Automode: Halted")
 			: settings?.enabled
-				? paint(ctx.ui.theme, "success", "Automode: On")
-				: paint(ctx.ui.theme, "warning", "Automode: Off");
+				? paint(theme, "success", "Automode: On")
+				: paint(theme, "warning", "Automode: Off");
 		const lines = [halted
 			? "Guarded actions are blocked until configuration is re-verified."
 			: settings?.enabled
@@ -597,15 +603,42 @@ function classifierPin(model: ClassifierModelInfo): string {
 	return `${escapeTerminal(model.provider)}/${escapeTerminal(model.id)}`;
 }
 
-/** pi-web-search parity: bare available pin, or `· login required` / `· untested`. */
-function classifierOption(model: ListedClassifier, current: string | undefined, theme: Theme | undefined): string {
+/** Strip the SGR sequences Pi's Theme.fg emits; also used to map rows back. */
+function stripAnsi(text: string): string {
+	return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+interface ClassifierRow {
+	plain: string;
+	painted: string;
+	model: ListedClassifier;
+}
+
+/**
+ * pi-web-search parity: bare available pin, `· login required` / `· untested`
+ * otherwise, current pin accented. Plain text is the mapping key; duplicate
+ * plain labels get a positional suffix so a row never maps to another model.
+ */
+function classifierRow(
+	model: ListedClassifier,
+	current: string | undefined,
+	theme: Theme | undefined,
+	used: Set<string>,
+): ClassifierRow {
 	const pin = classifierPin(model);
-	const name = current === `${model.provider}/${model.id}` ? `${paint(theme, "accent", "[current]")} ${pin}` : pin;
-	if (model.available === true) return name;
-	const state = model.available === false
-		? paint(theme, "warning", "login required")
-		: paint(theme, "muted", "untested");
-	return `${name} · ${state}`;
+	const isCurrent = current === `${model.provider}/${model.id}`;
+	const stateText = model.available === true ? "" : model.available === false ? " · login required" : " · untested";
+	const statePainted = stateText === ""
+		? ""
+		: ` · ${paint(theme, model.available === false ? "warning" : "muted", stateText.slice(3))}`;
+	let suffix = "";
+	while (used.has(`${isCurrent ? CURRENT_PREFIX : ""}${pin}${stateText}${suffix}`)) {
+		suffix = suffix === "" ? " (2)" : ` (${Number(suffix.slice(2, -1)) + 1})`;
+	}
+	const plain = `${isCurrent ? CURRENT_PREFIX : ""}${pin}${stateText}${suffix}`;
+	used.add(plain);
+	const painted = `${isCurrent ? `${paint(theme, "accent", "[current]")} ` : ""}${pin}${statePainted}${suffix}`;
+	return { plain, painted, model };
 }
 
 async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
@@ -632,10 +665,11 @@ async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		"Classifier — shadow review",
 		"Only bounded metadata (tool name, argument key names, path metadata, message-rule text; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
 	].join("\n");
-	const options = [
-		PICKER_RULES_ONLY,
-		...models.map((model) => classifierOption(model, currentPin, ctx.ui.theme)),
-	];
+	// Positional keys: every row's plain text is unique, so mapping is exact.
+	const used = new Set<string>([PICKER_RULES_ONLY]);
+	const rows = models.map((model) => classifierRow(model, currentPin, themeFor(ctx), used));
+	const byLabel = new Map(rows.map((row) => [row.plain, row.model]));
+	const options = [PICKER_RULES_ONLY, ...rows.map((row) => row.painted)];
 	let choice: string | undefined;
 	try {
 		choice = await ctx.ui.select(title, options);
@@ -664,12 +698,7 @@ async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		return;
 	}
 
-	// The host may return the painted label; strip ANSI before mapping back.
-	const plain = choice.replace(/\x1b\[[0-9;]*m/g, "");
-	const unprefixed = plain.startsWith(CURRENT_PREFIX) ? plain.slice(CURRENT_PREFIX.length) : plain;
-	const model =
-		models.find((entry) => classifierPin(entry) === unprefixed) ??
-		models.find((entry) => unprefixed.startsWith(`${classifierPin(entry)} · `));
+	const model = byLabel.get(stripAnsi(choice));
 	if (!model) return;
 
 	// Selecting a model IS the disclosure consent; there is no second dialog.
