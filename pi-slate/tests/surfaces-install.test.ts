@@ -15,7 +15,7 @@ import { KeybindingsManager } from "../node_modules/@earendil-works/pi-coding-ag
 class NullTerminal implements Terminal {
   columns = 140; rows = 40; kittyProtocolActive = false;
   start() {} stop() {} async drainInput() {} write() {} moveBy() {} hideCursor() {} showCursor() {}
-  clearLine() {} clearFromCursor() {} clearScreen() {} setTitle() {} setProgress() {}
+  clearLine() {} clearFromCursor() {} clearScreen() {} setTitle() {} setProgress() {} setProgramStatus() {}
 }
 
 const theme = { name: "dark", fg: (_color: string, text: string) => text, bold: (text: string) => text, italic: (text: string) => text } as Theme;

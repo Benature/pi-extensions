@@ -648,7 +648,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     pi.on("before_agent_start", (event, ctx) => {
       if (ctx.mode !== "tui") return;
       if (event.systemPromptOptions?.skills) skills.discover(event.systemPromptOptions.skills);
-      if (event.prompt) skills.observePrompt(event.prompt);
+      if (event.messageType === "user") skills.observePrompt(event.prompt);
       refreshResources(ctx); syncSidebar(ctx);
     });
     pi.on("tool_execution_start", (event, ctx) => {
