@@ -1,106 +1,130 @@
 # pi-automode
 
-A permission gate for Pi. While On, it checks the final arguments of `read`,
-`edit`, `write`, and `bash` before they run, so risky actions stop for a local
-decision instead of executing silently.
+A local permission gate for [Pi](https://pi.dev). Let ordinary workspace file
+operations run; approve other actions one at a time.
 
-## Why use it
+**Beta · macOS and Linux · Node 22.19+ · tested with Pi 1.1.0**
 
-- Quiet workspace, loud risks. Ordinary reads, edits, and writes inside the
-  workspace run on the file floor. Writes to the Pi agent directory, project
-  `.pi`, Git metadata, CI config, and secret or key names block. Unknown,
-  custom, child, codemode, and MCP tools block at the parent tool call.
-- Exact rules cut repeated asks. A command rule for `ls -la` lets that exact
-  invocation run; `ls -la; rm -rf dist` still asks because matching preserves
-  every byte.
-- Every decision is recorded locally. `/automode logs` shows the action,
-  outcome, source, matched rule, and time.
-- Optional classifier review. Select a classifier-typed model such as Jev from
-  Pi's own registry. Reviews are shadow-only and never approve an action.
-
-## Demo
-
-```text
-$ pi-automode --check
-pi-automode gate verified (generation 1)
-state: OFF
-tools: bash, edit, read, write (guarded)
-workspace: /path/to/project
-```
-
-The launcher verifies the gate before starting the TUI and after every runtime
-replacement. A missing or failed gate stops startup.
-
-## Install
+## Quick start
 
 ```sh
 pi install npm:@gagansd/pi-automode
 ```
 
-Restart Pi or run `/reload`. The gate starts Off and checks nothing until you
-enable it. It reviews tool calls through Pi's `tool_call` hook, so it runs
-alongside extensions that customize `read`, `edit`, `write`, or `bash` instead
-of competing with them for the tool names.
+Restart Pi or run `/reload`, then:
 
-For verified startup, run the bundled launcher instead of `pi`:
-
-```sh
-pi-automode          # verified startup, then the Pi TUI
-pi-automode --check  # startup check only, no TUI and no model requests
-pi-automode --help
+```text
+/automode on
 ```
 
-Requires Node 22.19+ and Pi 1.1.0 on macOS or Linux.
+Confirm **Turn on** in the terminal. No API key, classifier, or rules are
+required. Automode starts **off** on first install; your choice is saved.
 
-## Usage
+When an action needs permission, choose **Allow once**, **Decline**, or
+**Inspect details**. Escape cancels without granting permission. An explicit
+Decline also suppresses identical retries for the rest of that session.
 
-| Command | Result |
+To stop checking, run `/automode off` and confirm. Pending approvals are
+cancelled, not executed. New calls then run without Automode checks.
+
+## What happens while on
+
+| Action | Behavior |
 |---|---|
-| `/automode` | Panel with state, coverage, classifier selection, and usage |
-| `/automode on` | Enable checks after a local confirmation |
-| `/automode off` | Disable checks and cancel held calls |
-| `/automode rules` | Add, edit, delete, or disable allow and block rules |
-| `/automode logs` | Inspect or clear recorded decisions |
+| Ordinary `read`, `edit`, or `write` inside the workspace | Runs automatically when its target can be verified |
+| Writes to protected locations | Blocked |
+| Sensitive reads, outside-workspace files, or uncertain targets | Ask for local approval |
+| `bash` commands | Ask, unless a narrowly supported exact allow rule applies; exact block rules block |
+| Other tools, including codemode, MCP, custom tools, and nested calls | Blocked |
+
+Protected locations include the Pi agent directory, project `.pi`, Git
+metadata, CI configuration, this extension, and secret/key paths. Command
+rules do not override these file protections. An enabled message block rule
+makes otherwise allowed actions ask too; see [Rules](#rules).
+
+**Not a sandbox.** An approved shell command runs with your full user
+permissions, including access to files, network, and child processes.
+Automode cannot undo actions already started.
+
+## Commands
+
+| Command | Use |
+|---|---|
+| `/automode` | Open the compact panel: toggle, rules, logs, optional classifier, details |
+| `/automode on` | Enable checks after confirmation |
+| `/automode off` | Disable checks after confirmation |
+| `/automode rules` | Add or manage rules |
+| `/automode logs` | View recorded decisions, newest first |
+
+The footer shows only on, off, or halted. **Details** contains coverage,
+queue counts, settings location, and log limits.
+If configuration changes unexpectedly, checks halt; inspect the settings,
+then choose **Re-verify configuration** in the panel. Changes and approvals
+require Pi's interactive terminal, not RPC or print mode.
+
+## Rules
+
+You do not need rules to get started. Add them only to reduce repeated
+approvals or explicitly block an invocation.
+
+Open `/automode rules`, choose **Add rule**, then choose an effect and type:
+
+- **Allow command** / **Block command** match the entire command exactly,
+  including whitespace. Block rules take priority.
+- An allow rule only skips approval for a narrowly verified read-only shell
+  invocation. Scripts, interpreters, package managers, Git commands, and
+  compositions still ask, even with a matching rule.
+- **Message rules are experimental.** Allow messages never auto-approve.
+  An enabled block message makes **all otherwise allowed actions ask**,
+  because local policy cannot interpret the instruction and the optional
+  classifier cannot authorize anything.
+
+For example, allowing `ls -la` does not allow `ls -la; rm -rf dist`.
+Rules can be edited, disabled, moved between allow/block, or deleted.
+
+## Optional classifier
+
+You can skip this entirely. It adds **shadow review**, not automatic approval.
+
+In `/automode`, choose **Classifier (optional)** and select an authenticated,
+classifier-typed model from Pi's registry. Your coding model does not change.
+Before any request is sent, approve disclosure for that exact model,
+endpoint, and workspace. Escape leaves the previous selection unchanged.
+
+Reviews send bounded metadata: tool name, argument key names, path metadata,
+and message-rule text—not argument values or file bodies. Provider retention
+terms apply. Classifier results never grant permission or override a block.
+Choose **Rules only (no classifier)** to return to local-only checks.
+
+## Verified startup
+
+For stronger startup guarantees, use the bundled launcher instead of `pi`:
 
 ```sh
-/automode on      # enable after a local confirmation
-/automode rules   # add an exact command allow rule, for example ls -la
-/automode logs    # inspect what the gate decided
+pi-automode          # verify the gate, then start Pi
+pi-automode --check  # verify only; no TUI or model requests
 ```
 
-A command rule matches the exact command text. The allow side automates only
-the narrowly checked read-only invocation subset. Opaque scripts,
-interpreters, package managers, Git commands, and compositions still ask.
+The launcher verifies gate health before startup and after runtime replacement,
+and stops if verification fails. It uses an isolated extension stack rather
+than loading your other executable extensions; see [launcher details](docs/launcher.md).
+A successful check verifies that the gate loaded, **not** that checks are on.
 
-Classifier review is optional. Open `/automode`, choose `Review (classifier)`,
-and select a classifier-typed model. A request goes out only after you approve
-consent for that exact model, endpoint, and workspace, and requests omit
-argument values and file bodies. Message allow rules never auto-approve, and a
-classifier answer cannot clear an enabled message block.
+In ordinary Pi, Automode uses the `tool_call` hook alongside other extensions.
+A later hook can still change arguments after review. Use a trusted extension
+stack or the verified launcher; neither is a security sandbox.
 
-## Settings and logs
+## Local data
 
-- `<agent-dir>/automode.json`, normally `~/.pi/agent/automode.json`, holds the
-  on/off state, classifier selection, consent binding, rules, and limits. A
-  missing file starts Off. Invalid external edits halt checks until verified.
-- `<agent-dir>/automode-logs.json` is a bounded NDJSON record of actual
-  decisions. It can contain exact action text, so treat it as sensitive.
+- `<agent-dir>/automode.json`: saved on/off state, rules, classifier selection,
+  consent bindings, and limits. Usually `~/.pi/agent/automode.json`.
+- `<agent-dir>/automode-logs.json`: bounded newline-delimited JSON decision log.
+  It can include exact commands and arguments; treat it as sensitive.
+  View or clear it through `/automode logs`.
 
-## Limits
-
-- Not a sandbox. An approved shell command runs with your full user
-  permissions and can reach protected files, the network, or child processes.
-  Off cancels held calls but does not sandbox the session.
-- The gate reviews at Pi's `tool_call` boundary. An extension that runs after
-  it can still change arguments before the tool executes, so use the bundled
-  launcher or a trusted extension stack.
-- Classifier receipts are shadow-only. They never create an Allow or clear an
-  enabled message block.
-- macOS and Linux only. Windows is unsupported.
-
-## Verification
+## Development
 
 ```sh
-npm run check       # strict typecheck, build, and the offline test suite
-npm run pack-check  # tarball contents
+npm run check       # typecheck, build/package checks, offline tests
+npm run pack:check  # verify tarball contents
 ```
