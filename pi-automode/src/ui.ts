@@ -1,3 +1,4 @@
+import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import type { AutomodeSettings, DecisionLog, Rule } from "./types.js";
 import { escapeOneLine, escapeTerminal } from "./runtime/escape.js";
 import { ambientShellCustomizations, type HostShellOptions } from "./runtime/host.js";
@@ -10,13 +11,14 @@ import type { AutomodeHealth } from "./runtime/health.js";
  * Authority rules (IMPLEMENTATION.md invariant 6 + B1):
  * - Pi dispatches slash commands BEFORE input hooks and provides no command
  *   origin authentication, so a command invocation alone never authorizes
- *   anything. Every authority change (toggle, rule save/delete, classifier /
- *   consent choice, log clear, re-verify) requires a live local TUI
- *   (ctx.mode === "tui" && ctx.hasUI) AND an explicit host-owned terminal
- *   confirmation whose default is Cancel. RPC (hasUI=true) cannot authorize.
- * - No user data, agent output or extension command invocation can approve,
- *   toggle or save: those paths never reach settings.update without the
- *   confirmed dialog.
+ *   anything. Every authority change requires a live local TUI
+ *   (ctx.mode === "tui" && ctx.hasUI). Rule save/delete, log clear and
+ *   re-verify additionally require an explicit host-owned terminal
+ *   confirmation whose default is Cancel. Toggle and classifier selection are
+ *   single-step: the invocation or the selected option is itself the
+ *   decision. RPC (hasUI=true) cannot authorize.
+ * - No user data or agent output can approve a rule, toggle the gate or clear
+ *   logs: those paths never reach settings.update without a live operator.
  */
 
 const USAGE = "Usage: /automode [on|off|rules|logs]";
@@ -32,6 +34,8 @@ export interface CommandUi {
 	editor(title: string, prefill?: string): Promise<string | undefined>;
 	notify(message: string, type?: "info" | "warning" | "error"): void;
 	setStatus?(key: string, text: string | undefined): void;
+	/** Host theme for status/header colors; absent in headless and tests. */
+	readonly theme?: Theme;
 }
 
 export interface ClassifierModelInfo {
@@ -41,6 +45,9 @@ export interface ClassifierModelInfo {
 }
 
 export interface CommandModelRegistry {
+	/** Every registered classifier when the host exposes the catalogue. */
+	getModelsOfType?(type: "classifier", provider?: string): readonly ClassifierModelInfo[];
+	/** Auth-ready classifiers; a rejection means availability unknown, not missing. */
 	getAvailableOfType(type: "classifier", provider?: string): Promise<readonly ClassifierModelInfo[]>;
 }
 
@@ -90,6 +97,11 @@ export interface UiDeps {
 
 const CANCEL = "Cancel";
 
+/** Theme-colored text; plain when the host provides no theme (headless, tests). */
+function paint(theme: Theme | undefined, color: ThemeColor, text: string): string {
+	return theme ? theme.fg(color, text) : text;
+}
+
 export function createCommandHandler(deps: UiDeps): (args: string, ctx: CommandCtx) => Promise<void> {
 	return async (args: string, ctx: CommandCtx) => {
 		const sub = args.trim();
@@ -111,17 +123,17 @@ export function createCommandHandler(deps: UiDeps): (args: string, ctx: CommandC
 }
 
 /** Keep the footer quiet; diagnostics live in Details. */
-export function statusText(deps: UiDeps): string {
+export function statusText(deps: UiDeps, theme?: Theme): string {
 	const settings = deps.settings.current;
 	const state = deps.gate.state;
-	if (state === "halted") return "automode · halted — /automode";
-	if (state === "off" || !settings?.enabled) return "automode · off";
-	return "automode · on";
+	if (state === "halted") return paint(theme, "error", "Automode: Halted");
+	if (state === "off" || !settings?.enabled) return paint(theme, "warning", "Automode: Off");
+	return paint(theme, "success", "Automode: On");
 }
 
 export function refreshStatus(deps: UiDeps, ctx: CommandCtx): void {
 	try {
-		ctx.ui.setStatus?.("automode", statusText(deps));
+		ctx.ui.setStatus?.("automode", statusText(deps, ctx.ui.theme));
 	} catch {
 		// Status display is best-effort and never authority.
 	}
@@ -191,16 +203,10 @@ async function setEnabled(deps: UiDeps, ctx: CommandCtx, on: boolean): Promise<v
 		return;
 	}
 	if (current.enabled === on && deps.gate.state !== "halted") {
-		ctx.ui.notify(on ? "Automode is already on." : "Automode is already off.", "info");
+		ctx.ui.notify(on ? "Already on." : "Already off.", "info");
 		return;
 	}
-	const title = on ? "Turn Automode ON?" : "Turn Automode OFF?";
-	const detail = on
-		? "Check read, edit, write and bash. Other tools, including codemode and MCP, are blocked. " +
-			"Not a sandbox: approved commands run with your permissions."
-		: "Disable all Automode checks. Pending approvals are cancelled, not executed.";
-	const confirmed = await confirmAuthority(ctx, title, detail, on ? "Turn on" : "Turn off");
-	if (!confirmed) return;
+	// Single-step: the live local TUI invocation is the decision; no dialog.
 	if (!(await saveSettings(deps, ctx, { ...current, enabled: on }, epoch0, on))) return;
 	// Clears any halt and invalidates pending asks/reviews; Off never releases
 	// held calls into execution, On never retroactively re-holds work.
@@ -217,11 +223,18 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	for (;;) {
 		const settings = deps.settings.current;
 		const state = deps.gate.state;
-		const lines = [state === "halted"
-			? `Halted: ${escapeOneLine(deps.gate.haltReason ?? "configuration needs verification", 160)}`
+		const halted = state === "halted";
+		const label = halted
+			? paint(ctx.ui.theme, "error", "Automode: Halted")
 			: settings?.enabled
-				? "On — ordinary workspace files can run; other actions may need approval."
-				: "Off — tool calls run without Automode checks."];
+				? paint(ctx.ui.theme, "success", "Automode: On")
+				: paint(ctx.ui.theme, "warning", "Automode: Off");
+		const lines = [halted
+			? "Guarded actions are blocked until configuration is re-verified."
+			: settings?.enabled
+				? "Guarded tools are checked; unresolved actions ask."
+				: "Tool calls run without Automode checks."];
+		if (halted) lines.push(`Halted: ${escapeOneLine(deps.gate.haltReason ?? "configuration needs verification", 160)}`);
 		if (deps.settings.error) lines.push(`Config error: ${escapeOneLine(String(deps.settings.error), 160)}`);
 		if (ambientShellCustomizations(deps.host()).length) lines.push("Shell customization detected: bash is blocked while on.");
 		if (ctx.mode !== "tui") lines.push("Changes and approvals require the interactive terminal.");
@@ -233,7 +246,7 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 
 		let choice: string | undefined;
 		try {
-			choice = await ctx.ui.select(`Automode\n\n${lines.join("\n")}`, options);
+			choice = await ctx.ui.select(`${label}\n${lines.join("\n")}`, options);
 		} catch {
 			return;
 		}
@@ -544,54 +557,100 @@ async function logsViewer(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 // ---------------------------------------------------------------- review / classifier
 
 const PICKER_RULES_ONLY = "Rules only (no classifier)";
-const PICKER_CANCEL = CANCEL;
-const CONSENT_APPROVE = "Approve disclosure";
-const CONSENT_DECLINE = "Decline disclosure";
+const CURRENT_PREFIX = "[current] ";
+
+/** Registered classifier plus tri-state availability (undefined = unknown). */
+interface ListedClassifier extends ClassifierModelInfo {
+	available?: boolean;
+}
+
+/**
+ * Every registered classifier with availability when it can be resolved.
+ * A failed availability lookup (abort, auth error, network) means unknown,
+ * never "missing credentials". Without getModelsOfType the availability
+ * results themselves are the catalogue.
+ */
+async function listClassifiers(registry: CommandModelRegistry): Promise<ListedClassifier[]> {
+	const known: ClassifierModelInfo[] = (registry.getModelsOfType?.("classifier") ?? []).map((model) => ({
+		provider: model.provider,
+		id: model.id,
+		...(model.baseUrl !== undefined ? { baseUrl: model.baseUrl } : {}),
+	}));
+	let available: readonly ClassifierModelInfo[] | undefined;
+	try {
+		available = await registry.getAvailableOfType("classifier");
+	} catch {
+		available = undefined;
+	}
+	const ready = new Set((available ?? []).map((model) => `${model.provider}/${model.id}`));
+	const listed = known.map((model) => {
+		const entry: ListedClassifier = { ...model };
+		if (available !== undefined) entry.available = ready.has(`${model.provider}/${model.id}`);
+		return entry;
+	});
+	if (listed.length > 0) return listed;
+	return (available ?? []).map((model) => ({ ...model, available: true }));
+}
+
+/** Display key for a classifier; escaped so registry ids cannot inject controls. */
+function classifierPin(model: ClassifierModelInfo): string {
+	return `${escapeTerminal(model.provider)}/${escapeTerminal(model.id)}`;
+}
+
+/** pi-web-search parity: bare available pin, or `· login required` / `· untested`. */
+function classifierOption(model: ListedClassifier, current: string | undefined, theme: Theme | undefined): string {
+	const pin = classifierPin(model);
+	const name = current === `${model.provider}/${model.id}` ? `${paint(theme, "accent", "[current]")} ${pin}` : pin;
+	if (model.available === true) return name;
+	const state = model.available === false
+		? paint(theme, "warning", "login required")
+		: paint(theme, "muted", "untested");
+	return `${name} · ${state}`;
+}
 
 async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	if (!requireOperator(ctx)) return;
-	// Bind the settings epoch before any async work: a consent choice shown
-	// for one configuration must never be applied to a newer one.
+	// Bind the settings epoch before any async work: a model choice shown for
+	// one configuration must never be applied to a newer one.
 	const epoch0 = deps.settings.epoch;
 	const registry = ctx.modelRegistry;
 	if (!registry || typeof registry.getAvailableOfType !== "function") {
 		ctx.ui.notify("Automode: model registry unavailable.", "error");
 		return;
 	}
-	let models: readonly ClassifierModelInfo[];
-	try {
-		// Classifier-typed entries only; the coding/chat model never changes.
-		models = await registry.getAvailableOfType("classifier");
-	} catch (error) {
-		ctx.ui.notify(`Automode: could not list classifiers (${error instanceof Error ? error.message : String(error)})`, "error");
-		return;
-	}
-	const modelLabels = models.map((m, index) => `${index + 1}. ${escapeOneLine(`${m.provider} / ${m.id}`)}`);
+	const models = await listClassifiers(registry);
+	const current = deps.settings.current;
+	const currentPin = current?.classifier
+		? `${current.classifier.provider}/${current.classifier.model}`
+		: undefined;
+	// Available classifiers first, current pin at the very top; stable otherwise.
+	models.sort((a, b) => Number(b.available === true) - Number(a.available === true));
+	const currentIndex = models.findIndex((model) => `${model.provider}/${model.id}` === currentPin);
+	if (currentIndex > 0) models.unshift(...models.splice(currentIndex, 1));
+
+	const title = [
+		"Classifier — shadow review",
+		"Only bounded metadata (tool name, argument key names, path metadata, message-rule text; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
+	].join("\n");
 	const options = [
 		PICKER_RULES_ONLY,
-		...modelLabels,
-		PICKER_CANCEL,
+		...models.map((model) => classifierOption(model, currentPin, ctx.ui.theme)),
 	];
-	const choice = await ctx.ui.select(
-		"Optional shadow review — never approves actions. Your coding model stays unchanged.",
-		options,
-	);
-	if (choice === undefined || choice === PICKER_CANCEL) return;
+	let choice: string | undefined;
+	try {
+		choice = await ctx.ui.select(title, options);
+	} catch {
+		return;
+	}
+	if (choice === undefined) return;
 
-	const current = deps.settings.current;
 	if (!current) {
 		ctx.ui.notify("Automode: no valid configuration; fix automode.json first.", "error");
 		return;
 	}
 
+	// Selecting Rules only is a complete, single-step decision.
 	if (choice === PICKER_RULES_ONLY) {
-		const confirmed = await confirmAuthority(
-			ctx,
-			"Switch to Rules only?",
-			"No evidence leaves this machine. The deterministic floor and exact command rules still apply; everything unresolved asks.",
-			"Switch to Rules",
-		);
-		if (!confirmed) return;
 		const next: AutomodeSettings = {
 			...current,
 			classifier: null,
@@ -601,57 +660,33 @@ async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 			disclosureEndpoint: null,
 			disclosureWorkspace: null,
 		};
-		if (await saveSettings(deps, ctx, next, epoch0)) ctx.ui.notify("Rules mode. Nothing is uploaded.", "info");
+		if (await saveSettings(deps, ctx, next, epoch0)) ctx.ui.notify("Rules only: nothing is uploaded.", "info");
 		return;
 	}
 
-	const model = models[modelLabels.indexOf(choice)];
+	// The host may return the painted label; strip ANSI before mapping back.
+	const plain = choice.replace(/\x1b\[[0-9;]*m/g, "");
+	const unprefixed = plain.startsWith(CURRENT_PREFIX) ? plain.slice(CURRENT_PREFIX.length) : plain;
+	const model =
+		models.find((entry) => classifierPin(entry) === unprefixed) ??
+		models.find((entry) => unprefixed.startsWith(`${classifierPin(entry)} · `));
 	if (!model) return;
+
+	// Selecting a model IS the disclosure consent; there is no second dialog.
 	const endpoint = normalizeDisclosureEndpoint(typeof model.baseUrl === "string" ? model.baseUrl : "");
-	const selection = { provider: model.provider, model: model.id };
-
 	if (endpoint === null) {
-		ctx.ui.notify("Invalid classifier endpoint (missing or contains credentials/query/fragment). Selection unchanged; no consent granted for this model.", "warning");
-		return;
-	}
-
-	const detail =
-		`Provider/model: ${escapeOneLine(model.provider)} / ${escapeOneLine(model.id)}\n` +
-		`Endpoint: ${escapeOneLine(endpoint)}\n` +
-		`Workspace: ${escapeOneLine(deps.dirs.workspace)}\n\n` +
-		"When an action cannot be settled locally, bounded metadata — the tool name, argument key names, " +
-		"path metadata and your message-rule text, never argument values or file bodies — " +
-		"may leave this machine to exactly this endpoint. Retention follows the provider's current terms; no zero-retention claim. " +
-		"Consent binds this provider/model, endpoint and workspace; any change resets it. Shadow review never auto-approves.";
-	const consent = await ctx.ui.select(
-		`Disclosure consent\n\n${detail}`,
-		[CONSENT_DECLINE, CONSENT_APPROVE],
-	);
-	if (consent !== CONSENT_APPROVE && consent !== CONSENT_DECLINE) return;
-	// A confirmed change resets consent; Escape leaves the existing selection intact.
-	if (consent === CONSENT_APPROVE) {
-		const next: AutomodeSettings = {
-			...current,
-			classifier: selection,
-			disclosureConsent: "approved",
-			disclosureProvider: model.provider,
-			disclosureModel: model.id,
-			disclosureEndpoint: endpoint,
-			disclosureWorkspace: deps.dirs.workspace,
-		};
-		if (await saveSettings(deps, ctx, next, epoch0)) ctx.ui.notify("Disclosure approved for this provider/model, endpoint and workspace.", "info");
+		ctx.ui.notify("Invalid classifier endpoint (missing or contains credentials/query/fragment). Selection unchanged; nothing saved.", "warning");
 		return;
 	}
 	const next: AutomodeSettings = {
 		...current,
-		classifier: selection,
-		disclosureConsent: "declined",
-		disclosureProvider: null,
-		disclosureModel: null,
-		disclosureEndpoint: null,
-		disclosureWorkspace: null,
+		classifier: { provider: model.provider, model: model.id },
+		disclosureConsent: "approved",
+		disclosureProvider: model.provider,
+		disclosureModel: model.id,
+		disclosureEndpoint: endpoint,
+		disclosureWorkspace: deps.dirs.workspace,
 	};
-	if (await saveSettings(deps, ctx, next, epoch0)) {
-		ctx.ui.notify("Disclosure declined — nothing is sent.", "info");
-	}
+	if (!(await saveSettings(deps, ctx, next, epoch0))) return;
+	ctx.ui.notify(`Shadow review: ${escapeOneLine(model.provider)}/${escapeOneLine(model.id)}.`, "info");
 }
