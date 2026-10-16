@@ -125,7 +125,7 @@ stack or the verified launcher; neither is a security sandbox.
 ## Local data
 
 - `<agent-dir>/automode.json`: saved on/off state, rules, classifier selection,
-  consent bindings, and limits. Usually `~/.pi/agent/automode.json`.
+  classifier bindings, and limits. Usually `~/.pi/agent/automode.json`.
 - `<agent-dir>/automode-logs.json`: bounded newline-delimited JSON decision log.
   It can include exact commands and arguments; treat it as sensitive.
   View or clear it through `/automode logs`.

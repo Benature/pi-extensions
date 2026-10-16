@@ -100,8 +100,8 @@ semantic-enforcement claim.
 
 ## 6. Provider-specific disclosure/retention wording
 
-**Final wording** (now carried by the consent dialog in `src/ui.ts` and
-consistent with README "Native classifier: shadow only"):
+**Final wording** (now carried by the classifier picker in `src/ui.ts` and
+consistent with README "Optional classifier"):
 
 > Shadow review sends only bounded metadata — the tool name, argument key
 > names, path metadata and your message-rule text, never argument values or
@@ -123,4 +123,4 @@ consistent with README "Native classifier: shadow only"):
 | 3. Jev pin / risk budget | Closed: shadow-only; budget approved by operator 2026-10-14, evidence gated | Any semantic-enforcement claim |
 | 4. Platforms/languages | Closed: macOS/Linux beta, no Windows, no multilingual parity claim | Windows or multilingual claims |
 | 5. npm name | Closed: `@gagansd/pi-automode`, MIT `0.1.0`; semantic enforcement remains gated on decision 3 evidence | Semantic-enforcement claim |
-| 6. Disclosure wording | Closed (text above; dialog and README aligned) | — |
+| 6. Disclosure wording | Closed (text above; picker and README aligned) | — |
