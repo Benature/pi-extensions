@@ -221,7 +221,7 @@ export async function buildEvidence(action: Action, ctx: EvidenceContext): Promi
     } else {
       const analysis = await analyzeShell(command, canonicalCwd, workspace, {
         env: process.env,
-        agentDir,
+        agentDir: ctx.agentDir,
         protection: { workspace, agentDir, extensionDir, homeDir },
       });
       shell = analysis.resolution;

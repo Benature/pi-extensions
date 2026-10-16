@@ -176,7 +176,7 @@ export class ApprovalManager {
 				for (;;) {
 					const title =
 						`Needs your permission\n\n${req.summary}\n\n` +
-						`Why: ${req.decision.reason}\nSource: ${req.decision.source}`;
+						`Why: ${escapeTerminal(req.decision.reason)}`;
 					const choice = await ctx.ui.select(title, [CHOICE_DECLINE, CHOICE_ALLOW_ONCE, CHOICE_INSPECT], {
 						signal: combined,
 						timeout: remaining(),

@@ -99,7 +99,7 @@ All controls live under one native slash command; nothing new is added to the mo
 
 That is the entire command surface—there is no setup, mode-switch or history subcommand beyond these five.
 
-**Panel/dialog actions:** the on/off control uses the same operator-only handler as the on/off commands. Allow once / Decline / Inspect, rule add/edit/delete confirmations, and classifier/disclosure choices are UI-only; they add no further commands.
+**Panel/dialog actions:** the on/off control uses the same operator-only handler as the on/off commands and applies in one step from the interactive terminal. Allow once / Decline / Inspect, rule add/edit/delete confirmations and log clearing are UI-only. The classifier picker shows the bounded-metadata disclosure and lists Pi's registered classifiers with availability; selecting a model is the disclosure decision and replaces the stored bindings in the same step. These paths add no further commands.
 
 Guard removal is an explicit operator configuration/restart action, not an agent-callable escape hatch. Another extension's approval cannot override an Automode block; running multiple permission extensions is unsupported until composition is tested.
 
@@ -132,7 +132,7 @@ Illustrative configuration after turning on and choosing review; a fresh install
 
 - Top-level `enabled` is the on/off toggle, persisted across restarts. Settings can still be edited and past logs viewed while Off; no action is reviewed then.
 - `classifier` is the native decision-model selection: a **classifier-typed** entry from Pi’s own model registry (`provider` + `model`). The panel picker filters classifier-typed models only; it never changes your coding/chat model. A moving alias such as `jev-latest` stays shadow-only until a tested fixed-version profile exists.
-- `disclosureConsent` is `none` / `approved` / `declined`. A stored Pi credential is not consent; nothing is transmitted while this is not `approved`. Changing the selected provider/model resets consent to `none` and shows the new disclosure before sending evidence.
+- `disclosureConsent` is `none` / `approved` / `declined`. A stored Pi credential is not consent; nothing is transmitted while this is not `approved`. Selecting a classifier replaces the stored consent and all four bindings in one step; **Rules only (no classifier)** clears them.
 - `allowlist` / `blocklist` store the rule type (`message` or `command`) and text exactly as written. List membership determines allow/block. Optional per-rule `enabled` defaults to `true`; disabling sets it to `false` in this same file. Decision metadata (ids, timestamps) stays internal.
 - `logRetentionDays` / `logMaxEntries` bound local decision-log retention.
 

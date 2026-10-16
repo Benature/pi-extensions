@@ -243,6 +243,17 @@ test("inspect shows escaped detail and returns to the dialog", async () => {
 	assert.deepEqual(fake.calls[1]?.options, ["Back"]);
 });
 
+test("approval summary escapes the reason and leaves internal sources in details", async () => {
+	const manager = new ApprovalManager({ settings: fakeSettings(), epochs: new EpochController() });
+	const fake = fakeUi(["Decline"]);
+	const req = makeRequest();
+	req.decision.reason = "needs approval\x1b[31m";
+	await manager.request({ ...TUI, ui: fake.ui }, req);
+	assert.ok(!fake.calls[0]?.title.includes("\x1b"));
+	assert.match(fake.calls[0]?.title ?? "", /needs approval\\e\[31m/);
+	assert.doesNotMatch(fake.calls[0]?.title ?? "", /Source:/);
+});
+
 test("decline is the default option, never allow", async () => {
 	const epochs = new EpochController();
 	const manager = new ApprovalManager({ settings: fakeSettings(), epochs });

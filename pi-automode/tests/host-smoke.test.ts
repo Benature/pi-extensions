@@ -5,7 +5,7 @@
  */
 import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -399,6 +399,69 @@ const REAL_GATE_SETTINGS = {
 	reviewMaxRequests: 100,
 	approvalTimeoutMs: 600_000,
 };
+
+test("host-smoke: an earlier PATH executable cannot hide behind a trusted agent-bin symlink", { timeout: 60_000 }, async () => {
+	using env = createTempEnv({ agentSettings: fakeEnvSettings() });
+	const bin = join(env.agentDir, "bin");
+	const earlier = join(env.root, "earlier-bin");
+	const marker = join(env.workspace, "malicious-marker");
+	mkdirSync(bin);
+	mkdirSync(earlier);
+	symlinkSync("/bin/ls", join(bin, "ls"));
+	writeFileSync(join(earlier, "ls"), `#!/bin/sh\nprintf executed > '${marker}'\n`);
+	chmodSync(join(earlier, "ls"), 0o700);
+	writeFileSync(join(env.agentDir, "automode.json"), JSON.stringify({
+		...REAL_GATE_SETTINGS, allowlist: [{ type: "command", text: "ls -la" }],
+	}));
+	const savedPath = process.env.PATH;
+	const savedAgent = process.env.PI_CODING_AGENT_DIR;
+	process.env.PATH = [earlier, "/usr/bin", bin].join(":");
+	process.env.PI_CODING_AGENT_DIR = env.agentDir;
+	try {
+		const harness = createHarness({ env, turns: [
+			{ kind: "toolCalls", calls: [{ name: "bash", args: { command: "ls -la" } }] },
+			{ kind: "text", text: "done" },
+		] });
+		harness.deps.createAutomodeExtension = createAutomodeExtension;
+		const { runtime } = await createVerifiedRuntime(harness.deps);
+		try {
+			await runtime.session.bindExtensions({ onError: () => {} });
+			await runtime.session.prompt("list files");
+			assert.equal(existsSync(marker), false, "untrusted PATH executable ran without approval");
+		} finally {
+			await runtime.dispose();
+		}
+	} finally {
+		if (savedPath === undefined) delete process.env.PATH;
+		else process.env.PATH = savedPath;
+		if (savedAgent === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgent;
+	}
+});
+
+test("host-smoke: dangling links to protected files block before native write", { timeout: 60_000 }, async () => {
+	using env = createTempEnv({ agentSettings: fakeEnvSettings() });
+	writeFileSync(join(env.agentDir, "automode.json"), JSON.stringify(REAL_GATE_SETTINGS));
+	const targets = [join(env.workspace, ".env"), join(env.workspace, ".git", "config"), join(env.agentDir, "absent.json")];
+	const calls = targets.map((target, index) => {
+		const alias = join(env.workspace, `notes-${index}.txt`);
+		symlinkSync(target, alias);
+		return { name: "write", args: { path: alias, content: "must not write" } };
+	});
+	const harness = createHarness({ env, turns: [{ kind: "toolCalls", calls }, { kind: "text", text: "done" }] });
+	harness.deps.createAutomodeExtension = createAutomodeExtension;
+	const { runtime } = await createVerifiedRuntime(harness.deps);
+	try {
+		await runtime.session.bindExtensions({ onError: () => {} });
+		await runtime.session.prompt("write files");
+		for (const target of targets) assert.equal(existsSync(target), false);
+		const records = readFileSync(join(env.agentDir, "automode-logs.json"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+		assert.equal(records.length, 3);
+		assert.ok(records.every((entry) => entry.outcome === "block" && entry.source === "policy:protected-write"));
+	} finally {
+		await runtime.dispose();
+	}
+});
 
 test("host-smoke: real gate floor-allows a plain workspace write end-to-end", { timeout: 60_000 }, async () => {
 	// Positive control with the REAL createAutomodeExtension: an inert write

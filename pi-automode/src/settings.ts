@@ -513,6 +513,9 @@ export class SettingsStore {
 
     const dir = path.dirname(this.#filePath);
     const bytes = Buffer.from(`${JSON.stringify(validated, null, 2)}\n`, "utf8");
+    if (bytes.length > SETTINGS_MAX_BYTES) {
+      throw new SettingsError(`settings file exceeds the ${SETTINGS_MAX_BYTES}-byte bound (${bytes.length} bytes)`);
+    }
 
     await this.#withLock(async () => {
       if (this.#loaded) await this.#checkDrift();

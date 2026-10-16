@@ -19,7 +19,7 @@ import type { ShellResolution } from "../types.js";
  *   - no shell startup environment (BASH_ENV/ENV) and no exported shell
  *     functions (BASH_FUNC_*), which can shadow any resolved binary,
  *   - the executable resolves, through the SAME PATH Pi's bash will use
- *     (Pi prepends <agentDir>/bin), to a realpath under a trusted system
+ *     (Pi prepends <agentDir>/bin only when absent), to a realpath under a trusted system
  *     prefix with the execute bit set — never by basename alone,
  *   - the program is in a tiny set of read-only tools, every flag is from a
  *     per-program allowlist that excludes any write/exec/output option, and
@@ -91,9 +91,8 @@ export interface ShellAnalysisContext {
   /** Environment the shell will actually run with; defaults to process.env. */
   env?: NodeJS.ProcessEnv;
   /**
-   * Canonical agent directory. Pi's bash prepends <agentDir>/bin to PATH
-   * (getShellEnv); resolution must model that or a planted binary there is
-   * invisible to the evidence.
+   * Host-configured agent directory, preserving its lexical spelling. Pi
+   * prepends its bin directory only if that exact PATH entry is absent.
    */
   agentDir?: string;
   /** Protection context for classifying path operands of proven programs. */
@@ -280,12 +279,11 @@ export async function analyzeShell(
     return opaque(`interpreter '${base}' execution is opaque in this beta`);
   }
 
-  // Model Pi's shell env: getShellEnv prepends <agentDir>/bin to PATH, so a
-  // binary planted there wins over every system directory. Resolve against
-  // the same effective PATH the real bash will use.
-  const envPath = env.PATH;
-  const effectivePath = context.agentDir !== undefined
-    ? [path.join(context.agentDir, "bin"), ...(envPath ?? "").split(path.delimiter)].join(path.delimiter)
+  // Match Pi's getShellEnv: an existing bin entry keeps its position.
+  const envPath = env.PATH ?? "";
+  const binDir = context.agentDir === undefined ? undefined : path.join(context.agentDir, "bin");
+  const effectivePath = binDir !== undefined && !envPath.split(path.delimiter).includes(binDir)
+    ? [binDir, envPath].filter(Boolean).join(path.delimiter)
     : envPath;
 
   const resolved = await resolveExecutable(first, cwdCanonical, effectivePath);
