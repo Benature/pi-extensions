@@ -16,6 +16,10 @@
 - Simplify the panel and footer, move diagnostics into Details, remove trailing
   ellipses, and combine rule type/effect into one step. Empty lists no longer
   contain selectable placeholder rows.
+- Show normalized classifier destinations before the single-step disclosure
+  decision, without displaying credentials from rejected endpoint URLs.
+- Bind rule additions and edits to the settings epoch of the displayed rule
+  list, so a configuration change while that list is open cannot be overwritten.
 - Keep classifier selection unchanged when the endpoint is invalid. Distinguish
   duplicate log summaries so each opens its own record.
 - Escape halt reasons, classifier disclosure fields, and approval reasons before

@@ -335,7 +335,7 @@ test("picker header discloses the bounded metadata and never asks for consent", 
 	await createCommandHandler(h.deps)("", ctx);
 	const title = ctx.calls[1]?.title ?? "";
 	assert.equal(title.split("\n")[0], "Classifier — shadow review");
-	assert.equal(title.split("\n").length, 2, "one compact disclosure line");
+	assert.equal(title.split("\n").length, 4, "compact disclosure plus each model's destination");
 	assert.match(title, /bounded metadata/);
 	assert.match(title, /never argument values or file bodies/);
 	assert.match(title, /never approve actions/);
@@ -751,6 +751,35 @@ test("a stale rule confirmation (settings epoch moved mid-dialog) is discarded, 
 	assert.equal(h.settings.updates.length, 0, "stale confirmation must not commit");
 	assert.equal(h.settings.current.blocklist.length, 0);
 	assert.match(ctx.notifications.at(-1)?.message ?? "", /changed while you were deciding/);
+});
+
+test("rule workflows retain the epoch of the displayed rule list", async () => {
+	for (const action of ["add", "delete"] as const) {
+		const h = makeHarness({ enabled: true, blocklist: [{ type: "command", text: "old" }] });
+		const ctx = h.makeCtx([
+			(_title, options) => {
+				h.settings.current = makeSettings({ enabled: false, blocklist: [{ type: "command", text: "new" }] });
+				h.settings.epoch += 1;
+				return action === "add" ? "Add rule" : options[0];
+			},
+			...(action === "add" ? ["Block command", "another", "Save rule"] : ["Delete", "Delete rule"]),
+		]);
+		await createCommandHandler(h.deps)("rules", ctx);
+		assert.equal(h.settings.updates.length, 0, `${action} must not overwrite a newer configuration`);
+		assert.equal(h.settings.current.enabled, false);
+		assert.equal(h.settings.current.blocklist[0]?.text, "new");
+		assert.match(ctx.notifications.at(-1)?.message ?? "", /changed while you were deciding/);
+	}
+});
+
+test("classifier consent displays normalized destinations without exposing invalid URL credentials", async () => {
+	const h = makeHarness();
+	const ctx = h.makeCtx(["Classifier (optional)", undefined, "Close"]);
+	await createCommandHandler(h.deps)("", ctx);
+	const title = ctx.calls[1]?.title ?? "";
+	assert.match(title, /typesafe\/jev-1\.13\.2.*https:\/\/api\.typesafe\.ai\/v1/);
+	assert.match(title, /typesafe\/jev-sketchy.*invalid endpoint/);
+	assert.doesNotMatch(title, /key@|token=1/);
 });
 
 test("managed queue diagnostics live in Details, not the footer or main panel", async () => {

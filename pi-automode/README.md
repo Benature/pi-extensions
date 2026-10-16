@@ -99,7 +99,8 @@ immediately, with no separate disclosure dialog. **Rules only (no
 classifier)** clears the selection in one step. Your coding model does not
 change.
 
-The picker states that only bounded metadata—tool name, argument key names,
+The picker shows each model's normalized destination endpoint before selection
+and states that only bounded metadata—tool name, argument key names,
 path metadata, and message-rule text, never argument values or file
 bodies—may go to the selected endpoint. Provider retention terms apply, and
 shadow reviews never approve actions or override a block.

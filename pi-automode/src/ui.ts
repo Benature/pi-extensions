@@ -324,6 +324,7 @@ async function rulesEditor(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 			ctx.ui.notify("Automode: no valid configuration; fix automode.json first.", "error");
 			return;
 		}
+		const epoch0 = deps.settings.epoch;
 		const refs: (RuleRef | typeof RULE_ADD | typeof RULE_DONE)[] = [];
 		const options: string[] = [];
 
@@ -352,15 +353,14 @@ async function rulesEditor(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		const ref = choice === undefined ? RULE_DONE : refs[options.indexOf(choice)];
 		if (ref === undefined || ref === RULE_DONE) return;
 		if (ref === RULE_ADD) {
-			await addRule(deps, ctx, current);
+			await addRule(deps, ctx, current, epoch0);
 			continue;
 		}
-		await editRule(deps, ctx, current, ref);
+		await editRule(deps, ctx, current, ref, epoch0);
 	}
 }
 
-async function addRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings): Promise<void> {
-	const epoch0 = deps.settings.epoch;
+async function addRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings, epoch0: number): Promise<void> {
 	const choices = ["Allow command", "Block command", "Allow message", "Block message"];
 	const choice = await ctx.ui.select("Add rule — command rules match exact text", [...choices, CANCEL]);
 	if (!choice || !choices.includes(choice)) return;
@@ -388,8 +388,7 @@ async function addRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings)
 	if (await saveSettings(deps, ctx, next, epoch0)) ctx.ui.notify("Rule saved.", "info");
 }
 
-async function editRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings, ref: RuleRef): Promise<void> {
-	const epoch0 = deps.settings.epoch;
+async function editRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings, ref: RuleRef, epoch0: number): Promise<void> {
 	const toggleLabel = ref.rule.enabled === false ? "Enable" : "Disable";
 	const moveLabel = ref.list === "allowlist" ? "Move to blocklist" : "Move to allowlist";
 	const choice = await ctx.ui.select(`${ruleLine(ref.list === "allowlist" ? "allow" : "block", ref.rule)}`, [
@@ -661,15 +660,21 @@ async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	const currentIndex = models.findIndex((model) => `${model.provider}/${model.id}` === currentPin);
 	if (currentIndex > 0) models.unshift(...models.splice(currentIndex, 1));
 
-	const title = [
-		"Classifier — shadow review",
-		"Only bounded metadata (tool name, argument key names, path metadata, message-rule text; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
-	].join("\n");
 	// Positional keys: every row's plain text is unique, so mapping is exact.
 	const used = new Set<string>([PICKER_RULES_ONLY]);
 	const rows = models.map((model) => classifierRow(model, currentPin, themeFor(ctx), used));
 	const byLabel = new Map(rows.map((row) => [row.plain, row.model]));
 	const options = [PICKER_RULES_ONLY, ...rows.map((row) => row.painted)];
+	// Selection grants consent, so show the exact normalized destination before
+	// the decision. Never render rejected URLs: they may contain credentials.
+	const title = [
+		"Classifier — shadow review",
+		"Only bounded metadata (tool name, argument key names, path metadata, message-rule text; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
+		...rows.map((row) => {
+			const endpoint = normalizeDisclosureEndpoint(typeof row.model.baseUrl === "string" ? row.model.baseUrl : "");
+			return `${row.plain} → ${endpoint === null ? "invalid endpoint (selection unavailable)" : escapeTerminal(endpoint)}`;
+		}),
+	].join("\n");
 	let choice: string | undefined;
 	try {
 		choice = await ctx.ui.select(title, options);
