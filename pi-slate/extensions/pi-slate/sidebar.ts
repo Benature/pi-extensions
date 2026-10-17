@@ -233,7 +233,7 @@ export class Sidebar implements Component {
     const s = this.session;
     const percent = s.percent !== null && Number.isFinite(s.percent) ? s.percent : null;
     const tone = percent !== null && percent >= 80 ? "warning" : "accent";
-    const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · pid ${s.pid}`;
+    const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · PID ${s.pid}`;
     const occupancy = `${s.estimated ? "~" : ""}${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}`
       + ` · ${sidebarCost(s.usage.cost)} · ${sidebarRate(s.rate)}`;
     const meter = ((): string => {
@@ -249,18 +249,19 @@ export class Sidebar implements Component {
     })();
     const branchUsage = () => this.actions?.inspect?.("Branch usage", this.sessionDetails());
     const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
+    const statRight = (label: string, value: string): string => `${this.paint("text", value)} ${this.paint("muted", label)}`;
     return [
       { text: this.paint("muted", "SESSION"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) },
       { text: this.heading(sidebarText(s.name) || "Untitled session") },
-      { text: this.paint("muted", visibleWidth(identity) > width ? this.pair(sidebarText(s.id).slice(0, 8), `pid ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
+      { text: this.paint("muted", visibleWidth(identity) > width ? this.pair(sidebarText(s.id).slice(0, 8), `PID ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
       { text: "" },
       { text: this.pair(this.paint("text", sidebarText(s.model)), this.paint("dim", sidebarText(s.thinking)), width) },
       { text: "" },
       { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      { text: this.pair(stat("in", formatCompactTokenCount(s.usage.input)), stat("cache", formatCompactTokenCount(s.usage.cacheRead)), width), action: branchUsage },
-      { text: this.pair(stat("out", formatCompactTokenCount(s.usage.output)), stat("uncached", formatCompactTokenCount(sidebarUncached(s.usage))), width), action: branchUsage },
+      { text: this.pair(stat("CACHED", formatCompactTokenCount(s.usage.cacheRead)), statRight("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
+      { text: this.pair(stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
       { text: "" },
       { text: this.paint("dim", "─".repeat(width)) },
     ];
@@ -272,14 +273,14 @@ export class Sidebar implements Component {
     const resourceHeading = (label: string, count: string): string =>
       this.heading(label) + this.paint("muted", ` · ${count}`);
     const rows: Row[] = [{ text: "" }, {
-      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : `${unknown ? "—" : enabled} enabled`),
+      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : unknown ? "—" : `${enabled} Enabled`),
       action: () => this.toggleSection("mcp"),
     }];
     if (this.folds.mcp) {
       if (this.resources.mcpError) rows.push({ text: this.paint("warning", this.resources.mcpError) });
       rows.push(...this.resourceRows("mcp"));
     }
-    rows.push({ text: "" }, { text: resourceHeading(`${this.folds.skills ? "⌄" : "›"} Skills`, `${loaded} loaded`), action: () => this.toggleSection("skills") });
+    rows.push({ text: "" }, { text: resourceHeading(`${this.folds.skills ? "⌄" : "›"} Skills`, `${loaded} Loaded`), action: () => this.toggleSection("skills") });
     if (this.folds.skills) rows.push(...this.resourceRows("skills"));
     rows.push({ text: "" }, { text: resourceHeading(`${this.folds.prompts ? "⌄" : "›"} Prompts`, `${this.resources.prompts.length}`), action: () => this.toggleSection("prompts") });
     if (this.folds.prompts) rows.push(...this.resourceRows("prompts"));
@@ -325,7 +326,7 @@ export class Sidebar implements Component {
       const action = () => this.actions?.inspect?.(task.label, this.taskDetails(task));
       if (rows.length < height) rows.push({ text: this.paint(error ? "error" : task.state === "waiting" ? "warning" : "muted",
         this.pair(`${icon} ${sidebarText(task.label)}`, task.state, width)), list: "tasks", action });
-      if (rows.length < height) rows.push({ text: this.paint("dim", `${task.kind} · ${sidebarDuration(this.now() - task.startedAt)}${task.pid ? ` · pid ${task.pid}` : ""}`), list: "tasks", action });
+      if (rows.length < height) rows.push({ text: this.paint("dim", `${task.kind} · ${sidebarDuration(this.now() - task.startedAt)}${task.pid ? ` · PID ${task.pid}` : ""}`), list: "tasks", action });
     }
     while (rows.length < height) rows.push({ text: "" });
     return rows;

@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
   backgroundAnsi, foregroundAnsi, rgbColor, truncateToWidth, visibleWidth, type Component, type TerminalColorMode,
@@ -53,7 +54,7 @@ function logoRow(mark: string, text: string, width: number): string {
 
 export type HeaderIdentity = { version: string; model?: string; thinking?: string };
 
-/** Official mark + product stack. Ready is a session chip, never greeting copy. */
+/** Official mark + product stack. Ready is a session chip, never greeting copy. No hairline without a notice. */
 export function renderSlateHeader(input: {
   width: number; path: string; identity?: HeaderIdentity; notice?: string; ready?: boolean;
   logo?: boolean; theme: Theme;
@@ -63,7 +64,9 @@ export function renderSlateHeader(input: {
   const version = sidebarText(input.identity?.version) || "0";
   const model = sidebarText(input.identity?.model);
   const thinking = sidebarText(input.identity?.thinking);
-  const path = sidebarText(input.path);
+  const rawPath = sidebarText(input.path);
+  const dir = rawPath.startsWith("/") ? basename(rawPath) : "";
+  const path = dir ? `/${dir}` : rawPath;
   const showLogo = input.logo ?? supportsPiLogo();
   const modelLine = [model, thinking].filter(Boolean).join(" · ");
   const rows: string[] = [];
@@ -82,7 +85,6 @@ export function renderSlateHeader(input: {
   }
   if (input.notice) rows.push(...renderUpdateHairlines(input.notice, width,
     text => input.theme.fg("border", text), text => input.theme.fg("accent", text)));
-  else rows.push(input.theme.fg("border", "─".repeat(width)));
   if (input.ready) rows.push(truncateToWidth(input.theme.fg("accent", "✓ New session started"), width, "…"));
   return rows;
 }

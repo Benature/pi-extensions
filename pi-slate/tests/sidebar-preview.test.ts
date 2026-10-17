@@ -43,7 +43,7 @@ function task(i: number): BackgroundTask {
 test("quiet session rail merges usage into context and hides empty shelves", () => {
   const { sidebar } = fixture();
   const lines = plain(sidebar.render(80));
-  for (const label of ["SESSION", "Sidebar redesign", "pid 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "in 61.4k", "out 876", "cache 48k", "uncached 7.3k", "MCP · 6 enabled", "Skills · 1 loaded", "Prompts · 6"])
+  for (const label of ["SESSION", "Sidebar redesign", "PID 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "61.4k IN", "876 OUT", "CACHED 48k", "UNCACHED 7.3k", "MCP · 6 Enabled", "Skills · 1 Loaded", "Prompts · 6"])
     assert(lines.some(line => line.includes(label)), label);
   for (const label of ["Stats", "Tokens · branch", "Commands ·", "Tasks", "Preview", "no selection", "/run-0", "prompt-0"])
     assert(!lines.some(line => line.includes(label)), label);
@@ -72,7 +72,7 @@ test("usage is a single stable label/value lane; full accounting stays in detail
   const { sidebar } = fixture();
   for (const width of [18, 28, 40, 80]) {
     const text = plain(sidebar.render(width)).join("\n");
-    assert(text.includes("pid 8421"));
+    assert(text.includes("PID 8421"));
     if (width >= 28) for (const value of ["61.4k", "876", "48k", "7.3k", "$0.12"]) assert(text.includes(value), value);
     if (width >= 40) assert(text.includes("~82/s")); // Narrow rails truncate the merged occupancy tail first.
   }
@@ -90,8 +90,10 @@ test("native blend header is 13 rows matching the slot constant, ending in the h
   assert.equal(hairline, 12, "hairline closes a 13-row header");
   assert(/^Context [█░]+ │ 16%$/.test(lines[6]!), "single context meter row");
   assert(lines[7]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
-  assert(lines[9]!.includes("in 61.4k") && lines[9]!.includes("cache 48k"));
-  assert(lines[10]!.includes("out 876") && lines[10]!.includes("uncached 7.3k"));
+  assert(lines[9]!.includes("61.4k IN") && lines[9]!.includes("CACHED 48k"));
+  assert(lines[9]!.indexOf("CACHED 48k") < lines[9]!.indexOf("61.4k IN"), "CACHED lanes left, IN right with value first");
+  assert(lines[10]!.includes("876 OUT") && lines[10]!.includes("UNCACHED 7.3k"));
+  assert(lines[10]!.indexOf("UNCACHED 7.3k") < lines[10]!.indexOf("876 OUT"), "UNCACHED lanes left, OUT right with value first");
 });
 
 test("context meter fills the rail with a shaded track and degrades gracefully when narrow", () => {
@@ -141,8 +143,8 @@ test("occupancy and stat rows keep the branch usage inspect action; nulls render
   sidebar.setActions({ copy() {}, openFile() {}, inspect: title => inspected.push(title) });
   sidebar.setSession({ ...session, estimated: true, usage: { input: null, output: null, total: null, cacheRead: null, cacheWrite: null, cost: null } });
   sidebar.handleMouse(mouse(row(sidebar, "~31.6k / 200k · — · ~82/s")));
-  sidebar.handleMouse(mouse(row(sidebar, "in —")));
-  sidebar.handleMouse(mouse(row(sidebar, "uncached —")));
+  sidebar.handleMouse(mouse(row(sidebar, "— IN")));
+  sidebar.handleMouse(mouse(row(sidebar, "UNCACHED —")));
   assert.deepEqual(inspected, ["Branch usage", "Branch usage", "Branch usage"]);
 });
 
@@ -167,7 +169,7 @@ test("foldable MCP and Skills sections persist independently and keep counts vis
   assert.deepEqual(saved, [{ mcp: true, skills: false, prompts: false }, { mcp: true, skills: true, prompts: false }]);
   sidebar.handleMouse(mouse(row(sidebar, "MCP")));
   assert(!plain(sidebar.render(40)).some(line => line.includes("server-0")));
-  assert(plain(sidebar.render(40)).some(line => line.includes("6 enabled")));
+  assert(plain(sidebar.render(40)).some(line => line.includes("6 Enabled")));
 });
 
 test("prompts section folds, scrolls, inspects and shows none when empty", () => {
