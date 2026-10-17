@@ -4,7 +4,7 @@ Derived from an investigation of [`r4vi/pi-auto-mode`](https://github.com/r4vi/p
 (a pi re-implementation of Claude Code's auto mode), adapted to pi-automode's
 architecture. pi-auto-mode uses regex bash patterns and a two-stage chat-model
 classifier; pi-automode uses byte-exact rules, a verified read-only shell
-subset, native protected-path checks, and a shadow-only native classifier.
+subset, native protected-path checks, and a shadow-only native decision model.
 This document is the **policy plan and benchmark seed source** — the "Current"
 column is what the beta enforces today; the "Default v1" column is the proposed
 shipping default. Nothing in "Default v1" is enforced until implemented and
@@ -27,7 +27,7 @@ tested.
 3. **Two-stage classifier** on everything else: cheap YES/NO filter, then a
    JSON decision, guided by 7 allow categories and 28 deny categories.
 
-## Tier 0 — deterministic ALLOW (no dialog, no classifier)
+## Tier 0 — deterministic ALLOW (no dialog, no decision model)
 
 | Rule | Current (beta) | Default v1 |
 |---|---|---|
@@ -37,7 +37,7 @@ tested.
 | Byte-exact operator allowlist rule with complete evidence | Allow | Keep |
 | **Default seed allowlist:** single invocations of the verified read-only set (`cat ls head tail wc file pwd echo printf whoami hostname uname basename dirname`, flags restricted per `src/core/shell.ts` PROVEN_SIMPLE, executable resolved under `/bin`, `/usr/bin`, `/sbin`, `/usr/sbin`, operands non-sensitive) | Only with an operator rule | Allow by default; each entry is still evidence-checked (trusted-prefix realpath, flag allowlist, no redirect/composition). `sort`, `date`, `diff`, `grep`, `tr`, `cut` stay excluded (write/exec/options). |
 
-## Tier 1 — deterministic BLOCK (hard deny, no dialog, no classifier)
+## Tier 1 — deterministic BLOCK (hard deny, no dialog, no decision model)
 
 | Category | Current (beta) | Default v1 |
 |---|---|---|
@@ -65,8 +65,8 @@ limitations, explained rather than hidden):
 - Opaque shell: interpreters (`python3 script.py`), package managers
   (`npm install`), git (all subcommands incl. `status`), compositions
   (`;`, `&&`, `|`, redirects), unresolvable executables, `~` operands
-- Sensitive/protected **reads** (local Ask, never hosted for classifier)
-- Unresolved message **block** rules (classifier can never clear)
+- Sensitive/protected **reads** (local Ask, never hosted for decision model)
+- Unresolved message **block** rules (decision model can never clear)
 - Message **allow** rules (never auto-approve in this beta)
 - Network commands (`curl`, `wget`) — opaque, Ask
 

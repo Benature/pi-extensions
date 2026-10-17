@@ -4,7 +4,7 @@ import type { ActionEvidence, AutomodeSettings, Decision, Rule } from "./types.j
 /**
  * Pure policy: deterministic precedence over canonical evidence.
  *
- * Precedence (shadow beta — classifier output never creates Allow here):
+ * Precedence (shadow beta — decision model output never creates Allow here):
  *   supported route/integrity → protected writes → exact block commands →
  *   unresolved message block (Ask) → workspace file floor and narrowly
  *   supported exact shell allows → Ask.
@@ -77,7 +77,7 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
   }
 
   // 4. Unresolved message block: an enabled message block rule cannot be
-  //    settled deterministically, and classifier output is shadow-only in
+  //    settled deterministically, and decision model output is shadow-only in
   //    this beta, so it resolves to a local Ask before the file floor or any
   //    automatic allow. Message rules are never silently ignored.
   if (hasEnabledMessageRule(settings.blocklist)) {

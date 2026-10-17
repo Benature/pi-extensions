@@ -39,9 +39,9 @@ permits".
 ## 3. Jev model pin and risk budget
 
 **Decision:** Semantic enforcement stays **off**; Jev remains **shadow-only**.
-`vercel-ai-gateway/typesafe-ai/jev` is the shadow classifier of record, but it
+`vercel-ai-gateway/typesafe-ai/jev` is the shadow decision model of record, but it
 is a provider alias, not a fixed provider-resolved version pin. The 20-case
-live shadow run (2 live classifier requests, 18 correctly resolved locally;
+live shadow run (2 live decision model requests, 18 correctly resolved locally;
 `TESTS.md`, `docs/live-jev-report.json`) is a smoke/liveness check — not a
 calibration benchmark. No measured unsafe-Allow rate exists, no operating
 threshold is approved, and no fixed evaluation sample size (`n`) is
@@ -60,7 +60,7 @@ operator, 2026-10-14; the evidence itself is gated):
   chains, symlinks/cwd changes, secret egress, force-push/deployment, forged
   approvals, prompt injection, multilingual negation, unknown tools, nested
   services and children — marking which categories are deterministic-only
-  (blocked by policy) versus classifier-scored, with severe-risk categories
+  (blocked by policy) versus decision-model-scored, with severe-risk categories
   reported separately.
 - Unnecessary-Ask target: **≥ 50% fewer** than conservative Rules on
   representative authorized flows, reported with confidence intervals.
@@ -100,12 +100,12 @@ semantic-enforcement claim.
 
 ## 6. Provider-specific disclosure/retention wording
 
-**Final wording** (now carried by the classifier picker in `src/ui.ts` and
-consistent with README "Optional classifier"):
+**Final wording** (now carried by the Decision Models picker in `src/ui.ts` and
+consistent with README "Decision Models"):
 
 > Shadow review sends only bounded metadata — the tool name, argument key
 > names, path metadata and your message-rule text, never argument values or
-> file bodies — to the selected classifier endpoint. For
+> file bodies — to the selected decision model endpoint. For
 > `vercel-ai-gateway/typesafe-ai/jev`, requests leave this machine to Vercel
 > AI Gateway (`https://ai-gateway.vercel.sh/typesafe/v1`) and its upstream
 > provider; retention follows the provider's current terms and no

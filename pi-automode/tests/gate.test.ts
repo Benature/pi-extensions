@@ -525,7 +525,7 @@ async function askHarness(consent: Partial<AutomodeSettings>, baseUrl?: string) 
 	return makeHarness({
 		settings: {
 			enabled: true,
-			classifier: { provider: "typesafe", model: "jev-1.13.2" },
+			decisionModel: { provider: "typesafe", model: "jev-1.13.2" },
 			// Consent binds provider+model too; tests override to drift them.
 			disclosureProvider: "typesafe",
 			disclosureModel: "jev-1.13.2",
@@ -551,7 +551,7 @@ test("shadow reviewer runs with bound consent, and its allow-ish receipt never r
 	assert.equal(h.runs.length, 0, "shadow receipt never approves");
 	const entries = await logEntries(h.logs, h.settings);
 	const askEntry = entries.find((e) => e.outcome === "ask");
-	assert.ok(askEntry?.classifier !== undefined, "receipt recorded on the log");
+	assert.ok(askEntry?.decisionModel !== undefined, "receipt recorded on the log");
 });
 
 test("same provider/model with a different endpoint is NOT consented — no reviewer call", async () => {

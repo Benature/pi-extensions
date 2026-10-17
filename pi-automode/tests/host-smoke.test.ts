@@ -387,7 +387,7 @@ test("host-smoke: while On, an adapter-mismatch write must never floor-allow int
 const REAL_GATE_SETTINGS = {
 	version: 1,
 	enabled: true,
-	classifier: null,
+	decisionModel: null,
 	disclosureConsent: "none",
 	disclosureEndpoint: null,
 	disclosureWorkspace: null,
@@ -501,7 +501,7 @@ test("host-smoke: real gate never floor-allows an @-prefixed write onto the sett
 		JSON.stringify({
 			version: 1,
 			enabled: true,
-			classifier: null,
+			decisionModel: null,
 			disclosureConsent: "none",
 			disclosureEndpoint: null,
 			disclosureWorkspace: null,

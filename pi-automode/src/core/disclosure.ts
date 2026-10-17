@@ -2,7 +2,7 @@ import type { AutomodeSettings } from "../types.js";
 
 /**
  * Disclosure consent binding. Consent is upload authority only when it is
- * bound to the exact selected classifier provider/model, its endpoint, and
+ * bound to the exact selected decision model provider/model, its endpoint, and
  * the canonical workspace; "approved" without all four bindings is NOT
  * consent, and a selected provider/model that differs from the bound pair is
  * NOT consent either.
@@ -35,7 +35,7 @@ export interface DisclosureConsentStatus {
  * Decide whether evidence may be disclosed for a native review request.
  *
  * `expected.endpoint` is the credential-free canonical `baseUrl` of the
- * currently selected classifier model (normalized here defensively);
+ * currently selected decision model (normalized here defensively);
  * `expected.workspace` is the canonical workspace (evidence.workspace is
  * already realpath-canonical). Any drift — a different endpoint for the same
  * provider/model, a different workspace, a restart with unbound fields —
@@ -45,8 +45,8 @@ export function checkDisclosureConsent(
   settings: AutomodeSettings,
   expected: { endpoint: string | null; workspace: string },
 ): DisclosureConsentStatus {
-  if (settings.classifier === null) {
-    return { consented: false, reason: "no classifier selected" };
+  if (settings.decisionModel === null) {
+    return { consented: false, reason: "no decision model selected" };
   }
   if (settings.disclosureConsent !== "approved") {
     return {
@@ -68,12 +68,12 @@ export function checkDisclosureConsent(
   // Fail closed when the current selection is not the bound pair: consent
   // given for one provider/model never covers another.
   if (
-    settings.disclosureProvider !== settings.classifier.provider ||
-    settings.disclosureModel !== settings.classifier.model
+    settings.disclosureProvider !== settings.decisionModel.provider ||
+    settings.disclosureModel !== settings.decisionModel.model
   ) {
     return {
       consented: false,
-      reason: "selected classifier differs from the consented provider/model binding",
+      reason: "selected decision model differs from the consented provider/model binding",
     };
   }
   const expectedEndpoint =

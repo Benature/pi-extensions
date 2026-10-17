@@ -66,7 +66,7 @@ footer{border-top:2px solid var(--line);margin-top:3em;padding:1.2em 0 3em;color
     <span class="badge">Pi 1.1.0 native UI vocabulary</span>
   </div>
   <p class="meta">Design spec: <a href="docs/specification.md">archived product proposal</a> · <a href="README.md">actual beta documentation</a> · 2026-10-11 · The screens below are ASCII renderings of Pi terminal/TUI boxes (<code>ctx.ui.custom()</code> components, dialogs, status and widget text). This HTML page is a review artifact — nothing here is embedded in Pi, executes an action, or talks to a model.</p>
-  <div class="callout"><strong>Design, not runtime coverage.</strong> The beta uses focused native dialogs, covers only the parent read/edit/write/bash routes, and keeps every classifier result shadow-only. Semantic-ready states below illustrate future evaluated behavior; they do not claim calibrated approval, child/codemode support, or unattended protection. The five commands and plain-text rule workflow remain the accepted design.</div>
+  <div class="callout"><strong>Design, not runtime coverage.</strong> The beta uses focused native dialogs, covers only the parent read/edit/write/bash routes, and keeps every decision model result shadow-only. Semantic-ready states below illustrate future evaluated behavior; they do not claim calibrated approval, child/codemode support, or unattended protection. The five commands and plain-text rule workflow remain the accepted design.</div>
   <nav class="toc" aria-label="Page sections">
     <a href="#read">How to read</a>
     <a href="#commands">Canonical commands</a>
@@ -120,20 +120,20 @@ footer{border-top:2px solid var(--line);margin-top:3em;padding:1.2em 0 3em;color
   <p>One slash command, five forms — nothing else. No setup wizard command, no mode-switch command, no extra history command. Labels below are used verbatim in both alternatives&rsquo; screens.</p>
   <table>
     <tr><th>Command</th><th>Purpose</th><th>Where it renders</th></tr>
-    <tr><td><code>/automode</code></td><td>The panel: <strong>on/off control</strong>, status, coverage, pending approvals, review (classifier picker + disclosure consent), usage.</td><td>A: hub&rsquo;s Status page. B: compact status card overlay.</td></tr>
+    <tr><td><code>/automode</code></td><td>The panel: <strong>on/off control</strong>, status, coverage, pending approvals, review (Decision Models picker + disclosure consent), usage.</td><td>A: hub&rsquo;s Status page. B: compact status card overlay.</td></tr>
     <tr><td><code>/automode on</code></td><td>Enable reviewing/enforcement, after the guarded-host checks pass. Same effect as the panel&rsquo;s Turn on.</td><td>Status line + one notification.</td></tr>
-    <tr><td><code>/automode off</code></td><td>Disable reviewing/enforcement, deliberately. Held asks end not-executed; pending classifier results are discarded.</td><td>Status line + one notification.</td></tr>
+    <tr><td><code>/automode off</code></td><td>Disable reviewing/enforcement, deliberately. Held asks end not-executed; pending decision model results are discarded.</td><td>Status line + one notification.</td></tr>
     <tr><td><code>/automode rules</code></td><td>Open the Pi-native <strong>allowlist/blocklist editor</strong>: plain-text rules, saved exactly as written.</td><td>A: hub&rsquo;s Rules page. B: full-screen overlay.</td></tr>
     <tr><td><code>/automode logs</code></td><td>Recent decisions <strong>as made</strong>: action text, Allow/Ask/Block, matched rule or decision source, time; expandable detail.</td><td>A: hub&rsquo;s Logs page. B: list overlay + detail.</td></tr>
   </table>
-  <p><strong>Panel/dialog actions:</strong> the on/off control uses the same operator-only handler as its commands. Allow once / Decline / Inspect, rule add/edit/delete confirmations, and classifier/disclosure choices are UI-only; they add no further commands. The model never sees any of this in its tool schema, and prompt text (including &ldquo;go ahead&rdquo; or &ldquo;/automode off&rdquo;) cannot change state.</p>
+  <p><strong>Panel/dialog actions:</strong> the on/off control uses the same operator-only handler as its commands. Allow once / Decline / Inspect, rule add/edit/delete confirmations, and decision model/disclosure choices are UI-only; they add no further commands. The model never sees any of this in its tool schema, and prompt text (including &ldquo;go ahead&rdquo; or &ldquo;/automode off&rdquo;) cannot change state.</p>
 
   <h3>One settings file</h3>
-  <p>All extension settings live in <code>&lt;agent-dir&gt;/automode.json</code> (normally <code>~/.pi/agent/automode.json</code>) — on/off state, rules as written, classifier selection, disclosure consent, log retention. Writes are atomic and validated; an invalid file warns and the last valid config stays in force. API keys stay in Pi&rsquo;s own auth store; logs are operational records, not settings.</p>
+  <p>All extension settings live in <code>&lt;agent-dir&gt;/automode.json</code> (normally <code>~/.pi/agent/automode.json</code>) — on/off state, rules as written, decision model selection, disclosure consent, log retention. Writes are atomic and validated; an invalid file warns and the last valid config stays in force. API keys stay in Pi&rsquo;s own auth store; logs are operational records, not settings.</p>
 <pre class="frame">{
   "version": 1,
   "enabled": true,
-  "classifier": { "provider": "typesafe", "model": "jev-1.13.2" },
+  "decisionModel": { "provider": "typesafe", "model": "jev-1.13.2" },
   "disclosureConsent": "approved",
   "allowlist": [
     { "type": "command", "text": "npm test -- parser" },
@@ -156,8 +156,8 @@ footer{border-top:2px solid var(--line);margin-top:3em;padding:1.2em 0 3em;color
   <table>
     <tr><th>#</th><th>State</th><th>Status text</th><th>What runs automatically</th><th>Unresolved actions</th><th>Enter / exit</th></tr>
     <tr><td>1</td><td><strong>Off</strong> (default after install)</td><td><code>automode · off — Automode checks disabled</code></td><td>Nothing is reviewed; stock Pi behaves as stock Pi. No protected/guarded badge, because nothing is guarded.</td><td>n/a — Automode is not in the loop at all.</td><td>Enter: install + <code>/reload</code>, or <code>/automode off</code>. Exit: <code>/automode on</code> → host check → 2.</td></tr>
-    <tr><td>2</td><td>On · <strong>Rules</strong> (keyless is a real mode)</td><td><code>automode · on · Rules · verified parent routes · 34 allowed · 0 need you</code></td><td>Deterministic floor + exact command-rule matches.</td><td>? Ask you.</td><td>Enter: <code>/automode on</code> with checks passing. Exit: off → 1; choose classifier → 3.</td></tr>
-    <tr><td>3</td><td>On · Jev <strong>consent pending</strong></td><td><code>automode · on · Rules · Jev needs disclosure consent</code></td><td>Same as 2; nothing is sent to the reviewer.</td><td>? Ask you.</td><td>Enter: pick a classifier in the panel. Exit: approve + fixed profile + availability → 5; decline → 4.</td></tr>
+    <tr><td>2</td><td>On · <strong>Rules</strong> (keyless is a real mode)</td><td><code>automode · on · Rules · verified parent routes · 34 allowed · 0 need you</code></td><td>Deterministic floor + exact command-rule matches.</td><td>? Ask you.</td><td>Enter: <code>/automode on</code> with checks passing. Exit: off → 1; choose decision model → 3.</td></tr>
+    <tr><td>3</td><td>On · Jev <strong>consent pending</strong></td><td><code>automode · on · Rules · Jev needs disclosure consent</code></td><td>Same as 2; nothing is sent to the reviewer.</td><td>? Ask you.</td><td>Enter: pick a decision model in the panel. Exit: approve + fixed profile + availability → 5; decline → 4.</td></tr>
     <tr><td>4</td><td>On · Jev <strong>consent declined</strong></td><td><code>automode · on · Rules · Jev declined</code></td><td>Same as 2. Decline is remembered in <code>automode.json</code>; nothing leaves the machine for review.</td><td>? Ask you.</td><td>Enter: decline at consent. Exit: Reconsider… → 3.</td></tr>
     <tr><td>5</td><td>On · <strong>Jev ready</strong></td><td><code>automode · on · Jev · verified parent routes · 34 allowed · 1 needs you</code></td><td>Floor + exact rules + semantic matches of your allow rules with high support.</td><td>? Ask on uncertainty, missing authority or missing evidence.</td><td>Enter: consent + pinned profile + availability. Exit: switch back → 2; outage → 7.</td></tr>
     <tr><td>6</td><td>On · Jev <strong>shadow-only</strong> (moving alias)</td><td><code>automode · on · Rules · Jev shadow (profile not pinned)</code></td><td>Rules enforce; Jev suggestions logged for evaluation only.</td><td>? Ask you.</td><td>Enter: catalog entry is a moving alias (<code>jev-latest</code>). Exit: tested fixed profile → 5.</td></tr>
@@ -184,14 +184,14 @@ footer{border-top:2px solid var(--line);margin-top:3em;padding:1.2em 0 3em;color
       ? HELD ── allow once ─► ✓ runs once    │ reach this toggle
               ── decline ───► ✗ blocked; identical retries stay silent
               ── ⎋/timeout ─► ✗ blocked (never executed)
-Switching OFF while work is held: pending classifier requests are cancelled,
+Switching OFF while work is held: pending decision model requests are cancelled,
 held asks end NOT-EXECUTED — nothing is released by the state change, and a
-late classifier result is discarded, never applied. Switching ON applies to
+late decision model result is discarded, never applied. Switching ON applies to
 new actions only.
 
 Jev sub-states (panel Review control + automode.json — never a subcommand):
 
- Rules ──pick classifier──► 3 consent pending ──approve + fixed profile──► 5 ready
+ Rules ──pick decision model──► 3 consent pending ──approve + fixed profile──► 5 ready
  3 ──decline──► 4 declined ──Reconsider…──► 3         │ failures/budget
                                                      ▼
                                             7 ◐ Rules fallback (same allows,
@@ -253,7 +253,7 @@ status line below the editor:  automode · on · Rules · verified parent routes
 │                                                                           │
 │ ⏻ ON — reviewing on verified routes                [ Turn off ]           │
 │ Review    Rules — deterministic floor + your rules; the rest asks. A      │
-│           real mode, not a failure.   [ Choose classifier &amp; enable Jev… ] │
+│           real mode, not a failure. [ Choose Decision Models… ]           │
 │ Coverage  parent tools ✓ · codemode blocked ✗ · child launch blocked ✗    │
 │ Session   34 allowed · 6 asked · 2 declined · 0 silent retries            │
 │ Rules     2 blocklist · 2 allowlist · logs 7d/500 · ~/.pi/agent/…         │
@@ -263,7 +263,7 @@ status line below the editor:  automode · on · Rules · verified parent routes
 <pre class="frame">│ Review    Rules · no Jev key stored — deterministic floor + your exact    │
 │           command rules; anything unresolved asks. Keyless is a real,     │
 │           supported mode, not a broken first run.                         │
-│           Message rules wait for a classifier — keyless cannot tell       │
+│           Message rules wait for a decision model — keyless cannot tell   │
 │           whether an action violates “Never deploy to production”, so     │
 │           it asks instead of guessing.      [ Add key &amp; enable Jev… ]     │
 │           Storing a key is not disclosure consent: consent is a separate  │
@@ -299,15 +299,15 @@ status line below the editor:  automode · on · Rules · verified parent routes
     </div>
     <table>
       <tr><th>What you see</th><th>Actions</th><th>Outcome</th><th>Acceptance check</th></tr>
-      <tr><td>The toggle first, in plain words; coverage honesty (what is <em>not</em> covered is printed, not hidden); review state; where settings live.</td><td>Turn on/off · Choose classifier… · Retry Jev</td><td>Off disables checks visibly; On re-runs host checks; review changes never add new permissions.</td><td>With only <code>jev-latest</code> available, the badge can never say &ldquo;Jev&rdquo;; kill network → ◐ fallback with identical allow set; retry is operator-initiated; turning Off mid-ask ends the held action not-executed and discards late classifier results.</td></tr>
+      <tr><td>The toggle first, in plain words; coverage honesty (what is <em>not</em> covered is printed, not hidden); review state; where settings live.</td><td>Turn on/off · Choose Decision Models… · Retry Jev</td><td>Off disables checks visibly; On re-runs host checks; review changes never add new permissions.</td><td>With only <code>jev-latest</code> available, the badge can never say &ldquo;Jev&rdquo;; kill network → ◐ fallback with identical allow set; retry is operator-initiated; turning Off mid-ask ends the held action not-executed and discards late decision model results.</td></tr>
     </table>
   </div>
 
-  <h3>A2 · Choose classifier (the decision-model picker)</h3>
-  <p class="meta">Reached from the Review row. It lists <strong>classifier-typed</strong> models from Pi&rsquo;s own registry only — it never touches your coding/chat model. Writes <code>classifier</code> + triggers the consent step in <code>automode.json</code>.</p>
+  <h3>A2 · Decision Models (the picker)</h3>
+  <p class="meta">Reached from the Review row. It lists <strong>classifier-typed</strong> models from Pi&rsquo;s own registry only — it never touches your coding/chat model. Writes <code>decisionModel</code> + triggers the consent step in <code>automode.json</code>.</p>
   <div class="screen">
-<pre class="frame">╭─ Automode — Choose decision classifier ──────────────────────────────────╮
-│ Classifier-typed models in Pi’s model registry:                           │
+<pre class="frame">╭─ Automode — Decision Models ──────────────────────────────────────────────╮
+│ Decision models in Pi’s model registry:                                   │
 │  (•) typesafe / jev-1.13.2    fixed version ✓ can enforce after consent   │
 │  ( ) typesafe / jev-latest    moving alias → shadow only, never enforces  │
 │  ( ) local llama.cpp entry    separate evaluated profile — later          │
@@ -501,7 +501,7 @@ status line below the editor:  automode · on · Rules · verified parent routes
 │ Action     npm run build               cwd /work/parser                   │
 │ Source     jev · result: timeout at the 2s deadline → no decision →       │
 │            asked you. The action was held, never auto-allowed.            │
-│ No past classifier arguments are invented: none were produced.            │
+│ No past decision model arguments are invented: none were produced.        │
 ╰───────────────────────────────────────────────────────────────────────────╯</pre>
       </div>
       <div class="variant" data-variant="empty" hidden>
@@ -514,7 +514,7 @@ status line below the editor:  automode · on · Rules · verified parent routes
     </div>
     <table>
       <tr><th>What you see</th><th>Actions</th><th>Outcome</th><th>Acceptance check</th></tr>
-      <tr><td>Time, actual action text, Allow/Ask/Block, matched rule or decision source (floor / you / blocklist / allowlist / classifier id).</td><td>expand entry · clear logs</td><td>Useful local history with bounded retention; payload that was never captured is reported unavailable, not reconstructed.</td><td>No entry contains invented reasoning or invented past arguments; a timeout row shows the real source and result; retention limits from <code>automode.json</code> are enforced; clearing works.</td></tr>
+      <tr><td>Time, actual action text, Allow/Ask/Block, matched rule or decision source (floor / you / blocklist / allowlist / decision model id).</td><td>expand entry · clear logs</td><td>Useful local history with bounded retention; payload that was never captured is reported unavailable, not reconstructed.</td><td>No entry contains invented reasoning or invented past arguments; a timeout row shows the real source and result; retention limits from <code>automode.json</code> are enforced; clearing works.</td></tr>
     </table>
   </div>
 
@@ -590,7 +590,7 @@ only while pending/degraded, a widget below the editor:
 <pre class="frame">╭─ Automode ───────────────────────────────────────────────────────────────╮
 │ ⏻ ON · Rules · verified parent routes · 34 allowed · 0 need you           │
 │ Review   Rules — floor + your rules; the rest asks. A real mode.          │
-│          [ Choose classifier &amp; enable Jev… ]      [ Turn off ]            │
+│          [ Choose Decision Models… ]      [ Turn off ]                    │
 │ Coverage parent tools ✓ · codemode ✗ blocked · children ✗ blocked         │
 │ [ Rules ]   [ Logs ]                                        ⎋ close       │
 ╰───────────────────────────────────────────────────────────────────────────╯</pre>
@@ -598,7 +598,7 @@ only while pending/degraded, a widget below the editor:
       <div class="variant" data-variant="nokey" hidden>
 <pre class="frame">│ Review   Rules · no Jev key stored — floor + exact command rules; the     │
 │          rest asks. Keyless is a supported mode, not a failure. Message   │
-│          rules wait for a classifier — keyless asks instead of guessing.  │
+│        rules wait for a decision model — keyless asks instead of guessing │
 │          [ Add key &amp; enable Jev… ]  (a stored key is not consent)         │</pre>
       </div>
       <div class="variant" data-variant="jev" hidden>
@@ -623,13 +623,13 @@ only while pending/degraded, a widget below the editor:
     </div>
   </div>
 
-  <h3>B2 · Choose classifier — picker dialog</h3>
+  <h3>B2 · Decision Models — picker dialog</h3>
   <div class="screen">
-<pre class="frame">   ╭──── Choose decision classifier ────────────────────────────────────────╮
+<pre class="frame">   ╭──── Decision Models ───────────────────────────────────────────────────╮
    │  (•) typesafe / jev-1.13.2    fixed version ✓ can enforce after consent│
    │  ( ) typesafe / jev-latest    moving alias → shadow only               │
    │  ( ) local llama.cpp entry    separate evaluated profile — later       │
-   │ Classifier-typed models only; your coding model does not change.       │
+   │ Decision models only; your coding model does not change.               │
    │ Keys stay in Pi’s auth store.         [ Select ]   [ Cancel ]          │
    ╰────────────────────────────────────────────────────────────────────────╯</pre>
   </div>
@@ -804,7 +804,7 @@ only while pending/degraded, a widget below the editor:
 <pre class="frame b-warn">╭─ Logs · entry 14:31 ──────────────────────────────────────────────────────╮
 │ ? ask 14:31:02 → you allowed once 14:31:40 · npm run build                │
 │ source jev · result: timeout at the 2s deadline → no decision → asked     │
-│ you — the action was held, never auto-allowed. No past classifier         │
+│ you — the action was held, never auto-allowed. No past decision model     │
 │ arguments are invented: none were produced.                               │
 ╰───────────────────────────────────────────────────────────────────────────╯</pre>
       </div>
@@ -937,7 +937,7 @@ Allow once never lifts these blocks; an unsupported route is Block, not Ask.</pr
   <ol>
     <li>The built command table contains exactly the five canonical forms — <code>/automode</code>, <code>on</code>, <code>off</code>, <code>rules</code>, <code>logs</code> — and no other subcommand (checked by inspection).</li>
     <li>Prompt text containing &ldquo;/automode off&rdquo;, &ldquo;go ahead&rdquo; or &ldquo;approved&rdquo; changes no state (provenance test); pi-ask <code>ask_user</code> answers likewise mint nothing; agent-controlled edits to <code>automode.json</code> are blocked through covered paths.</li>
-    <li><code>/automode off</code> with a dialog open and a classifier request in flight: the review is cancelled, the held action ends not-executed, the badge disappears, and a late classifier result is discarded — nothing is released by the transition. <code>/automode on</code> re-runs host checks and applies to new actions only.</li>
+    <li><code>/automode off</code> with a dialog open and a decision model request in flight: the review is cancelled, the held action ends not-executed, the badge disappears, and a late decision model result is discarded — nothing is released by the transition. <code>/automode on</code> re-runs host checks and applies to new actions only.</li>
     <li>Rules editor: a Message rule such as &ldquo;Never deploy to production&rdquo; and a Command rule such as <code>git push --force</code> save verbatim with no template step; blocklist is consulted before allowlist; command rules match literally; an ambiguous message-rule match asks rather than allows; delete requires confirmation.</li>
     <li>Disabling a rule writes <code>enabled: false</code> in the same JSON; reopening the editor or restarting preserves the disabled row without changing its text.</li>
     <li>A message block that cannot be resolved takes the local Ask path before any deterministic or semantic Allow; a resolved block match is shown with the matched rule, never inferred from a generic Ask answer.</li>
@@ -951,7 +951,7 @@ Allow once never lifts these blocks; an unsupported route is Block, not Ask.</pr
     <li>Dialog unanswered 10:00 → blocked; <code>/reload</code> mid-dialog → expired, not executed; Escape never approves.</li>
     <li>Print and default RPC runs end unresolved actions as <code>approval_required</code>; no auto-yes path exists.</li>
     <li>Guarded-start check failure → no guarded execution, no on/guarded badge, and no in-loop continue-anyway button.</li>
-    <li><code>/automode logs</code> shows each decision as made — actual action text, Allow/Ask/Block, matched rule or source, time — states when payload detail was never captured, never invents past arguments or classifier reasoning, honors the retention limits in <code>automode.json</code>, and clears on request.</li>
+    <li><code>/automode logs</code> shows each decision as made — actual action text, Allow/Ask/Block, matched rule or source, time — states when payload detail was never captured, never invents past arguments or decision model reasoning, honors the retention limits in <code>automode.json</code>, and clears on request.</li>
   </ol>
 </section>
 

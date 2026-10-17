@@ -31,7 +31,7 @@ export type DisclosureConsent = "none" | "approved" | "declined";
  * resets consent and all bindings.
  */
 export interface ReviewerSettings {
-	classifier: { provider: string; model: string } | null;
+	decisionModel: { provider: string; model: string } | null;
 	disclosureConsent: DisclosureConsent;
 	/** Bound provider id; older/invalid files normalize to `null`. */
 	disclosureProvider?: string | null;
@@ -78,8 +78,8 @@ export interface ReviewerEvidence {
 	shell?: ShellResolutionLike;
 }
 
-/** Minimal structural shape of Pi's `ClassifierModel`. */
-export interface ClassifierModelLike {
+/** Minimal structural shape of Pi's `ClassifierModel` (Pi's "classifier" model type). */
+export interface DecisionModelLike {
 	provider: string;
 	id: string;
 	api: string;
@@ -89,7 +89,7 @@ export interface ClassifierModelLike {
 	input?: readonly unknown[];
 }
 
-export interface ClassifierChoiceQuestionLike {
+export interface DecisionModelChoiceQuestionLike {
 	type: "choice";
 	instructions: string;
 	criteria: Record<string, string>;
@@ -104,11 +104,11 @@ export type JsonValueLike = null | boolean | number | string | JsonValueLike[] |
  */
 export interface ReviewInput {
 	state: { [key: string]: JsonValueLike };
-	questions: Record<string, ClassifierChoiceQuestionLike>;
+	questions: Record<string, DecisionModelChoiceQuestionLike>;
 }
 
 /** Minimal structural shape of Pi's `ClassifierResult` (never rejects). */
-export interface ClassifierResultLike {
+export interface DecisionModelResultLike {
 	provider: string;
 	model: string;
 	answers: Record<string, unknown>;
@@ -121,22 +121,22 @@ export interface ClassifierResultLike {
  * Structural subset of Pi 1.1.0 `ModelRegistry` used by the reviewer. No SDK,
  * no HTTP, no chat-model or provider cascade: this is the only transport.
  */
-export interface ClassifierRegistryLike {
-	findOfType(type: "classifier", provider: string, modelId: string): ClassifierModelLike | undefined;
+export interface DecisionModelRegistryLike {
+	findOfType(type: "classifier", provider: string, modelId: string): DecisionModelLike | undefined;
 	getAvailableOfType(
 		type: "classifier",
 		provider?: string,
 		options?: { signal?: AbortSignal },
-	): Promise<readonly ClassifierModelLike[]>;
+	): Promise<readonly DecisionModelLike[]>;
 	classify(
-		model: ClassifierModelLike,
+		model: DecisionModelLike,
 		context: ReviewInput,
 		options?: { signal?: AbortSignal },
-	): Promise<ClassifierResultLike>;
+	): Promise<DecisionModelResultLike>;
 }
 
 /** Validated, bounded usage accounting. Absent means unknown, never zero-cost. */
-export interface ClassifierUsage {
+export interface DecisionModelUsage {
 	input: number;
 	output: number;
 	totalTokens: number;

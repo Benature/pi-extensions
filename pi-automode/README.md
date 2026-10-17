@@ -20,7 +20,7 @@ Restart Pi or run `/reload`, then:
 ```
 
 It applies immediately from Pi's interactive terminal—there is no
-confirmation step. No API key, classifier, or rules are required. Automode
+confirmation step. No API key, decision model, or rules are required. Automode
 starts **off** on first install; your choice is saved.
 
 When an action needs permission, choose **Allow once**, **Decline**, or
@@ -54,7 +54,7 @@ Automode cannot undo actions already started.
 
 | Command | Use |
 |---|---|
-| `/automode` | Open the compact panel: toggle, rules, logs, optional classifier, details |
+| `/automode` | Open the compact panel: toggle, rules, logs, optional decision models, details |
 | `/automode on` | Enable checks immediately (interactive terminal) |
 | `/automode off` | Disable checks immediately (pending approvals cancelled) |
 | `/automode rules` | Add or manage rules |
@@ -82,23 +82,23 @@ Open `/automode rules`, choose **Add rule**, then choose an effect and type:
 - **Message rules are experimental.** Allow messages never auto-approve.
   An enabled block message makes **all otherwise allowed actions ask**,
   because local policy cannot interpret the instruction and the optional
-  classifier cannot authorize anything.
+  decision model cannot authorize anything.
 
 For example, allowing `ls -la` does not allow `ls -la; rm -rf dist`.
 Rules can be edited, disabled, moved between allow/block, or deleted.
 
-## Optional classifier
+## Decision Models
 
 You can skip this entirely. It adds **shadow review**, not automatic approval.
 
-In `/automode`, choose **Classifier (optional)** to open a picker that lists
-every classifier in Pi's registry—including models such as
+In `/automode`, choose **Decision Models** to open a picker that lists
+every decision model in Pi's registry—including models such as
 vercel-ai-gateway's Jev (`typesafe-ai/jev`). Entries are marked
 `login required` when that provider is not authenticated and `untested` when
 availability is unknown; the current selection is pinned at the top with a
-`[current]` marker. Selecting a classifier is the whole setup: it applies
+`[current]` marker. Selecting a decision model is the whole setup: it applies
 immediately, with no separate disclosure dialog. **Rules only (no
-classifier)** clears the selection in one step. Your coding model does not
+decision model)** clears the selection in one step. Your coding model does not
 change.
 
 The picker shows each model's normalized destination endpoint before selection
@@ -130,11 +130,15 @@ security sandbox.
 
 ## Local data
 
-- `<agent-dir>/automode.json`: saved on/off state, rules, classifier selection,
-  classifier bindings, and limits. Usually `~/.pi/agent/automode.json`.
+- `<agent-dir>/automode.json`: saved on/off state, rules, decision model selection,
+  decision model bindings, and limits. Usually `~/.pi/agent/automode.json`.
+  Migration: earlier beta files used a `classifier` key; rename it to
+  `decisionModel` or the file is rejected as an unknown-key config error.
 - `<agent-dir>/automode-logs.json`: bounded newline-delimited JSON decision log.
   It can include exact commands and arguments; treat it as sensitive.
-  View or clear it through `/automode logs`.
+  View or clear it through `/automode logs`. Pre-rename entries carrying the old
+  `classifier` field are treated as corrupt lines; clear the log if that noise
+  bothers you.
 
 ## Development
 

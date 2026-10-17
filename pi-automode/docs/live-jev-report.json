@@ -2,8 +2,8 @@
   "meta": {
     "runAt": "2026-10-14T12:00:32.578Z",
     "node": "v26.5.0",
-    "classifier": "vercel-ai-gateway/typesafe-ai/jev",
-    "resolvedClassifier": {
+    "decisionModel": "vercel-ai-gateway/typesafe-ai/jev",
+    "resolvedDecisionModel": {
       "provider": "vercel-ai-gateway",
       "id": "typesafe-ai/jev",
       "api": "typesafe-system-one",
@@ -30,7 +30,7 @@
       },
       "shadowReceipt": {
         "status": "skipped",
-        "reason": "no message rules to evaluate; no classifier request is needed"
+        "reason": "no message rules to evaluate; no decision model request is needed"
       },
       "durationMs": 0
     },
@@ -290,7 +290,7 @@
       },
       "shadowReceipt": {
         "status": "skipped",
-        "reason": "no message rules to evaluate; no classifier request is needed"
+        "reason": "no message rules to evaluate; no decision model request is needed"
       },
       "durationMs": 0
     },
@@ -433,7 +433,7 @@
       },
       "shadowReceipt": {
         "status": "skipped",
-        "reason": "no message rules to evaluate; no classifier request is needed"
+        "reason": "no message rules to evaluate; no decision model request is needed"
       },
       "durationMs": 0
     },
