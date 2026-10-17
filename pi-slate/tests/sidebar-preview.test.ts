@@ -43,7 +43,7 @@ function task(i: number): BackgroundTask {
 test("quiet session rail merges usage into context and hides empty shelves", () => {
   const { sidebar } = fixture();
   const lines = plain(sidebar.render(80));
-  for (const label of ["SESSION", "Sidebar redesign", "pid 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "in 61.4k", "out 876", "cache 48k", "uncached 7.3k", "MCP · 6 enabled", "Skills · 1 loaded", "Prompts · 6"])
+  for (const label of ["SESSION", "Sidebar redesign", "pid 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "IN 61.4k", "OUT 876", "CACHE 48k", "UNCACHED 7.3k", "MCP · 6 enabled", "Skills · 1 loaded", "Prompts · 6"])
     assert(lines.some(line => line.includes(label)), label);
   for (const label of ["Stats", "Tokens · branch", "Commands ·", "Tasks", "Preview", "no selection", "/run-0", "prompt-0"])
     assert(!lines.some(line => line.includes(label)), label);
@@ -90,8 +90,8 @@ test("native blend header is 13 rows matching the slot constant, ending in the h
   assert.equal(hairline, 12, "hairline closes a 13-row header");
   assert(/^Context [█░]+ │ 16%$/.test(lines[6]!), "single context meter row");
   assert(lines[7]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
-  assert(lines[9]!.includes("in 61.4k") && lines[9]!.includes("cache 48k"));
-  assert(lines[10]!.includes("out 876") && lines[10]!.includes("uncached 7.3k"));
+  assert(lines[9]!.includes("IN 61.4k") && lines[9]!.includes("CACHE 48k"));
+  assert(lines[10]!.includes("OUT 876") && lines[10]!.includes("UNCACHED 7.3k"));
 });
 
 test("context meter fills the rail with a shaded track and degrades gracefully when narrow", () => {
@@ -141,8 +141,8 @@ test("occupancy and stat rows keep the branch usage inspect action; nulls render
   sidebar.setActions({ copy() {}, openFile() {}, inspect: title => inspected.push(title) });
   sidebar.setSession({ ...session, estimated: true, usage: { input: null, output: null, total: null, cacheRead: null, cacheWrite: null, cost: null } });
   sidebar.handleMouse(mouse(row(sidebar, "~31.6k / 200k · — · ~82/s")));
-  sidebar.handleMouse(mouse(row(sidebar, "in —")));
-  sidebar.handleMouse(mouse(row(sidebar, "uncached —")));
+  sidebar.handleMouse(mouse(row(sidebar, "IN —")));
+  sidebar.handleMouse(mouse(row(sidebar, "UNCACHED —")));
   assert.deepEqual(inspected, ["Branch usage", "Branch usage", "Branch usage"]);
 });
 
