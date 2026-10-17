@@ -260,8 +260,8 @@ export class Sidebar implements Component {
       { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      { text: this.pair(stat("CACHED", formatCompactTokenCount(s.usage.cacheRead)), statRight("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
-      { text: this.pair(stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
+      { text: this.pair(stat("Cached", formatCompactTokenCount(s.usage.cacheRead)), statRight("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
+      { text: this.pair(stat("Uncached", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
       { text: "" },
       { text: this.paint("dim", "─".repeat(width)) },
     ];
