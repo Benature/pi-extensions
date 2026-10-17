@@ -235,31 +235,30 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 			: settings?.enabled
 				? paint(theme, "success", "Automode: On")
 				: paint(theme, "warning", "Automode: Off");
-		const lines = [halted
-			? "Guarded actions are blocked until configuration is re-verified."
-			: settings?.enabled
-				? "Guarded tools are checked; unresolved actions ask."
-				: "Tool calls run without Automode checks."];
-		if (halted) lines.push(`Halted: ${escapeOneLine(deps.gate.haltReason ?? "configuration needs verification", 160)}`);
+		const lines: string[] = [];
+		if (halted) {
+			lines.push("Guarded actions are blocked until configuration is re-verified.");
+			lines.push(`Halted: ${escapeOneLine(deps.gate.haltReason ?? "configuration needs verification", 160)}`);
+		}
 		if (deps.settings.error) lines.push(`Config error: ${escapeOneLine(String(deps.settings.error), 160)}`);
 		if (ambientShellCustomizations(deps.host()).length) lines.push("Shell customization detected: bash is blocked while on.");
 		if (ctx.mode !== "tui") lines.push("Changes and approvals require the interactive terminal.");
 		if (deps.approval.pendingCount) lines.push(`${deps.approval.pendingCount} awaiting approval`);
-		const toggle = settings?.enabled ? "Turn off" : "Turn on";
-		const options = [toggle, "Rules", "Logs", "Classifier (optional)", "Details"];
+		const toggle = settings?.enabled ? "Toggle OFF" : "Toggle ON";
+		const options = [toggle, "Rules", "Logs", "Decision Models", "Details"];
 		if (state === "halted") options.unshift("Re-verify configuration");
 		options.push("Close");
 
 		let choice: string | undefined;
 		try {
-			choice = await ctx.ui.select(`${label}\n${lines.join("\n")}`, options);
+			choice = await ctx.ui.select(lines.length ? `${label}\n${lines.join("\n")}` : label, options);
 		} catch {
 			return;
 		}
 		if (choice === toggle) await setEnabled(deps, ctx, !settings?.enabled);
 		else if (choice === "Rules") await rulesEditor(deps, ctx);
 		else if (choice === "Logs") await logsViewer(deps, ctx);
-		else if (choice === "Classifier (optional)") await classifierPicker(deps, ctx);
+		else if (choice === "Decision Models") await classifierPicker(deps, ctx);
 		else if (choice === "Details") await showDetails(deps, ctx);
 		else if (choice === "Re-verify configuration") await reverify(deps, ctx);
 		else return;

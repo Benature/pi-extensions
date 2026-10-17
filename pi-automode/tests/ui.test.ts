@@ -325,7 +325,7 @@ test("rules editor refuses non-TUI modes entirely", async () => {
 test("picker header discloses the bounded metadata and never asks for consent", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			assert.equal(options[0], "Rules only (no classifier)");
 			return undefined; // Escape.
@@ -353,7 +353,7 @@ test("picker shows unavailable classifiers with login required and pins the curr
 	});
 	let picker: string[] = [];
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			picker = options;
 			return undefined; // Escape cancels.
@@ -386,7 +386,7 @@ test("a failed availability lookup marks classifiers untested, not missing", asy
 	const h = makeHarness({ enabled: true });
 	let picker: string[] = [];
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			picker = options;
 			return undefined;
@@ -410,7 +410,7 @@ test("picker falls back to availability results when getModelsOfType is unavaila
 	const h = makeHarness({ enabled: true });
 	let picker: string[] = [];
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			picker = options;
 			return undefined;
@@ -430,7 +430,7 @@ test("picker falls back to availability results when getModelsOfType is unavaila
 test("picking a classifier saves it with consent and all four bindings, no consent dialog", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => options.find((option) => stripAnsi(option) === "typesafe/jev-1.13.2"),
 		"Close",
 	]);
@@ -450,7 +450,7 @@ test("picking a classifier saves it with consent and all four bindings, no conse
 test("invalid classifier endpoint changes nothing", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => options.find((option) => stripAnsi(option) === "typesafe/jev-sketchy"),
 		"Close",
 	]);
@@ -476,7 +476,7 @@ test("Escape from the picker preserves the previous selection and binding", asyn
 		disclosureEndpoint: "https://api.typesafe.ai/v1",
 		disclosureWorkspace: "/work",
 	});
-	const ctx = h.makeCtx(["Classifier (optional)", undefined, "Close"]);
+	const ctx = h.makeCtx(["Decision Models", undefined, "Close"]);
 	await createCommandHandler(h.deps)("", ctx);
 	assert.equal(h.settings.updates.length, 0);
 	assert.equal(h.settings.current.disclosureConsent, "approved");
@@ -496,7 +496,7 @@ test("Rules only clears classifier and consent in one step", async () => {
 		disclosureEndpoint: "https://api.typesafe.ai/v1",
 		disclosureWorkspace: "/work",
 	});
-	const ctx = h.makeCtx(["Classifier (optional)", "Rules only (no classifier)", "Close"]);
+	const ctx = h.makeCtx(["Decision Models", "Rules only (no classifier)", "Close"]);
 	await createCommandHandler(h.deps)("", ctx);
 	assert.equal(h.settings.updates.length, 1);
 	assert.equal(ctx.calls.length, 3, "panel, picker, panel — no confirmation dialog");
@@ -512,7 +512,7 @@ test("Rules only clears classifier and consent in one step", async () => {
 test("a classifier choice made in a stale epoch is discarded, not applied", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			h.settings.epoch += 1;
 			return options.find((option) => stripAnsi(option) === "typesafe/jev-1.13.2");
@@ -533,7 +533,7 @@ test("escaped-pin collisions still map a row to its own model", async () => {
 	];
 	let labels: string[] = [];
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			labels = options.map(stripAnsi);
 			return options[2]; // the second model row
@@ -561,7 +561,7 @@ test("suffix collisions never fall back to a different classifier", async () => 
 	];
 	let labels: string[] = [];
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			labels = options.map(stripAnsi);
 			return options[2]; // the unavailable row, whose suffix repeats the marker
@@ -585,7 +585,7 @@ test("classifier labels stay distinct and never emit raw control bytes", async (
 	const h = makeHarness({ enabled: true });
 	const prefix = "x".repeat(240);
 	const ctx = h.makeCtx([
-		"Classifier (optional)",
+		"Decision Models",
 		(_title, options) => {
 			assert.notEqual(options[1], options[2]);
 			return options[2];
@@ -688,16 +688,24 @@ test("status text paints On green, Off yellow and Halted red with a theme", () =
 	assert.equal(statusText(halted.deps, STUB_THEME), "\x1b[31mAutomode: Halted\x1b[0m");
 });
 
-test("panel header paints the status label first, then one short sentence", async () => {
+test("panel header is the status label alone, with no state subtitle", async () => {
 	const h = makeHarness();
 	const ctx = h.makeCtx(["Close"], "tui", true, STUB_THEME);
 	await createCommandHandler(h.deps)("", ctx);
-	assert.deepEqual(ctx.calls[0]?.options, ["Turn on", "Rules", "Logs", "Classifier (optional)", "Details", "Close"]);
+	assert.deepEqual(ctx.calls[0]?.options, ["Toggle ON", "Rules", "Logs", "Decision Models", "Details", "Close"]);
 	const title = ctx.calls[0]?.title ?? "";
-	assert.match(title, /^\x1b\[33mAutomode: Off\x1b\[0m\n/);
-	assert.equal(title.split("\n").length, 2, "label plus one short sentence");
-	assert.ok(!/ordinary workspace files/.test(title), "old long sentence dropped");
+	assert.equal(title, "\x1b[33mAutomode: Off\x1b[0m", "label only; no subtitle");
+	assert.ok(!/Guarded tools are checked|run without Automode checks/.test(title));
 	assert.ok(ctx.calls[0]?.options.every((label) => !/[.…]$/.test(label)));
+});
+
+test("the toggle option names the action and mirrors the live state", async () => {
+	for (const enabled of [true, false]) {
+		const h = makeHarness({ enabled });
+		const ctx = h.makeCtx(["Close"]);
+		await createCommandHandler(h.deps)("", ctx);
+		assert.equal(ctx.calls[0]?.options[0], enabled ? "Toggle OFF" : "Toggle ON");
+	}
 });
 
 test("empty rules and logs have no selectable placeholder rows", async () => {
@@ -774,7 +782,7 @@ test("rule workflows retain the epoch of the displayed rule list", async () => {
 
 test("classifier consent displays normalized destinations without exposing invalid URL credentials", async () => {
 	const h = makeHarness();
-	const ctx = h.makeCtx(["Classifier (optional)", undefined, "Close"]);
+	const ctx = h.makeCtx(["Decision Models", undefined, "Close"]);
 	await createCommandHandler(h.deps)("", ctx);
 	const title = ctx.calls[1]?.title ?? "";
 	assert.match(title, /typesafe\/jev-1\.13\.2.*https:\/\/api\.typesafe\.ai\/v1/);
