@@ -206,7 +206,9 @@ export class Sidebar implements Component {
     const key = `${width}:${height}:${this.revision}:${Math.floor(this.now() / 1000)}`;
     if (this.cached?.key === key) return this.cached.lines;
     this.hits = []; this.listRows = [];
+    const chrome = height >= 12 ? 1 : 0;
     const slots = sessionSidebarSlots(height, this.tasks.length, Boolean(this.imageView()));
+    if (chrome) slots.middle = Math.max(0, slots.middle - 2);
     const inner = Math.max(0, width - 2);
     const lines: string[] = [];
     const add = (row: Row): void => {
@@ -215,6 +217,7 @@ export class Sidebar implements Component {
       if (row.action && inner > 0) this.hits.push({ y, x0: 2, x1: width, action: row.action });
       if (row.list) this.listRows.push({ y, list: row.list });
     };
+    if (chrome) add({ text: this.paint("dim", "─".repeat(inner)) });
     for (const row of this.headerRows(inner).slice(0, slots.header)) add(row);
     const middle = this.middle();
     this.middleRows = middle.length; this.middleHeight = slots.middle; this.middleStart = lines.length;
@@ -224,7 +227,8 @@ export class Sidebar implements Component {
     this.imageStart = lines.length; this.imageHeight = slots.image;
     lines.push(...this.imageLines(width, slots.image, lines.length));
     if (slots.footer) add({ text: this.paint("dim", "/slate session · details"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) });
-    while (lines.length < height) lines.push(this.decorateLine("", width));
+    while (lines.length < height - chrome) lines.push(this.decorateLine("", width));
+    if (chrome) add({ text: this.paint("dim", "─".repeat(inner)) });
     this.cached = { key, lines: lines.slice(0, height) };
     return this.cached.lines;
   }
@@ -260,8 +264,8 @@ export class Sidebar implements Component {
       { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      { text: this.pair(stat("Cached", formatCompactTokenCount(s.usage.cacheRead)), statRight("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
-      { text: this.pair(stat("Uncached", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
+      { text: this.pair(stat("Cached", formatCompactTokenCount(s.usage.cacheRead)), statRight("In", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
+      { text: this.pair(stat("Uncached", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("Out", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
       { text: "" },
       { text: this.paint("dim", "─".repeat(width)) },
     ];
