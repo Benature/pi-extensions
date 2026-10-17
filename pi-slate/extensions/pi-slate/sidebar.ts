@@ -249,6 +249,7 @@ export class Sidebar implements Component {
     })();
     const branchUsage = () => this.actions?.inspect?.("Branch usage", this.sessionDetails());
     const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
+    const statRight = (label: string, value: string): string => `${this.paint("text", value)} ${this.paint("muted", label)}`;
     return [
       { text: this.paint("muted", "SESSION"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) },
       { text: this.heading(sidebarText(s.name) || "Untitled session") },
@@ -259,8 +260,8 @@ export class Sidebar implements Component {
       { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      { text: this.pair(stat("CACHE", formatCompactTokenCount(s.usage.cacheRead)), stat("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
-      { text: this.pair(stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), stat("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
+      { text: this.pair(stat("CACHED", formatCompactTokenCount(s.usage.cacheRead)), statRight("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
+      { text: this.pair(stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
       { text: "" },
       { text: this.paint("dim", "─".repeat(width)) },
     ];
