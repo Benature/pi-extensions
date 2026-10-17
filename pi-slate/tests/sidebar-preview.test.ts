@@ -43,7 +43,7 @@ function task(i: number): BackgroundTask {
 test("quiet session rail merges usage into context and hides empty shelves", () => {
   const { sidebar } = fixture();
   const lines = plain(sidebar.render(80));
-  for (const label of ["SESSION", "Sidebar redesign", "PID 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "61.4k IN", "876 OUT", "CACHED 48k", "UNCACHED 7.3k", "MCP · 6 enabled", "Skills · 1 loaded", "Prompts · 6"])
+  for (const label of ["SESSION", "Sidebar redesign", "PID 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "61.4k IN", "876 OUT", "CACHED 48k", "UNCACHED 7.3k", "MCP · 6 Enabled", "Skills · 1 Loaded", "Prompts · 6"])
     assert(lines.some(line => line.includes(label)), label);
   for (const label of ["Stats", "Tokens · branch", "Commands ·", "Tasks", "Preview", "no selection", "/run-0", "prompt-0"])
     assert(!lines.some(line => line.includes(label)), label);

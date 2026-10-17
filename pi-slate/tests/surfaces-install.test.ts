@@ -293,7 +293,7 @@ test("dashboard uses live branch facts and session-scoped tasks; commands preser
   assert(!/Summary|Activity Preview|Context\s*\n/.test(rail()));
   f.extraCommands.push({ name: "skill:review", source: "skill", sourceInfo: { path: "/skills/review/SKILL.md", scope: "user" } });
   await f.emit("message_end", { message: { role: "toolResult", toolName: "codemode", toolCallId: "outer", content: [], isError: false, nestedCalls: { calls: [{ id: "nested-read", name: "read", arguments: { path: "/skills/review/SKILL.md" }, status: "ok" }], complete: true } } });
-  assert.match(rail(), /Skills · 1 loaded/, "nested successful reads update the live rail, not only restoration");
+  assert.match(rail(), /Skills · 1 Loaded/, "nested successful reads update the live rail, not only restoration");
   const payload = { version: 1, source: "fixture", sessionId: f.manager.getSessionId(), tasks: [{ id: "native-1", label: "review", kind: "subagent", state: "waiting", startedAt: Date.now() }] };
   f.eventBus.emit("pi:background-tasks", payload); assert.match(rail(), /Tasks\s+1 live/);
   await f.emit("tool_execution_start", { toolCallId: "shell", toolName: "bash", args: { command: "npm run dev" } });
