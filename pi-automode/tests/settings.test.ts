@@ -72,6 +72,10 @@ test("validateSettings rejects unknown top-level fields, including credentials",
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, extra: 1 }));
 });
 
+test("legacy classifier key is rejected as unknown, not silently migrated", () => {
+  assert.throws(() => validateSettings({ ...VALID_MINIMAL, classifier: { provider: "p", model: "m" } }), /classifier/);
+});
+
 test("validateSettings rejects prototype-pollution keys without polluting", () => {
   const json = '{"version":1,"enabled":true,"__proto__":{"polluted":true}}';
   assert.throws(() => validateSettings(JSON.parse(json)));
