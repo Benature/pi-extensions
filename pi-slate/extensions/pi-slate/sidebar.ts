@@ -273,7 +273,7 @@ export class Sidebar implements Component {
     const resourceHeading = (label: string, count: string): string =>
       this.heading(label) + this.paint("muted", ` · ${count}`);
     const rows: Row[] = [{ text: "" }, {
-      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : `${unknown ? "—" : enabled} Enabled`),
+      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : unknown ? "—" : `${enabled} Enabled`),
       action: () => this.toggleSection("mcp"),
     }];
     if (this.folds.mcp) {

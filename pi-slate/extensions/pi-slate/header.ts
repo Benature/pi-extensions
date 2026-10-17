@@ -65,8 +65,8 @@ export function renderSlateHeader(input: {
   const model = sidebarText(input.identity?.model);
   const thinking = sidebarText(input.identity?.thinking);
   const rawPath = sidebarText(input.path);
-  const dir = rawPath ? basename(rawPath) : "";
-  const path = dir && dir !== "/" ? `/${dir}` : rawPath;
+  const dir = rawPath.startsWith("/") ? basename(rawPath) : "";
+  const path = dir ? `/${dir}` : rawPath;
   const showLogo = input.logo ?? supportsPiLogo();
   const modelLine = [model, thinking].filter(Boolean).join(" · ");
   const rows: string[] = [];
