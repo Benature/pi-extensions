@@ -233,7 +233,7 @@ export class Sidebar implements Component {
     const s = this.session;
     const percent = s.percent !== null && Number.isFinite(s.percent) ? s.percent : null;
     const tone = percent !== null && percent >= 80 ? "warning" : "accent";
-    const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · pid ${s.pid}`;
+    const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · PID ${s.pid}`;
     const occupancy = `${s.estimated ? "~" : ""}${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}`
       + ` · ${sidebarCost(s.usage.cost)} · ${sidebarRate(s.rate)}`;
     const meter = ((): string => {
@@ -252,15 +252,15 @@ export class Sidebar implements Component {
     return [
       { text: this.paint("muted", "SESSION"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) },
       { text: this.heading(sidebarText(s.name) || "Untitled session") },
-      { text: this.paint("muted", visibleWidth(identity) > width ? this.pair(sidebarText(s.id).slice(0, 8), `pid ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
+      { text: this.paint("muted", visibleWidth(identity) > width ? this.pair(sidebarText(s.id).slice(0, 8), `PID ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
       { text: "" },
       { text: this.pair(this.paint("text", sidebarText(s.model)), this.paint("dim", sidebarText(s.thinking)), width) },
       { text: "" },
       { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      { text: this.pair(stat("IN", formatCompactTokenCount(s.usage.input)), stat("CACHE", formatCompactTokenCount(s.usage.cacheRead)), width), action: branchUsage },
-      { text: this.pair(stat("OUT", formatCompactTokenCount(s.usage.output)), stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), width), action: branchUsage },
+      { text: this.pair(stat("CACHE", formatCompactTokenCount(s.usage.cacheRead)), stat("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
+      { text: this.pair(stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), stat("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
       { text: "" },
       { text: this.paint("dim", "─".repeat(width)) },
     ];
