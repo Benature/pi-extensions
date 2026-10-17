@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
   backgroundAnsi, foregroundAnsi, rgbColor, truncateToWidth, visibleWidth, type Component, type TerminalColorMode,
@@ -10,7 +11,7 @@ const CORAL = rgbColor(228, 138, 122);
 const BLUE = rgbColor(79, 142, 179);
 const YELLOW = rgbColor(234, 182, 93);
 const RESET = "\x1b[0m";
-const LOGO_CELLS = 4;
+const LOGO_CELLS = 5;
 
 export function supportsPiLogo(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.TERM_PROGRAM !== "Apple_Terminal";
@@ -20,13 +21,13 @@ function colorMode(theme: Theme): TerminalColorMode {
   return typeof theme.getColorMode === "function" ? theme.getColorMode() : "truecolor";
 }
 
-/** Stock Pi mark: 4 cells × 2 rows of half-blocks. Brand colors stay fixed. */
+/** Stock Pi mark, 25% larger: 5 cells × 2 rows of half-blocks. Brand colors stay fixed. */
 export function piLogoLines(theme: Theme): [string, string] {
   const mode = colorMode(theme);
   const fg = (color: typeof CORAL) => foregroundAnsi(color, mode);
   return [
-    `${fg(CORAL)}${backgroundAnsi(BLUE, mode)}▀${RESET}${fg(CORAL)}▀█${RESET} `,
-    `${fg(BLUE)}█▀${RESET} ${fg(YELLOW)}█${RESET}`,
+    `${fg(CORAL)}${backgroundAnsi(BLUE, mode)}▀▀${RESET}${fg(CORAL)}▀█${RESET} `,
+    `${fg(BLUE)}██▀${RESET} ${fg(YELLOW)}█${RESET}`,
   ];
 }
 
@@ -63,7 +64,8 @@ export function renderSlateHeader(input: {
   const version = sidebarText(input.identity?.version) || "0";
   const model = sidebarText(input.identity?.model);
   const thinking = sidebarText(input.identity?.thinking);
-  const path = sidebarText(input.path);
+  const rawPath = sidebarText(input.path);
+  const path = rawPath ? basename(rawPath) || rawPath : rawPath;
   const showLogo = input.logo ?? supportsPiLogo();
   const modelLine = [model, thinking].filter(Boolean).join(" · ");
   const rows: string[] = [];
