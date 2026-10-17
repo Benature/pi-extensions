@@ -1,5 +1,5 @@
 /**
- * Exact validation of native classifier results.
+ * Exact validation of native decision model results.
  *
  * Pi's System One wrapper guarantees presence and numeric type of answers but
  * deliberately echoes the *requested* `model.id` — so identity fields prove an
@@ -19,10 +19,10 @@
  *   dropped as unknown (never reported as zero cost).
  */
 import type {
-	ClassifierChoiceQuestionLike,
-	ClassifierModelLike,
-	ClassifierResultLike,
-	ClassifierUsage,
+	DecisionModelChoiceQuestionLike,
+	DecisionModelLike,
+	DecisionModelResultLike,
+	DecisionModelUsage,
 	ValidatedChoiceAnswer,
 } from "./contract.js";
 
@@ -50,19 +50,19 @@ export function sanitizeReason(text: unknown, maxLength = MAX_REASON_LENGTH): st
 }
 
 /** Result identity must echo the requested pair exactly; never a pinning claim. */
-export function validateIdentity(result: ClassifierResultLike, model: ClassifierModelLike): string | undefined {
+export function validateIdentity(result: DecisionModelResultLike, model: DecisionModelLike): string | undefined {
 	if (result.provider !== model.provider) {
-		return `classifier identity mismatch: result provider ${sanitizeReason(result.provider) || "?"} != requested ${model.provider}`;
+		return `decision model identity mismatch: result provider ${sanitizeReason(result.provider) || "?"} != requested ${model.provider}`;
 	}
 	if (result.model !== model.id) {
-		return `classifier identity mismatch: result model ${sanitizeReason(result.model) || "?"} != requested ${model.id}`;
+		return `decision model identity mismatch: result model ${sanitizeReason(result.model) || "?"} != requested ${model.id}`;
 	}
 	return undefined;
 }
 
 function validateChoiceAnswer(
 	id: string,
-	question: ClassifierChoiceQuestionLike,
+	question: DecisionModelChoiceQuestionLike,
 	raw: unknown,
 ): { ok: true; answer: ValidatedChoiceAnswer } | { ok: false; reason: string } {
 	const fail = (reason: string) => ({ ok: false as const, reason: `answer ${id}: ${reason}` });
@@ -107,7 +107,7 @@ function validateChoiceAnswer(
 
 /** Every question sent needs exactly one valid answer; extra ids are rejected. */
 export function validateAnswers(
-	questions: Record<string, ClassifierChoiceQuestionLike>,
+	questions: Record<string, DecisionModelChoiceQuestionLike>,
 	answers: unknown,
 ): { ok: true; answers: Record<string, ValidatedChoiceAnswer> } | { ok: false; reason: string } {
 	if (!isRecord(answers)) return { ok: false, reason: "answers missing or not an object" };
@@ -139,12 +139,12 @@ function nonNegativeFinite(value: unknown): value is number {
  * Clean, validated usage or `undefined` (unknown). A catalog's absent price is
  * unknown cost, not free; malformed usage is dropped, never clamped to zero.
  */
-export function validateUsage(raw: unknown): ClassifierUsage | undefined {
+export function validateUsage(raw: unknown): DecisionModelUsage | undefined {
 	if (raw === undefined || raw === null) return undefined;
 	if (!isRecord(raw) || !isRecord(raw.cost)) return undefined;
 	if (!nonNegativeFinite(raw.input) || !nonNegativeFinite(raw.output)) return undefined;
 	if (!nonNegativeFinite(raw.totalTokens) || !nonNegativeFinite(raw.cost.total)) return undefined;
-	const usage: ClassifierUsage = {
+	const usage: DecisionModelUsage = {
 		input: raw.input,
 		output: raw.output,
 		totalTokens: raw.totalTokens,

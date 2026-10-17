@@ -1,7 +1,7 @@
 {
 	"version": 1,
 	"enabled": true,
-	"classifier": {
+	"decisionModel": {
 		"provider": "typesafe",
 		"model": "jev-1.13.0"
 	},

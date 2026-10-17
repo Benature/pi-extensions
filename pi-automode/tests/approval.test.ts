@@ -48,7 +48,7 @@ function fakeSettings(overrides: Record<string, unknown> = {}) {
 		current: {
 			version: 1,
 			enabled: true,
-			classifier: null,
+			decisionModel: null,
 			disclosureConsent: "none",
 			disclosureEndpoint: null,
 			disclosureWorkspace: null,

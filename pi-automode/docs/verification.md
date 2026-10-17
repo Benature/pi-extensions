@@ -46,7 +46,7 @@ loader, compiler-error whitelist, or gate-test skip to become green.
 Executed pre-repair inert proofs found raw Pi path-expansion/alias false
 Allows, effectful shell flags, executable-profile aliasing, dropped empty
 operands, missing hard-link identity in fingerprints, an Off-during-Allow-log
-execution race, ordinary-source classifier disclosure, request-budget
+execution race, ordinary-source decision model disclosure, request-budget
 oversubscription, and early concurrency-lease release after timeout.
 Permanent regression cases cover the repaired paths.
 
@@ -64,7 +64,7 @@ green matrix was not used as a final verdict.
 Independent parent replay against the repaired native reviewer, using fake
 registries only, observed:
 
-- Ordinary write content absent from the captured classifier input.
+- Ordinary write content absent from the captured decision model input.
 - Three concurrent reviews at budget one dispatched **exactly one** request.
 - Concurrency one with uncooperative 100 ms work and 20 ms outer deadlines
   retained an underlying peak of **one**.
@@ -130,7 +130,7 @@ The previously recorded hold for a fresh Kimi-on-reviewer native review is
 superseded by these operator-requested DeepSeek reviews plus the executed
 repairs and parent matrix. These remain **static source reviews plus the
 parent-executed offline matrix**: no live Jev enforcement or calibration run
-(one 20-case live shadow smoke with 2 classifier requests is recorded in
+(one 20-case live shadow smoke with 2 decision model requests is recorded in
 `../TESTS.md` and `live-jev-report.json`), no Linux/Windows matrix, and Jev
 remains shadow-only. See the remaining-gate closure in
 `../IMPLEMENTATION.md` in the source repository; that plan is not included in

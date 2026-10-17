@@ -805,13 +805,13 @@ export class Gate {
 		scope: PendingScope,
 	): Promise<ReviewReceipt | undefined> {
 		const reviewer = this.#deps.reviewer;
-		const classifier = settings.classifier;
-		if (!reviewer || !classifier) return undefined;
-		const source = `native-classifier:${classifier.provider}/${classifier.model}`;
+		const decisionModel = settings.decisionModel;
+		if (!reviewer || !decisionModel) return undefined;
+		const source = `native-decision-model:${decisionModel.provider}/${decisionModel.model}`;
 		const skipped = (reason: string): ReviewReceipt => ({ shadow: true, status: "skipped", source, reason, durationMs: 0 });
 		const registry = call.ctx.modelRegistry;
 		if (!registry) return skipped("model registry unavailable; stayed local");
-		const model = findClassifierModel(registry, classifier.provider, classifier.model);
+		const model = findDecisionModel(registry, decisionModel.provider, decisionModel.model);
 		// Consent is upload authority only when bound to the exact selected
 		// endpoint and the canonical workspace; otherwise stay local.
 		const consent = checkDisclosureConsent(settings, {
@@ -842,11 +842,11 @@ export class Gate {
 		source: string,
 		reason: string,
 		matchedRule?: Decision["matchedRule"],
-		classifier?: unknown,
+		decisionModel?: unknown,
 	): Promise<void> {
 		const settings = this.#deps.settings.current;
 		try {
-			await this.#appendLog(call, rec, outcome, source, reason, settings, matchedRule, classifier);
+			await this.#appendLog(call, rec, outcome, source, reason, settings, matchedRule, decisionModel);
 		} catch {
 			call.ctx.ui.notify?.("Automode: decision log write failed", "error");
 		}
@@ -860,7 +860,7 @@ export class Gate {
 		reason: string,
 		settings: AutomodeSettings,
 		matchedRule?: Decision["matchedRule"],
-		classifier?: unknown,
+		decisionModel?: unknown,
 	): Promise<void> {
 		// The log records the ACTUAL post-hook arguments frozen at entry. When
 		// they failed validation (or an uncovered route is audited), the record
@@ -895,7 +895,7 @@ export class Gate {
 			reason,
 		};
 		if (matchedRule) entry.matchedRule = matchedRule;
-		if (classifier !== undefined) entry.classifier = classifier;
+		if (decisionModel !== undefined) entry.decisionModel = decisionModel;
 		if (!captured) {
 			entry.input = { note: "post-hook arguments failed validation or are not reviewable; not captured" };
 		} else if (rec?.translated) {
@@ -941,22 +941,22 @@ function summarizeAction(tool: string, rec: CallRecord): string {
 	}
 }
 
-interface ClassifierModelLike {
+interface DecisionModelLike {
 	baseUrl?: unknown;
 }
 
-function findClassifierModel(registry: unknown, provider: string, modelId: string): ClassifierModelLike | undefined {
+function findDecisionModel(registry: unknown, provider: string, modelId: string): DecisionModelLike | undefined {
 	const find = (registry as { findOfType?: unknown } | undefined)?.findOfType;
 	if (typeof find !== "function") return undefined;
 	try {
 		return (find as (t: string, p: string, m: string) => unknown).call(registry, "classifier", provider, modelId) as
-			| ClassifierModelLike
+			| DecisionModelLike
 			| undefined;
 	} catch {
 		return undefined;
 	}
 }
 
-function modelBaseUrl(model: ClassifierModelLike | undefined): string | null {
+function modelBaseUrl(model: DecisionModelLike | undefined): string | null {
 	return typeof model?.baseUrl === "string" ? model.baseUrl : null;
 }

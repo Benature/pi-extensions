@@ -35,7 +35,7 @@ const LOCK_STALE_MS = 30_000;
 const KNOWN_KEYS = new Set([
   "version",
   "enabled",
-  "classifier",
+  "decisionModel",
   "disclosureConsent",
   "disclosureProvider",
   "disclosureModel",
@@ -126,13 +126,13 @@ export function validateSettings(input: unknown): AutomodeSettings {
   if (input.version !== 1) fail("settings.version: must be 1");
   if (typeof input.enabled !== "boolean") fail("settings.enabled: expected boolean");
 
-  let classifier: AutomodeSettings["classifier"] = null;
-  if (input.classifier !== undefined && input.classifier !== null) {
-    if (!isPlainObject(input.classifier)) fail("settings.classifier: expected object or null");
-    checkKeys(input.classifier, new Set(["provider", "model"]), "settings.classifier");
-    classifier = Object.freeze({
-      provider: validateText(input.classifier.provider, "settings.classifier.provider", 200),
-      model: validateText(input.classifier.model, "settings.classifier.model", 200),
+  let decisionModel: AutomodeSettings["decisionModel"] = null;
+  if (input.decisionModel !== undefined && input.decisionModel !== null) {
+    if (!isPlainObject(input.decisionModel)) fail("settings.decisionModel: expected object or null");
+    checkKeys(input.decisionModel, new Set(["provider", "model"]), "settings.decisionModel");
+    decisionModel = Object.freeze({
+      provider: validateText(input.decisionModel.provider, "settings.decisionModel.provider", 200),
+      model: validateText(input.decisionModel.model, "settings.decisionModel.model", 200),
     });
   }
 
@@ -176,7 +176,7 @@ export function validateSettings(input: unknown): AutomodeSettings {
   const settings: AutomodeSettings = {
     version: 1,
     enabled: input.enabled,
-    classifier,
+    decisionModel,
     disclosureConsent,
     disclosureProvider,
     disclosureModel,

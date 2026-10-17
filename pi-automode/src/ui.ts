@@ -11,7 +11,7 @@ import type { AutomodeHealth } from "./runtime/health.js";
  * Authority rules (IMPLEMENTATION.md invariant 6 + B1):
  * - Pi dispatches slash commands BEFORE input hooks and provides no command
  *   origin authentication. Authority is the live local TUI dispatch itself
- *   (ctx.mode === "tui" && ctx.hasUI): the on/off toggle and classifier
+ *   (ctx.mode === "tui" && ctx.hasUI): the on/off toggle and decision model
  *   selection are single-step by operator decision, so any TUI-context
  *   command dispatch can apply them with no dialog. Rule save/delete, log
  *   clear and re-verify additionally require an explicit host-owned
@@ -38,17 +38,17 @@ export interface CommandUi {
 	readonly theme?: Theme;
 }
 
-export interface ClassifierModelInfo {
+export interface DecisionModelInfo {
 	provider: string;
 	id: string;
 	baseUrl?: unknown;
 }
 
 export interface CommandModelRegistry {
-	/** Every registered classifier when the host exposes the catalogue. */
-	getModelsOfType?(type: "classifier", provider?: string): readonly ClassifierModelInfo[];
-	/** Auth-ready classifiers; a rejection means availability unknown, not missing. */
-	getAvailableOfType(type: "classifier", provider?: string): Promise<readonly ClassifierModelInfo[]>;
+	/** Every registered decision model when the host exposes the catalogue. */
+	getModelsOfType?(type: "classifier", provider?: string): readonly DecisionModelInfo[];
+	/** Auth-ready decision models; a rejection means availability unknown, not missing. */
+	getAvailableOfType(type: "classifier", provider?: string): Promise<readonly DecisionModelInfo[]>;
 }
 
 export interface CommandCtx {
@@ -258,7 +258,7 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		if (choice === toggle) await setEnabled(deps, ctx, !settings?.enabled);
 		else if (choice === "Rules") await rulesEditor(deps, ctx);
 		else if (choice === "Logs") await logsViewer(deps, ctx);
-		else if (choice === "Decision Models") await classifierPicker(deps, ctx);
+		else if (choice === "Decision Models") await decisionModelPicker(deps, ctx);
 		else if (choice === "Details") await showDetails(deps, ctx);
 		else if (choice === "Re-verify configuration") await reverify(deps, ctx);
 		else return;
@@ -268,13 +268,13 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 
 async function showDetails(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	const settings = deps.settings.current;
-	const classifier = settings.classifier;
+	const decisionModel = settings.decisionModel;
 	const count = (rules: Rule[]) => rules.filter((r) => r.enabled !== false).length;
 	const lines = [
 		`Tools checked: ${deps.guardedTools.join(", ")}. Other tools and nested calls are blocked while on.`,
 		"Protected writes are blocked. Approved shell commands are not sandboxed.",
 		`Rules: ${count(settings.blocklist)} block, ${count(settings.allowlist)} allow`,
-		`Classifier: ${classifier ? `${escapeOneLine(classifier.provider)}/${escapeOneLine(classifier.model)} (shadow only; consent: ${settings.disclosureConsent})` : "none — local checks only"}`,
+		`Decision model: ${decisionModel ? `${escapeOneLine(decisionModel.provider)}/${escapeOneLine(decisionModel.model)} (shadow only; consent: ${settings.disclosureConsent})` : "none — local checks only"}`,
 		`Pending: ${deps.gate.pendingManaged} managed, ${deps.approval.pendingCount} awaiting approval`,
 		`Settings: ${escapeOneLine(deps.dirs.agentDir)}/automode.json`,
 		`Logs: local; retained ${settings.logRetentionDays} days, up to ${settings.logMaxEntries} entries`,
@@ -482,9 +482,9 @@ function logDetail(entry: DecisionLog): string {
 		lines.push(`matched rule: [${entry.matchedRule.type}] ${escapeTerminal(entry.matchedRule.text, { multiline: true })}`);
 	}
 	lines.push(
-		entry.classifier !== undefined
-			? `classifier: ${escapeTerminal(JSON.stringify(entry.classifier), { multiline: true })}`
-			: "classifier: not captured",
+		entry.decisionModel !== undefined
+			? `decision model: ${escapeTerminal(JSON.stringify(entry.decisionModel), { multiline: true })}`
+			: "decision model: not captured",
 		entry.input !== undefined
 			? `input: ${escapeTerminal(JSON.stringify(entry.input), { multiline: true })}`
 			: "input: not captured",
@@ -558,29 +558,29 @@ async function logsViewer(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	}
 }
 
-// ---------------------------------------------------------------- review / classifier
+// ---------------------------------------------------------------- review / decision models
 
-const PICKER_RULES_ONLY = "Rules only (no classifier)";
+const PICKER_RULES_ONLY = "Rules only (no decision model)";
 const CURRENT_PREFIX = "[current] ";
 
-/** Registered classifier plus tri-state availability (undefined = unknown). */
-interface ListedClassifier extends ClassifierModelInfo {
+/** Registered decision model plus tri-state availability (undefined = unknown). */
+interface ListedDecisionModel extends DecisionModelInfo {
 	available?: boolean;
 }
 
 /**
- * Every registered classifier with availability when it can be resolved.
+ * Every registered decision model with availability when it can be resolved.
  * A failed availability lookup (abort, auth error, network) means unknown,
  * never "missing credentials". Without getModelsOfType the availability
  * results themselves are the catalogue.
  */
-async function listClassifiers(registry: CommandModelRegistry): Promise<ListedClassifier[]> {
-	const known: ClassifierModelInfo[] = (registry.getModelsOfType?.("classifier") ?? []).map((model) => ({
+async function listDecisionModels(registry: CommandModelRegistry): Promise<ListedDecisionModel[]> {
+	const known: DecisionModelInfo[] = (registry.getModelsOfType?.("classifier") ?? []).map((model) => ({
 		provider: model.provider,
 		id: model.id,
 		...(model.baseUrl !== undefined ? { baseUrl: model.baseUrl } : {}),
 	}));
-	let available: readonly ClassifierModelInfo[] | undefined;
+	let available: readonly DecisionModelInfo[] | undefined;
 	try {
 		available = await registry.getAvailableOfType("classifier");
 	} catch {
@@ -588,7 +588,7 @@ async function listClassifiers(registry: CommandModelRegistry): Promise<ListedCl
 	}
 	const ready = new Set((available ?? []).map((model) => `${model.provider}/${model.id}`));
 	const listed = known.map((model) => {
-		const entry: ListedClassifier = { ...model };
+		const entry: ListedDecisionModel = { ...model };
 		if (available !== undefined) entry.available = ready.has(`${model.provider}/${model.id}`);
 		return entry;
 	});
@@ -596,8 +596,8 @@ async function listClassifiers(registry: CommandModelRegistry): Promise<ListedCl
 	return (available ?? []).map((model) => ({ ...model, available: true }));
 }
 
-/** Display key for a classifier; escaped so registry ids cannot inject controls. */
-function classifierPin(model: ClassifierModelInfo): string {
+/** Display key for a decision model; escaped so registry ids cannot inject controls. */
+function decisionModelPin(model: DecisionModelInfo): string {
 	return `${escapeTerminal(model.provider)}/${escapeTerminal(model.id)}`;
 }
 
@@ -606,10 +606,10 @@ function stripAnsi(text: string): string {
 	return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-interface ClassifierRow {
+interface DecisionModelRow {
 	plain: string;
 	painted: string;
-	model: ListedClassifier;
+	model: ListedDecisionModel;
 }
 
 /**
@@ -617,13 +617,13 @@ interface ClassifierRow {
  * otherwise, current pin accented. Plain text is the mapping key; duplicate
  * plain labels get a positional suffix so a row never maps to another model.
  */
-function classifierRow(
-	model: ListedClassifier,
+function decisionModelRow(
+	model: ListedDecisionModel,
 	current: string | undefined,
 	theme: Theme | undefined,
 	used: Set<string>,
-): ClassifierRow {
-	const pin = classifierPin(model);
+): DecisionModelRow {
+	const pin = decisionModelPin(model);
 	const isCurrent = current === `${model.provider}/${model.id}`;
 	const stateText = model.available === true ? "" : model.available === false ? " · login required" : " · untested";
 	const statePainted = stateText === ""
@@ -639,7 +639,7 @@ function classifierRow(
 	return { plain, painted, model };
 }
 
-async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
+async function decisionModelPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	if (!requireOperator(ctx)) return;
 	// Bind the settings epoch before any async work: a model choice shown for
 	// one configuration must never be applied to a newer one.
@@ -649,25 +649,25 @@ async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		ctx.ui.notify("Automode: model registry unavailable.", "error");
 		return;
 	}
-	const models = await listClassifiers(registry);
+	const models = await listDecisionModels(registry);
 	const current = deps.settings.current;
-	const currentPin = current?.classifier
-		? `${current.classifier.provider}/${current.classifier.model}`
+	const currentPin = current?.decisionModel
+		? `${current.decisionModel.provider}/${current.decisionModel.model}`
 		: undefined;
-	// Available classifiers first, current pin at the very top; stable otherwise.
+	// Available decision models first, current pin at the very top; stable otherwise.
 	models.sort((a, b) => Number(b.available === true) - Number(a.available === true));
 	const currentIndex = models.findIndex((model) => `${model.provider}/${model.id}` === currentPin);
 	if (currentIndex > 0) models.unshift(...models.splice(currentIndex, 1));
 
 	// Positional keys: every row's plain text is unique, so mapping is exact.
 	const used = new Set<string>([PICKER_RULES_ONLY]);
-	const rows = models.map((model) => classifierRow(model, currentPin, themeFor(ctx), used));
+	const rows = models.map((model) => decisionModelRow(model, currentPin, themeFor(ctx), used));
 	const byLabel = new Map(rows.map((row) => [row.plain, row.model]));
 	const options = [PICKER_RULES_ONLY, ...rows.map((row) => row.painted)];
 	// Selection grants consent, so show the exact normalized destination before
 	// the decision. Never render rejected URLs: they may contain credentials.
 	const title = [
-		"Classifier — shadow review",
+		"Decision Models — shadow review",
 		"Only bounded metadata (tool name, argument key names, path metadata, message-rule text; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
 		...rows.map((row) => {
 			const endpoint = normalizeDisclosureEndpoint(typeof row.model.baseUrl === "string" ? row.model.baseUrl : "");
@@ -691,7 +691,7 @@ async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	if (choice === PICKER_RULES_ONLY) {
 		const next: AutomodeSettings = {
 			...current,
-			classifier: null,
+			decisionModel: null,
 			disclosureConsent: "none",
 			disclosureProvider: null,
 			disclosureModel: null,
@@ -708,12 +708,12 @@ async function classifierPicker(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	// Selecting a model IS the disclosure consent; there is no second dialog.
 	const endpoint = normalizeDisclosureEndpoint(typeof model.baseUrl === "string" ? model.baseUrl : "");
 	if (endpoint === null) {
-		ctx.ui.notify("Invalid classifier endpoint (missing or contains credentials/query/fragment). Selection unchanged; nothing saved.", "warning");
+		ctx.ui.notify("Invalid decision model endpoint (missing or contains credentials/query/fragment). Selection unchanged; nothing saved.", "warning");
 		return;
 	}
 	const next: AutomodeSettings = {
 		...current,
-		classifier: { provider: model.provider, model: model.id },
+		decisionModel: { provider: model.provider, model: model.id },
 		disclosureConsent: "approved",
 		disclosureProvider: model.provider,
 		disclosureModel: model.id,

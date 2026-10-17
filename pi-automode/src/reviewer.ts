@@ -1,7 +1,7 @@
 /**
- * Native classifier reviewer (shadow-only beta).
+ * Native decision model reviewer (shadow-only beta).
  *
- * Talks to a classifier-typed model exclusively through Pi's own model
+ * Talks to a decision-model-typed model (Pi's `classifier` model type) exclusively through Pi's own model
  * registry: `findOfType("classifier", provider, id)`,
  * `getAvailableOfType("classifier", provider)`, and
  * `classify(model, { state, questions }, { signal })`. Pi owns transport,
@@ -10,7 +10,7 @@
  *
  * SHADOW ONLY: a ReviewReceipt is evidence for logs and future calibration.
  * No receipt — at any status, label, or confidence — authorizes an action,
- * and a classifier result can never clear an unresolved message-rule block.
+ * and a decision model result can never clear an unresolved message-rule block.
  * The gate treats receipts as shadow records only.
  *
  * Consent: a request is sent only when settings bind an approved disclosure
@@ -25,7 +25,7 @@
  * uncooperative; caller aborts are linked and late results are ignored.
  * Concurrency is capped (default 4 in-flight, 32 pending): a slot lease is
  * held until the underlying provider call actually settles, so timed-out or
- * cancelled reviews with an uncooperative classifier still count against
+ * cancelled reviews with an uncooperative decision model still count against
  * the real concurrency ceiling. The session request budget comes from
  * settings.reviewMaxRequests and is debited atomically at the actual
  * dispatch point (after availability and queue wait), together with a
@@ -33,40 +33,40 @@
  * concurrent review can never slip a second dispatch past a budget of one,
  * and a review queued behind a 401 never dispatches. 3 consecutive
  * transport failures (or one authentication failure) open a session breaker.
- * `reset()` is the documented explicit operator "Retry classifier" action:
+ * `reset()` is the documented explicit operator "Retry decision model" action:
  * it starts a new generation, cancels queued waiters, and retains active
  * leases until their underlying calls settle; results or errors from an old
  * generation never touch the fresh budget, streak, latch, or breaker.
  *
- * Receipts capture the real typed classifier output. They never contain
+ * Receipts capture the real typed decision model output. They never contain
  * invented model reasoning; `reason` describes this adapter's own outcome.
  */
 import type {
-	ClassifierModelLike,
-	ClassifierRegistryLike,
-	ClassifierUsage,
+	DecisionModelLike,
+	DecisionModelRegistryLike,
+	DecisionModelUsage,
 	ReviewInput,
 	ReviewerEvidence,
 	ReviewerSettings,
 	ValidatedChoiceAnswer,
-} from "./classifier/contract.js";
-import { buildReviewInput, type EnvelopeResult } from "./classifier/envelope.js";
-import { sanitizeReason, validateAnswers, validateIdentity, validateUsage } from "./classifier/validate.js";
+} from "./decision-model/contract.js";
+import { buildReviewInput, type EnvelopeResult } from "./decision-model/envelope.js";
+import { sanitizeReason, validateAnswers, validateIdentity, validateUsage } from "./decision-model/validate.js";
 
 export type {
-	ClassifierModelLike,
-	ClassifierRegistryLike,
-	ClassifierResultLike,
-	ClassifierUsage,
+	DecisionModelLike,
+	DecisionModelRegistryLike,
+	DecisionModelResultLike,
+	DecisionModelUsage,
 	ReviewInput,
 	ReviewerAction,
 	ReviewerEvidence,
 	ReviewerSettings,
 	Rule,
 	ValidatedChoiceAnswer,
-} from "./classifier/contract.js";
-export { ALLOW_QUESTION_ID, BLOCK_QUESTION_ID, QUESTION_VERSION } from "./classifier/questions.js";
-export { ENVELOPE_VERSION } from "./classifier/envelope.js";
+} from "./decision-model/contract.js";
+export { ALLOW_QUESTION_ID, BLOCK_QUESTION_ID, QUESTION_VERSION } from "./decision-model/questions.js";
+export { ENVELOPE_VERSION } from "./decision-model/envelope.js";
 
 export type ReviewStatus =
 	| "completed"
@@ -83,18 +83,18 @@ export type ReviewStatus =
 export interface ReviewReceipt {
 	readonly shadow: true;
 	readonly status: ReviewStatus;
-	/** `native-classifier:<provider>/<model>` when a classifier is selected. */
+	/** `native-decision-model:<provider>/<model>` when a decision model is selected. */
 	readonly source: string;
 	/** This adapter's own outcome description — never model "reasoning". */
 	readonly reason?: string;
 	/** Selected identity and the canonical credential-free endpoint used. */
-	readonly classifier?: { provider: string; model: string; endpoint: string };
+	readonly decisionModel?: { provider: string; model: string; endpoint: string };
 	/** The exact bounded input sent, when a request was attempted. */
 	readonly input?: ReviewInput;
 	/** The validated typed answers, only when they passed full validation. */
 	readonly output?: Record<string, ValidatedChoiceAnswer>;
 	/** Validated usage accounting; absent means unknown, never zero-cost. */
-	readonly usage?: ClassifierUsage;
+	readonly usage?: DecisionModelUsage;
 	readonly durationMs: number;
 }
 
@@ -127,7 +127,7 @@ class ResetError extends Error {
 	override readonly name = "ResetError";
 }
 
-/** Authentication/authorization failure: disables the classifier at once. */
+/** Authentication/authorization failure: disables the decision model at once. */
 const AUTH_ERROR = /\b(401|403)\b|unauthorized|forbidden|no api key|invalid (api )?key/i;
 
 /**
@@ -248,13 +248,13 @@ export class NativeReviewer {
 	}
 
 	/**
-	 * Explicit operator "Retry classifier" action: starts a new generation —
+	 * Explicit operator "Retry decision model" action: starts a new generation —
 	 * clears the breaker, the failure streak, the availability/auth latch, and
 	 * the session request counter, and cancels all queued waiters of the old
 	 * generation. Active leases are retained until their underlying provider
 	 * calls actually settle, and late results/errors from an old generation
 	 * never mutate the fresh budget, streak, latch, or breaker. Call only
-	 * after the operator has re-checked the classifier selection, endpoint,
+	 * after the operator has re-checked the decision model selection, endpoint,
 	 * and credentials. It never changes consent.
 	 */
 	reset(): void {
@@ -349,7 +349,7 @@ export class NativeReviewer {
 	async review(
 		evidence: ReviewerEvidence,
 		settings: ReviewerSettings,
-		registry: ClassifierRegistryLike,
+		registry: DecisionModelRegistryLike,
 		signal?: AbortSignal,
 	): Promise<ReviewReceipt> {
 		const startedAt = this.#now();
@@ -358,17 +358,17 @@ export class NativeReviewer {
 			fields: {
 				reason?: string;
 				source?: string;
-				classifier?: ReviewReceipt["classifier"];
+				decisionModel?: ReviewReceipt["decisionModel"];
 				input?: ReviewInput;
 				output?: Record<string, ValidatedChoiceAnswer>;
-				usage?: ClassifierUsage;
+				usage?: DecisionModelUsage;
 			} = {},
 		): ReviewReceipt => ({
 			shadow: true,
 			status,
-			source: fields.source ?? "native-classifier:none",
+			source: fields.source ?? "native-decision-model:none",
 			...(fields.reason !== undefined ? { reason: fields.reason } : {}),
-			...(fields.classifier !== undefined ? { classifier: fields.classifier } : {}),
+			...(fields.decisionModel !== undefined ? { decisionModel: fields.decisionModel } : {}),
 			...(fields.input !== undefined ? { input: fields.input } : {}),
 			...(fields.output !== undefined ? { output: fields.output } : {}),
 			...(fields.usage !== undefined ? { usage: fields.usage } : {}),
@@ -378,9 +378,9 @@ export class NativeReviewer {
 		if (signal?.aborted) return done("aborted", { reason: "aborted before review started" });
 
 		// --- Consent and selection (local checks, no I/O) ---
-		const selection = settings.classifier;
-		if (!selection) return done("skipped", { reason: "no classifier selected" });
-		const source = `native-classifier:${selection.provider}/${selection.model}`;
+		const selection = settings.decisionModel;
+		if (!selection) return done("skipped", { reason: "no decision model selected" });
+		const source = `native-decision-model:${selection.provider}/${selection.model}`;
 		if (settings.disclosureConsent !== "approved") {
 			return done("skipped", { source, reason: "disclosure consent is not approved; review stays local" });
 		}
@@ -419,7 +419,7 @@ export class NativeReviewer {
 		if (boundProvider !== selection.provider || boundModel !== selection.model) {
 			return done("skipped", {
 				source,
-				reason: "selected classifier differs from the consented provider/model binding; review stays local",
+				reason: "selected decision model differs from the consented provider/model binding; review stays local",
 			});
 		}
 		// evidence.workspace is the canonical realpath supplied by the evidence worker.
@@ -432,12 +432,12 @@ export class NativeReviewer {
 
 		// --- Session bounds (local fast-path; re-checked atomically at dispatch) ---
 		if (this.#breakerOpen) {
-			return done("unavailable", { source, reason: "classifier breaker is open; operator reset() is required" });
+			return done("unavailable", { source, reason: "decision model breaker is open; operator reset() is required" });
 		}
 		if (this.#availabilityDisabled) {
 			return done("unavailable", {
 				source,
-				reason: "classifier availability/credentials failed; operator reset() is required after re-checks",
+				reason: "decision model availability/credentials failed; operator reset() is required after re-checks",
 			});
 		}
 		const maxRequests = sanePositiveInt(settings.reviewMaxRequests, DEFAULT_MAX_REQUESTS);
@@ -463,8 +463,8 @@ export class NativeReviewer {
 		let dispatched = false;
 
 		try {
-			// --- Resolve the selected classifier through the native registry only ---
-			let model: ClassifierModelLike | undefined;
+			// --- Resolve the selected decision model through the native registry only ---
+			let model: DecisionModelLike | undefined;
 			try {
 				model = registry.findOfType("classifier", selection.provider, selection.model);
 			} catch (error) {
@@ -475,7 +475,7 @@ export class NativeReviewer {
 				});
 			}
 			if (!model) {
-				return done("unavailable", { source, reason: "selected classifier is not in Pi's model registry" });
+				return done("unavailable", { source, reason: "selected decision model is not in Pi's model registry" });
 			}
 			if (model.provider !== selection.provider || model.id !== selection.model) {
 				return done("unavailable", { source, reason: "registry returned a different model than selected" });
@@ -487,17 +487,17 @@ export class NativeReviewer {
 					reason: "selected endpoint cannot be bound to consent (unparseable or credential-bearing); review stays local",
 				});
 			}
-			const classifier = { provider: model.provider, model: model.id, endpoint };
+			const decisionModel = { provider: model.provider, model: model.id, endpoint };
 			if (endpoint !== boundEndpoint) {
 				return done("skipped", {
 					source,
-					classifier,
+					decisionModel,
 					reason: "endpoint differs from the consented binding; review stays local",
 				});
 			}
 
 			// --- Availability (credentials) under the same outer deadline ---
-			let available: readonly ClassifierModelLike[];
+			let available: readonly DecisionModelLike[];
 			try {
 				available = await raceWithSignal(
 					Promise.resolve(registry.getAvailableOfType("classifier", selection.provider, { signal: controller.signal })),
@@ -508,7 +508,7 @@ export class NativeReviewer {
 				this.#latchUnavailable(generation);
 				return done("unavailable", {
 					source,
-					classifier,
+					decisionModel,
 					reason: `availability check failed: ${sanitizeReason(error instanceof Error ? error.message : String(error))}`,
 				});
 			}
@@ -516,8 +516,8 @@ export class NativeReviewer {
 				this.#latchUnavailable(generation);
 				return done("unavailable", {
 					source,
-					classifier,
-					reason: "no working credentials for the selected classifier; availability failed",
+					decisionModel,
+					reason: "no working credentials for the selected decision model; availability failed",
 				});
 			}
 
@@ -527,10 +527,10 @@ export class NativeReviewer {
 				release = await this.#acquire(controller.signal);
 			} catch (error) {
 				if (error instanceof OverloadedError) {
-					return done("unavailable", { source, classifier, reason: "review queue is full; unresolved work asks locally" });
+					return done("unavailable", { source, decisionModel, reason: "review queue is full; unresolved work asks locally" });
 				}
 				if (error instanceof ResetError) {
-					return done("aborted", { source, classifier, reason: "operator reset cancelled the queued review" });
+					return done("aborted", { source, decisionModel, reason: "operator reset cancelled the queued review" });
 				}
 				throw error;
 			}
@@ -550,25 +550,25 @@ export class NativeReviewer {
 			// must never debit or dispatch against the fresh generation.
 			if (generation !== this.#generation) {
 				release();
-				return done("aborted", { source, classifier, reason: "operator reset superseded this review before dispatch" });
+				return done("aborted", { source, decisionModel, reason: "operator reset superseded this review before dispatch" });
 			}
 			if (this.#breakerOpen) {
 				release();
-				return done("unavailable", { source, classifier, reason: "classifier breaker is open; operator reset() is required" });
+				return done("unavailable", { source, decisionModel, reason: "decision model breaker is open; operator reset() is required" });
 			}
 			if (this.#availabilityDisabled) {
 				release();
 				return done("unavailable", {
 					source,
-					classifier,
-					reason: "classifier availability/credentials failed; operator reset() is required after re-checks",
+					decisionModel,
+					reason: "decision model availability/credentials failed; operator reset() is required after re-checks",
 				});
 			}
 			if (this.#requestsUsed >= maxRequests) {
 				release();
 				return done("unavailable", {
 					source,
-					classifier,
+					decisionModel,
 					reason: `session semantic request budget exhausted (${maxRequests}); Rules mode continues locally`,
 				});
 			}
@@ -584,7 +584,7 @@ export class NativeReviewer {
 			// Late results are ignored: observe rejections so nothing is
 			// unhandled. The lease tracks the REAL underlying work — the slot
 			// is released only when the provider call actually settles, so an
-			// uncooperative classifier keeps counting against the concurrency
+			// uncooperative decision model keeps counting against the concurrency
 			// ceiling even after this review timed out or was cancelled.
 			const settled = call.then(
 				() => undefined,
@@ -597,31 +597,31 @@ export class NativeReviewer {
 			const identityError = validateIdentity(result, model);
 			if (identityError) {
 				this.#noteFailure(generation);
-				return done("error", { source, classifier, input: built.input, reason: identityError });
+				return done("error", { source, decisionModel, input: built.input, reason: identityError });
 			}
 
 			if (result.stopReason === "aborted") {
-				if (signal?.aborted) return done("aborted", { source, classifier, input: built.input, reason: "aborted by caller" });
+				if (signal?.aborted) return done("aborted", { source, decisionModel, input: built.input, reason: "aborted by caller" });
 				if (controller.signal.aborted) {
 					this.#noteFailure(generation);
-					return done("timeout", { source, classifier, input: built.input, reason: "review deadline exceeded" });
+					return done("timeout", { source, decisionModel, input: built.input, reason: "review deadline exceeded" });
 				}
 				this.#noteFailure(generation);
-				return done("error", { source, classifier, input: built.input, reason: "classifier reported aborted without cancellation" });
+				return done("error", { source, decisionModel, input: built.input, reason: "decision model reported aborted without cancellation" });
 			}
 			if (result.stopReason !== "stop") {
-				const message = sanitizeReason(result.errorMessage) || `classifier stopReason ${sanitizeReason(result.stopReason)}`;
+				const message = sanitizeReason(result.errorMessage) || `decision model stopReason ${sanitizeReason(result.stopReason)}`;
 				if (result.stopReason === "error" && AUTH_ERROR.test(message)) {
 					this.#openBreakerForAuth(generation);
 					return done("error", {
 						source,
-						classifier,
+						decisionModel,
 						input: built.input,
-						reason: `classifier authentication failed, breaker open: ${message}`,
+						reason: `decision model authentication failed, breaker open: ${message}`,
 					});
 				}
 				this.#noteFailure(generation);
-				return done("error", { source, classifier, input: built.input, reason: `classifier error: ${message}` });
+				return done("error", { source, decisionModel, input: built.input, reason: `decision model error: ${message}` });
 			}
 
 			// --- Exact typed-output validation; malformed is rejected, not clamped.
@@ -633,19 +633,19 @@ export class NativeReviewer {
 				this.#noteFailure(generation);
 				return done("error", {
 					source,
-					classifier,
+					decisionModel,
 					input: built.input,
-					reason: `malformed classifier output: ${validation.reason}`,
+					reason: `malformed decision model output: ${validation.reason}`,
 				});
 			}
 
 			this.#noteSuccess(generation);
 			const usage = validateUsage(result.usage);
 			// The lease is released by the settle observer above, not by this
-			// return: an uncooperative classifier keeps its slot until settle.
+			// return: an uncooperative decision model keeps its slot until settle.
 			return done("completed", {
 				source,
-				classifier,
+				decisionModel,
 				input: built.input,
 				output: validation.answers,
 				...(usage !== undefined ? { usage } : {}),

@@ -1,14 +1,14 @@
 /**
- * Offline tests for the native classifier reviewer. All registry interaction
+ * Offline tests for the native decision model reviewer. All registry interaction
  * is stubbed structurally; no network, no credentials, no paid calls.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-	type ClassifierModelLike,
-	type ClassifierRegistryLike,
-	type ClassifierResultLike,
+	type DecisionModelLike,
+	type DecisionModelRegistryLike,
+	type DecisionModelResultLike,
 	NativeReviewer,
 	normalizeEndpoint,
 	type ReviewInput,
@@ -24,9 +24,9 @@ function fixture<T>(relative: string): T {
 
 const settingsFixture = (name: string) => fixture<ReviewerSettings>(`settings/${name}.json`);
 const evidenceFixture = (name: string) => fixture<ReviewerEvidence>(`evidence/${name}.json`);
-const resultFixture = (name: string) => fixture<ClassifierResultLike>(`results/${name}.json`);
+const resultFixture = (name: string) => fixture<DecisionModelResultLike>(`results/${name}.json`);
 
-const MODEL: ClassifierModelLike = {
+const MODEL: DecisionModelLike = {
 	provider: "typesafe",
 	id: "jev-1.13.0",
 	api: "typesafe-system-one",
@@ -37,15 +37,15 @@ const MODEL: ClassifierModelLike = {
 };
 
 type ClassifyImpl = (
-	model: ClassifierModelLike,
+	model: DecisionModelLike,
 	context: ReviewInput,
 	options?: { signal?: AbortSignal },
-) => Promise<ClassifierResultLike>;
+) => Promise<DecisionModelResultLike>;
 
 /** Structural stub of Pi's registry; structurally compatible with ModelRegistry. */
-class StubRegistry implements ClassifierRegistryLike {
-	model: ClassifierModelLike | undefined = MODEL;
-	available: ClassifierModelLike[] = [MODEL];
+class StubRegistry implements DecisionModelRegistryLike {
+	model: DecisionModelLike | undefined = MODEL;
+	available: DecisionModelLike[] = [MODEL];
 	classifyImpl: ClassifyImpl = async () => resultFixture("valid");
 	findCalls = 0;
 	availabilityCalls = 0;
@@ -54,7 +54,7 @@ class StubRegistry implements ClassifierRegistryLike {
 	maxObservedInClassify = 0;
 	#insideClassify = 0;
 
-	findOfType(type: "classifier", provider: string, modelId: string): ClassifierModelLike | undefined {
+	findOfType(type: "classifier", provider: string, modelId: string): DecisionModelLike | undefined {
 		assert.equal(type, "classifier");
 		this.findCalls += 1;
 		return this.model && this.model.provider === provider && this.model.id === modelId ? this.model : undefined;
@@ -64,17 +64,17 @@ class StubRegistry implements ClassifierRegistryLike {
 		type: "classifier",
 		provider?: string,
 		_options?: { signal?: AbortSignal },
-	): Promise<readonly ClassifierModelLike[]> {
+	): Promise<readonly DecisionModelLike[]> {
 		assert.equal(type, "classifier");
 		this.availabilityCalls += 1;
 		return this.available.filter((entry) => !provider || entry.provider === provider);
 	}
 
 	async classify(
-		model: ClassifierModelLike,
+		model: DecisionModelLike,
 		context: ReviewInput,
 		options?: { signal?: AbortSignal },
-	): Promise<ClassifierResultLike> {
+	): Promise<DecisionModelResultLike> {
 		this.classifyCalls += 1;
 		this.contexts.push(context);
 		this.#insideClassify += 1;
@@ -130,11 +130,11 @@ test("declined consent: skipped locally", async () => {
 	assert.equal(registry.classifyCalls, 0);
 });
 
-test("no classifier selected: skipped", async () => {
+test("no decision model selected: skipped", async () => {
 	const registry = new StubRegistry();
 	const receipt = await review(new NativeReviewer(), registry, settingsFixture("unselected"));
 	assert.equal(receipt.status, "skipped");
-	assert.match(receipt.reason ?? "", /no classifier selected/i);
+	assert.match(receipt.reason ?? "", /no decision model selected/i);
 	assert.equal(registry.findCalls, 0);
 });
 
@@ -239,7 +239,7 @@ test("no key: availability empty, unavailable and latched until reset()", async 
 	assert.equal(registry.availabilityCalls, 2);
 });
 
-test("classifier absent from registry: unavailable", async () => {
+test("decision model absent from registry: unavailable", async () => {
 	const registry = new StubRegistry();
 	registry.model = undefined;
 	const receipt = await review(new NativeReviewer(), registry);
@@ -256,8 +256,8 @@ test("completed review captures validated typed output, usage, identity, endpoin
 	const receipt = await review(reviewer, registry);
 	assert.equal(receipt.status, "completed");
 	assert.equal(receipt.shadow, true);
-	assert.equal(receipt.source, "native-classifier:typesafe/jev-1.13.0");
-	assert.deepEqual(receipt.classifier, {
+	assert.equal(receipt.source, "native-decision-model:typesafe/jev-1.13.0");
+	assert.deepEqual(receipt.decisionModel, {
 		provider: "typesafe",
 		model: "jev-1.13.0",
 		endpoint: "https://api.typesafe.ai/v1",
@@ -444,7 +444,7 @@ for (const name of [
 		registry.classifyImpl = async () => resultFixture(name);
 		const receipt = await review(new NativeReviewer(), registry);
 		assert.equal(receipt.status, "error");
-		assert.match(receipt.reason ?? "", /malformed classifier output/i);
+		assert.match(receipt.reason ?? "", /malformed decision model output/i);
 		assert.equal(receipt.output, undefined);
 		assert.equal(receipt.usage, undefined);
 	});
@@ -536,7 +536,7 @@ test("uncooperative classify that rejects becomes an error receipt", async () =>
 test("hanging classify hits the outer deadline; late result is ignored", async () => {
 	const reviewer = new NativeReviewer({ breakerThreshold: 2 });
 	const registry = new StubRegistry();
-	const late = deferred<ClassifierResultLike>();
+	const late = deferred<DecisionModelResultLike>();
 	registry.classifyImpl = () => late.promise;
 	const settings = { ...approved(), reviewTimeoutMs: 50 };
 	const started = Date.now();
@@ -621,7 +621,7 @@ test("caller abort is linked into classify and maps to aborted, not failure", as
 	const registry = new StubRegistry();
 	let observedAbort = false;
 	registry.classifyImpl = (_model, _context, options) =>
-		new Promise<ClassifierResultLike>((_resolve, reject) => {
+		new Promise<DecisionModelResultLike>((_resolve, reject) => {
 			options?.signal?.addEventListener("abort", () => {
 				observedAbort = true;
 				reject(options.signal?.reason);
@@ -797,7 +797,7 @@ test("state budget is enforced in UTF-8 bytes, not UTF-16 code units", async () 
 	assert.equal(ok.status, "completed");
 });
 
-test("no message rules means no classifier request", async () => {
+test("no message rules means no decision model request", async () => {
 	const registry = new StubRegistry();
 	const settings = { ...approved(), allowlist: [], blocklist: [{ type: "command" as const, text: "git push --force" }] };
 	const receipt = await review(new NativeReviewer(), registry, settings);
@@ -839,7 +839,7 @@ test("multilingual rules are transmitted byte-exact as written", async () => {
 test("concurrent reviews cannot slip a second dispatch past a budget of one", async () => {
 	const reviewer = new NativeReviewer();
 	const registry = new StubRegistry();
-	const availability = deferred<readonly ClassifierModelLike[]>();
+	const availability = deferred<readonly DecisionModelLike[]>();
 	// Both reviews pass the local fast-path budget check (0 < 1), then wait on
 	// availability. The budget must still be enforced at the dispatch point.
 	registry.getAvailableOfType = () => availability.promise;
@@ -857,7 +857,7 @@ test("concurrent reviews cannot slip a second dispatch past a budget of one", as
 test("a review queued behind a 401 never dispatches once the breaker is open", async () => {
 	const reviewer = new NativeReviewer({ maxConcurrent: 1 });
 	const registry = new StubRegistry();
-	const first401 = deferred<ClassifierResultLike>();
+	const first401 = deferred<DecisionModelResultLike>();
 	registry.classifyImpl = () => first401.promise;
 	const firstPromise = review(reviewer, registry);
 	await tick();
@@ -882,7 +882,7 @@ test("a review queued behind a 401 never dispatches once the breaker is open", a
 test("reset() cancels queued waiters, retains active leases, starts a fresh generation", async () => {
 	const reviewer = new NativeReviewer({ maxConcurrent: 1 });
 	const registry = new StubRegistry();
-	const hung = deferred<ClassifierResultLike>();
+	const hung = deferred<DecisionModelResultLike>();
 	registry.classifyImpl = () => hung.promise;
 	const firstPromise = review(reviewer, registry);
 	await tick();
@@ -914,7 +914,7 @@ test("reset() cancels queued waiters, retains active leases, starts a fresh gene
 test("reset() during the availability wait never dispatches afterwards", async () => {
 	const reviewer = new NativeReviewer();
 	const registry = new StubRegistry();
-	const availability = deferred<readonly ClassifierModelLike[]>();
+	const availability = deferred<readonly DecisionModelLike[]>();
 	const originalAvailability = registry.getAvailableOfType.bind(registry);
 	registry.getAvailableOfType = (...args) => {
 		originalAvailability(...args);
@@ -937,7 +937,7 @@ test("reset() during the availability wait never dispatches afterwards", async (
 test("late old-generation failures cannot reopen the fresh breaker after reset()", async () => {
 	const reviewer = new NativeReviewer({ breakerThreshold: 1 });
 	const registry = new StubRegistry();
-	const late = deferred<ClassifierResultLike>();
+	const late = deferred<DecisionModelResultLike>();
 	registry.classifyImpl = () => late.promise;
 	const pending = review(reviewer, registry);
 	await tick();
@@ -965,7 +965,7 @@ test("late old-generation failures cannot reopen the fresh breaker after reset()
 test("abort during the availability wait never dispatches after revoke", async () => {
 	const reviewer = new NativeReviewer();
 	const registry = new StubRegistry();
-	const availability = deferred<readonly ClassifierModelLike[]>();
+	const availability = deferred<readonly DecisionModelLike[]>();
 	registry.getAvailableOfType = () => availability.promise;
 	const controller = new AbortController();
 	const pending = review(reviewer, registry, approved(), basic(), controller.signal);
@@ -982,7 +982,7 @@ test("abort during the availability wait never dispatches after revoke", async (
 test("abort while queued cancels the waiter; classify never runs", async () => {
 	const reviewer = new NativeReviewer({ maxConcurrent: 1 });
 	const registry = new StubRegistry();
-	const hung = deferred<ClassifierResultLike>();
+	const hung = deferred<DecisionModelResultLike>();
 	registry.classifyImpl = () => hung.promise;
 	const firstPromise = review(reviewer, registry);
 	await tick();

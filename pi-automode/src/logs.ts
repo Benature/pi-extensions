@@ -37,7 +37,7 @@ function isRule(value: unknown): value is Rule {
 
 const ENTRY_KEYS = new Set([
   "id", "time", "action", "outcome", "source", "reason", "matchedRule",
-  "classifier", "input", "output",
+  "decisionModel", "input", "output",
 ]);
 
 /** Strict structural validation; corrupt entries are reported, never repaired. */
