@@ -54,7 +54,7 @@ function logoRow(mark: string, text: string, width: number): string {
 
 export type HeaderIdentity = { version: string; model?: string; thinking?: string };
 
-/** Official mark + product stack. Ready is a session chip, never greeting copy. */
+/** Official mark + product stack. Ready is a session chip, never greeting copy. No hairline without a notice. */
 export function renderSlateHeader(input: {
   width: number; path: string; identity?: HeaderIdentity; notice?: string; ready?: boolean;
   logo?: boolean; theme: Theme;
@@ -85,7 +85,6 @@ export function renderSlateHeader(input: {
   }
   if (input.notice) rows.push(...renderUpdateHairlines(input.notice, width,
     text => input.theme.fg("border", text), text => input.theme.fg("accent", text)));
-  else rows.push(input.theme.fg("border", "─".repeat(width)));
   if (input.ready) rows.push(truncateToWidth(input.theme.fg("accent", "✓ New session started"), width, "…"));
   return rows;
 }
