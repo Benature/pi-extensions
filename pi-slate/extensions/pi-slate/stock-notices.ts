@@ -54,8 +54,8 @@ const FILTERED = Symbol("pi-slate.new-session-notice-filter");
 type FilteredAdd = ChatContainer["addChild"] & { [FILTERED]?: true; dispose?: () => void };
 
 /**
- * Keeps the stock chat copy of "✓ New session started" out of the transcript so
- * the chip lives only in the header. Also drops the blank spacer core adds right
+ * Keeps the stock chat copy of "✓ New session started" out of the transcript.
+ * Also drops the blank spacer core adds right
  * before the notice. The wrap binds the addChild present at install time, so it
  * composes with MessageWindow in either order. If a later wrap replaces addChild,
  * calling this again re-wraps the current function. dispose() stops filtering

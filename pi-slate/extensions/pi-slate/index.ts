@@ -463,21 +463,11 @@ export default function piSlate(pi: ExtensionAPI): void {
         };
         attachFilter(findChatContainer(layoutRootOf(tui)));
         if (!noticeFilterActive) queueMicrotask(() => attachFilter(findChatContainer(layoutRootOf(tui))));
-        return new SlateHeader(theme, () => currentContext, columnWidth, () => updates.notice, () => {
-          const idle = typeof currentContext?.isIdle !== "function" || currentContext.isIdle();
-          const empty = branchFacts
-            ? branchFacts.counts.messages === 0 && branchFacts.usage.total === 0
-            : (() => {
-              try { return sidebarMessageCounts(currentContext?.sessionManager.getBranch() ?? []).messages === 0; }
-              catch { return false; }
-            })();
-          return {
-            version: VERSION,
-            model: currentContext ? modelStatusLabel(currentContext.model, config.modelDisplay) : "",
-            thinking: currentContext?.thinkingLevel ?? "",
-            ready: noticeFilterActive && empty && idle,
-          };
-        });
+        return new SlateHeader(theme, () => currentContext, columnWidth, () => updates.notice, () => ({
+          version: VERSION,
+          model: currentContext ? modelStatusLabel(currentContext.model, config.modelDisplay) : "",
+          thinking: currentContext?.thinkingLevel ?? "",
+        }));
       });
     }
     if (owns("footer")) ctx.ui.setFooter(() => new SlateFooter());
