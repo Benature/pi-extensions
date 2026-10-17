@@ -64,7 +64,7 @@ Slate renders cleanly into your terminal and stays customizable without adding n
 
 ### Quiet Workbench
 
-The selected header restores the stock Pi mark plus version, model, path, and a session chip on an empty idle conversation. Composer keeps project/branch and model. Context, cost, Cache, Uncached, and Rate live on the rail. Native transcript, thinking, keyboard, paste and selection behavior stay intact.
+The selected header restores the stock Pi mark plus version, model, and path. Composer keeps project/branch and model. Context, cost, Cached, Uncached, and Rate live on the rail. Native transcript, thinking, keyboard, paste and selection behavior stay intact.
 
 For the full workbench, select `/slate surfaces full`, turn `/slate focused off`, then `/reload`. Select `/slate theme default` for Tokyo Night. Other surface combinations and existing preferences remain supported.
 
@@ -110,7 +110,7 @@ Previews are bounded: 256 KiB snapshots, 2,000 parsed rows, 16 collapsed / 400 e
 
 Slate uses Kitty Graphics Protocol to display rich media inside your terminal.
 
-> Usage: Caret-peek over image tokens to display. Open or copy from the image shelf, or double-click the image to open it. The peek leaves when the caret does. Task inspection never replaces the image. Pi-generated clipboard image paths are converted into `[image-N]` tokens.
+> Usage: Caret-peek over image tokens to display. `[image-N]` is a single object — the caret cannot enter it, and the whole token highlights. Open or copy from the image shelf, or double-click the image to open it. The peek leaves when the caret does. Task inspection never replaces the image. Pi-generated clipboard image paths are converted into `[image-N]` tokens.
 
 ![Chat with image tokens and the sidebar image preview](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-media.png)
 
@@ -119,10 +119,10 @@ Slate uses Kitty Graphics Protocol to display rich media inside your terminal.
 The dashboard replaces the old Summary, Activity Preview, and Context dock. It keeps session facts visible without sending them to a model:
 
 - Session name, copyable session ID, host PID, model/thinking level and context meter.
-- **Occupancy merges tokens, cost and rate** (`188k / 500k · $0.71 · ~420/s`) beneath the context meter, followed by two usage rows: left lane **CACHED/UNCACHED** label-first, right lane value-first (`61.4k IN`, `876 OUT`). Cached is cache-read; uncached is inbound minus cache read/write. Growing totals are abbreviated, rather than squeezing neighboring numbers. Click a usage row or `/slate session` for full accounting, including cache write and hit share.
+- **Occupancy merges tokens, cost and rate** (`188k / 500k · $0.71 · ~420/s`) beneath the context meter, followed by two usage rows: left lane **Cached/Uncached** label-first, right lane value-first (`61.4k IN`, `876 OUT`). Cached is cache-read; uncached is inbound minus cache read/write. Growing totals are abbreviated, rather than squeezing neighboring numbers. Click a usage row or `/slate session` for full accounting, including cache write and hit share.
 - Runtime wall time, last-turn duration and turns/messages stay in session details.
 - Input includes uncached input plus both cache categories; reasoning is not counted again. Context occupancy is separate from cumulative usage. Unavailable metrics show `—`; estimated context is marked `~`.
-- Independently foldable **MCP servers**, **Skills** and **Prompts**, initially collapsed. Click their headings to expand; preferences persist in `sidebarSections` (`true` means expanded). Fold headings are concise: **MCP · 2 Enabled**, **Skills · 5 Loaded**, using dim counts at the normal terminal font size. MCP shows up to five rows; skills and prompts show three. Commands stay behind `/` and `/slate session commands`, not a rail list. Wheel-scroll resource lists or the middle region when necessary.
+- Independently foldable **MCP servers**, **Skills** and **Prompts**, initially collapsed. Click their headings to expand; preferences persist in `sidebarSections` (`true` means expanded). Fold headings are concise: **MCP · 2 Enabled**, **Skills · 5 Loaded**, using dim counts at the normal terminal font size. Config errors append **· 1 Error** in red on the MCP heading instead of dumping the error text. MCP shows up to five rows; skills and prompts show three. Commands stay behind `/` and `/slate session commands`, not a rail list. Wheel-scroll resource lists or the middle region when necessary.
 - MCP states describe **configuration, not live connectivity**. Global `mcp.json` overrides extension registrations; trusted project `.pi/mcp.json` overrides global entries. Untrusted project files are not read. Use Pi's `enabled: false` flag to disable a server; legacy `disabled` keys are ignored by the native host. Validation follows the running host's native schema and exact-name file precedence; project partial overrides require a matching global server on hosts that support them. Rejected entries cannot replace a valid server. If the host adapter is unavailable, states show `—`. Credentials and transport arguments are never displayed.
 - Skills distinguish **available** from **observed loaded on the active branch**. Successful `SKILL.md` reads and explicit skill invocations are evidence; discovery alone is not. Branch changes may remove that evidence; an observed read does not guarantee the full instructions remain in context after compaction.
 - Nonempty background tasks stay above a separate image shelf; empty task/image shelves disappear. In-flight agent shell/terminal calls are observable; detached jobs appear only when their owning extension reports them. Native `pi-subagents` publishes display-only snapshots. Task details are read-only: no process scanning, guessed PIDs or run-control authority.

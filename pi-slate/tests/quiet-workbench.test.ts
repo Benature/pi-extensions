@@ -62,7 +62,7 @@ test("growing usage and money keep a stable label lane and value edge with the r
       sidebar.setSession({ ...session, usage: { ...session.usage, input: value, output: value, cost: value } });
       const rows = sidebar.render(width).map(stripVTControlCharacters);
       const stats: string[] = [];
-      for (const label of ["CACHED", "UNCACHED"]) {
+      for (const label of ["Cached", "Uncached"]) {
         const line = rows.find(row => row.startsWith("│ " + label + " "))!;
         assert(line, label); assert.equal(visibleWidth(line), width);
         assert.equal(visibleWidth(line.trimEnd()), width, "right edge must not move");

@@ -9,6 +9,43 @@ const IMAGE_TOKEN_RE = /\[image[ -]\d+\]/g;
 
 export type Cursor = { line: number; col: number };
 
+export type ImageTokenRange = {
+  /** Column of the token's `[` on its line. */
+  start: number;
+  /** Column one past the token's `]`. */
+  end: number;
+  /** The token text, e.g. "[image-1]". */
+  token: string;
+};
+
+/**
+ * The token whose interior holds the caret (`start < col < end`) on the
+ * caret's line, or undefined. Boundary columns are legal caret positions and
+ * do not count as inside the token.
+ */
+export function imageTokenEnclosing(text: string, cursor: Cursor): ImageTokenRange | undefined {
+  const line = text.split("\n")[cursor.line];
+  if (line === undefined) return undefined;
+  for (const match of line.matchAll(IMAGE_TOKEN_RE)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (cursor.col > start && cursor.col < end) return { start, end, token: match[0] };
+  }
+  return undefined;
+}
+
+/**
+ * Snap an interior caret to the nearest token boundary (ties go to the token
+ * start). A caret that is not inside a token is returned unchanged.
+ */
+export function snapCursorOutOfToken(text: string, cursor: Cursor): Cursor {
+  const token = imageTokenEnclosing(text, cursor);
+  if (!token) return cursor;
+  const toStart = cursor.col - token.start;
+  const toEnd = token.end - cursor.col;
+  return { line: cursor.line, col: toStart <= toEnd ? token.start : token.end };
+}
+
 export type AtomicTokenDelete = {
   /** Full editor text with the token removed. */
   text: string;

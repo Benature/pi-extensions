@@ -43,7 +43,7 @@ function task(i: number): BackgroundTask {
 test("quiet session rail merges usage into context and hides empty shelves", () => {
   const { sidebar } = fixture();
   const lines = plain(sidebar.render(80));
-  for (const label of ["SESSION", "Sidebar redesign", "PID 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "61.4k IN", "876 OUT", "CACHED 48k", "UNCACHED 7.3k", "MCP · 6 Enabled", "Skills · 1 Loaded", "Prompts · 6"])
+  for (const label of ["SESSION", "Sidebar redesign", "PID 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "61.4k IN", "876 OUT", "Cached 48k", "Uncached 7.3k", "MCP · 6 Enabled", "Skills · 1 Loaded", "Prompts · 6"])
     assert(lines.some(line => line.includes(label)), label);
   for (const label of ["Stats", "Tokens · branch", "Commands ·", "Tasks", "Preview", "no selection", "/run-0", "prompt-0"])
     assert(!lines.some(line => line.includes(label)), label);
@@ -90,10 +90,10 @@ test("native blend header is 13 rows matching the slot constant, ending in the h
   assert.equal(hairline, 12, "hairline closes a 13-row header");
   assert(/^Context [█░]+ │ 16%$/.test(lines[6]!), "single context meter row");
   assert(lines[7]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
-  assert(lines[9]!.includes("61.4k IN") && lines[9]!.includes("CACHED 48k"));
-  assert(lines[9]!.indexOf("CACHED 48k") < lines[9]!.indexOf("61.4k IN"), "CACHED lanes left, IN right with value first");
-  assert(lines[10]!.includes("876 OUT") && lines[10]!.includes("UNCACHED 7.3k"));
-  assert(lines[10]!.indexOf("UNCACHED 7.3k") < lines[10]!.indexOf("876 OUT"), "UNCACHED lanes left, OUT right with value first");
+  assert(lines[9]!.includes("61.4k IN") && lines[9]!.includes("Cached 48k"));
+  assert(lines[9]!.indexOf("Cached 48k") < lines[9]!.indexOf("61.4k IN"), "Cached lanes left, IN right with value first");
+  assert(lines[10]!.includes("876 OUT") && lines[10]!.includes("Uncached 7.3k"));
+  assert(lines[10]!.indexOf("Uncached 7.3k") < lines[10]!.indexOf("876 OUT"), "Uncached lanes left, OUT right with value first");
 });
 
 test("context meter fills the rail with a shaded track and degrades gracefully when narrow", () => {
@@ -144,7 +144,7 @@ test("occupancy and stat rows keep the branch usage inspect action; nulls render
   sidebar.setSession({ ...session, estimated: true, usage: { input: null, output: null, total: null, cacheRead: null, cacheWrite: null, cost: null } });
   sidebar.handleMouse(mouse(row(sidebar, "~31.6k / 200k · — · ~82/s")));
   sidebar.handleMouse(mouse(row(sidebar, "— IN")));
-  sidebar.handleMouse(mouse(row(sidebar, "UNCACHED —")));
+  sidebar.handleMouse(mouse(row(sidebar, "Uncached —")));
   assert.deepEqual(inspected, ["Branch usage", "Branch usage", "Branch usage"]);
 });
 
@@ -335,8 +335,27 @@ test("unknown values and invalid MCP config remain explicit even when folded", (
   const lines = plain(sidebar.render(80));
   assert(lines.some(line => line.includes("—%")));
   assert.match(sidebar.sessionDetails(), /Cache read: —/);
-  assert(lines.some(line => line.includes("config error")));
+  assert(lines.some(line => line.includes("MCP · 6 Enabled · 1 Error")));
+  assert(!lines.some(line => line.includes("MCP config unreadable") || line.includes("config error")));
+  sidebar.setThemeProvider(() => ({ fg: (tone: string, text: string) => tone === "error" ? `\x1b[31m${text}\x1b[0m` : text, bold: (text: string) => text }) as Theme);
+  assert(sidebar.render(80).some(line => line.includes("\x1b[31m · 1 Error\x1b[0m")));
   assert(!lines.some(line => line.includes("$0.00")));
+});
+
+test("rejected MCP entries count as Errors without dumping the reason", () => {
+  const { sidebar } = fixture();
+  sidebar.setResources({
+    ...resources,
+    mcp: [
+      { name: "ok", enabled: true, source: "global" },
+      { name: "ok2", enabled: true, source: "global" },
+      { name: "bad", enabled: null, source: "project" },
+    ],
+    mcpError: "MCP configuration has rejected entries",
+  });
+  const lines = plain(sidebar.render(80));
+  assert(lines.some(line => line.includes("MCP · 2 Enabled · 1 Error")), "enabled count stays numeric next to the error count");
+  assert(!lines.some(line => line.includes("rejected entries") || line.includes("config error")));
 });
 
 test("reset discards old images, task rows and hit targets without changing fold preference", () => {

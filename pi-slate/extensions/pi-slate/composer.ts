@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import {
+  CURSOR_MARKER,
   truncateToWidth,
   visibleWidth,
   getKeybindings,
@@ -57,6 +58,62 @@ export function paintSelectedContent(line: string): string {
   const text = line.slice(firstText, lastTextEnd).replaceAll(RESET, `${RESET}${REVERSE_ON}`);
   const after = line.slice(lastTextEnd);
   return `${before}${REVERSE_ON}${text}${REVERSE_OFF}${after}`;
+}
+
+// Pi 1.3+ editor caret is an APC fake-cursor pair; older builds used reverse video.
+const FAKE_CURSOR_START = "\x1b_pi:fc\x07";
+const CARET_CELL = /(?:\x1b_pi:c\x07)?\x1b_pi:fc\x07([\s\S]*?)\x1b_pi:\/fc\x07|\x1b\[7m([\s\S]*?)\x1b\[(?:0|27)m/;
+const IMAGE_TOKEN_TAIL = /^image[ -]\d+\]/;
+const IMAGE_TOKEN_HEAD = /\[image[ -]\d+\]$/;
+
+type CaretCell = { start: number; end: number; cell: string; marker: string };
+
+function caretCell(line: string): CaretCell | undefined {
+  const match = CARET_CELL.exec(line);
+  if (!match) return undefined;
+  const cell = match[1] ?? match[2] ?? "";
+  const marker = match[0].startsWith(CURSOR_MARKER) ? CURSOR_MARKER : "";
+  return { start: match.index, end: match.index + match[0].length, cell, marker };
+}
+
+/**
+ * Highlight a whole `[image-N]` token when the caret treats it as the current
+ * object: caret at the token start (the editor's fake cursor sits on `[`) or
+ * at the token end (the token immediately precedes the fake cursor). The
+ * token is repainted as one reverse-video unit, matching the caret cell.
+ *
+ * Pure string transform over one rendered editor line (ANSI intact); lines
+ * without a caret or without an adjacent image token pass through unchanged.
+ */
+export function paintImageTokenAtCaret(line: string): string {
+  const caret = caretCell(line);
+  if (!caret) return line;
+  // Caret at the token start: the caret cell is "[" and the token tail follows.
+  if (caret.cell === "[") {
+    const tail = IMAGE_TOKEN_TAIL.exec(line.slice(caret.end));
+    if (tail) {
+      return `${line.slice(0, caret.start)}${caret.marker}${REVERSE_ON}[${tail[0]}${REVERSE_OFF}${line.slice(caret.end + tail[0].length)}`;
+    }
+  }
+  // Caret at the token end: the token immediately precedes the caret cell
+  // (the zero-width IME cursor marker may sit between them; keep it in place).
+  let before = line.slice(0, caret.start);
+  if (before.endsWith(CURSOR_MARKER)) before = before.slice(0, before.length - CURSOR_MARKER.length);
+  const head = IMAGE_TOKEN_HEAD.exec(before);
+  if (!head) return line;
+  const tokenStart = before.length - head[0].length;
+  return `${line.slice(0, tokenStart)}${REVERSE_ON}${head[0]}${REVERSE_OFF}${line.slice(tokenStart + head[0].length)}`;
+}
+
+/** Paint the caret's image token on the one rendered line that holds the caret. */
+export function paintImageTokenAtCaretLines(lines: string[]): string[] {
+  const index = lines.findIndex((line) => line.includes(FAKE_CURSOR_START) || line.includes(REVERSE_ON));
+  if (index === -1) return lines;
+  const painted = paintImageTokenAtCaret(lines[index]!);
+  if (painted === lines[index]) return lines;
+  const out = lines.slice();
+  out[index] = painted;
+  return out;
 }
 
 export const COMPOSER_SHELF_LINES = 4;
@@ -451,9 +508,12 @@ export class ComposerEditor extends CustomEditor {
     if (padding !== undefined && this.getPaddingX() !== padding) super.setPaddingX(padding);
     const paint = (text: string) => this.borderColor(text);
     const raw = super.render(width);
+    // The caret's image token reads as one object; select-all already inverts
+    // the whole prompt, so the per-token paint is skipped while that is on.
+    const tokenObject = this.selectionActive ? raw : paintImageTokenAtCaretLines(raw);
     const selected = this.selectionActive && !this.isShowingAutocomplete()
-      ? raw.map((line, index) => index === 0 || index === raw.length - 1 ? line : paintSelectedContent(line))
-      : raw;
+      ? tokenObject.map((line, index) => index === 0 || index === tokenObject.length - 1 ? line : paintSelectedContent(line))
+      : tokenObject;
     const lines = padComposerFrame(
       frameComposerLines(selected, {
         width,
