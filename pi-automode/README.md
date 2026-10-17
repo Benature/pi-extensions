@@ -132,9 +132,13 @@ security sandbox.
 
 - `<agent-dir>/automode.json`: saved on/off state, rules, decision model selection,
   decision model bindings, and limits. Usually `~/.pi/agent/automode.json`.
+  Migration: pre-0.2 files used a `classifier` key; rename it to `decisionModel`
+  or the file is rejected as an unknown-key config error.
 - `<agent-dir>/automode-logs.json`: bounded newline-delimited JSON decision log.
   It can include exact commands and arguments; treat it as sensitive.
-  View or clear it through `/automode logs`.
+  View or clear it through `/automode logs`. Pre-rename entries carrying the old
+  `classifier` field are treated as corrupt lines; clear the log if that noise
+  bothers you.
 
 ## Development
 

@@ -16,7 +16,7 @@ Observed TUI thinking adds elapsed seconds and available token rate to the compo
 
 Highlighted diffs use responsive split edits, unified writes, and character-level emphasis. They follow `/slate theme`. Native model-facing results are preserved; bounded write patches are stored in TUI result details for session restore.
 
-Header uses the stock Pi mark plus version, model, path, optional update hairline, and a session chip. Composer keeps project/branch and model. The rail shows session, context, a merged tokens/cost/rate occupancy line, in/out and cache/uncached pairs, folded MCP/Skills/Prompts, and live background shells. Commands stay behind / and /slate session commands. Empty task/image shelves disappear. Below 100 columns or 30 rows the rail hides without changing preferences; condensed context/cost returns to the composer. Pin/inspection and session/root ownership protections remain intact.
+Header uses the stock Pi mark plus version, model, session dir as /<name>, optional update hairline, and a session chip. Composer keeps project/branch and model. The rail shows session (PID uppercase), context, a merged tokens/cost/rate occupancy line, left-lane CACHED/UNCACHED and right-lane value-first IN/OUT rows, folded MCP/Skills/Prompts (Enabled/Loaded counts), and live background shells. Commands stay behind / and /slate session commands. Empty task/image shelves disappear. Below 100 columns or 30 rows the rail hides without changing preferences; condensed context/cost returns to the composer. Pin/inspection and session/root ownership protections remain intact.
 
 ## Documentation
 

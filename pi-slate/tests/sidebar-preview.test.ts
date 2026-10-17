@@ -169,7 +169,7 @@ test("foldable MCP and Skills sections persist independently and keep counts vis
   assert.deepEqual(saved, [{ mcp: true, skills: false, prompts: false }, { mcp: true, skills: true, prompts: false }]);
   sidebar.handleMouse(mouse(row(sidebar, "MCP")));
   assert(!plain(sidebar.render(40)).some(line => line.includes("server-0")));
-  assert(plain(sidebar.render(40)).some(line => line.includes("6 enabled")));
+  assert(plain(sidebar.render(40)).some(line => line.includes("6 Enabled")));
 });
 
 test("prompts section folds, scrolls, inspects and shows none when empty", () => {

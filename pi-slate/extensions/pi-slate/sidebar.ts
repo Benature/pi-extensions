@@ -326,7 +326,7 @@ export class Sidebar implements Component {
       const action = () => this.actions?.inspect?.(task.label, this.taskDetails(task));
       if (rows.length < height) rows.push({ text: this.paint(error ? "error" : task.state === "waiting" ? "warning" : "muted",
         this.pair(`${icon} ${sidebarText(task.label)}`, task.state, width)), list: "tasks", action });
-      if (rows.length < height) rows.push({ text: this.paint("dim", `${task.kind} · ${sidebarDuration(this.now() - task.startedAt)}${task.pid ? ` · pid ${task.pid}` : ""}`), list: "tasks", action });
+      if (rows.length < height) rows.push({ text: this.paint("dim", `${task.kind} · ${sidebarDuration(this.now() - task.startedAt)}${task.pid ? ` · PID ${task.pid}` : ""}`), list: "tasks", action });
     }
     while (rows.length < height) rows.push({ text: "" });
     return rows;
