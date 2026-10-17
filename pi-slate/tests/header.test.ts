@@ -17,7 +17,8 @@ test("header uses the stock Pi mark and the product stack, not a greeting", () =
   assert.equal(plain.length, 4);
   assert.match(plain[0]!, /Pi Agent v1\.0\.4/);
   assert.match(plain[1]!, /grok-4\.6 \(bedrock\) · medium/);
-  assert.match(plain[2]!, /\/Users\/operator\/GitHub\/pi-extensions/);
+  assert.match(plain[2]!, /pi-extensions/);
+  assert.doesNotMatch(plain[2]!, /\/Users/);
   assert.equal(plain[3], "─".repeat(72));
   assert.doesNotMatch(plain.join("\n"), /Ready when you are|slate \/ /);
   assert(plain[0]!.includes("▀"));
@@ -56,8 +57,8 @@ test("identity truncates safely and strips untrusted terminal controls", () => {
 
 test("logo helpers keep the official bitmap and skip Apple Terminal", () => {
   const [top, bottom] = piLogoLines(theme);
-  assert.equal(visibleWidth(top), 4);
-  assert.equal(visibleWidth(bottom), 4);
+  assert.equal(visibleWidth(top), 5);
+  assert.equal(visibleWidth(bottom), 5);
   assert.match(piWordmark(theme), /P.*i/);
   assert.equal(supportsPiLogo({ TERM_PROGRAM: "Apple_Terminal" }), false);
   assert.equal(supportsPiLogo({ TERM_PROGRAM: "iTerm.app" }), true);
