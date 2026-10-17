@@ -729,13 +729,16 @@ test("duplicate log summaries open their own record instead of the last matching
 test("halt reason is escaped and recovery is the first action", async () => {
 	const h = makeHarness({ enabled: true });
 	h.gate.state = "halted";
-	h.gate.haltReason = "bad\x1b[31mconfig";
+	h.gate.haltReason = "configuration error: bad\x1b[31mconfig";
+	h.settings.error = "bad\x1b[31mconfig";
 	const ctx = h.makeCtx(["Close"]);
 	await createCommandHandler(h.deps)("", ctx);
 	const title = ctx.calls[0]?.title ?? "";
 	assert.ok(!title.includes("\x1b"));
 	assert.match(title, /^Automode: Halted\n/);
-	assert.match(title, /Halted: bad\\e\[31mconfig/);
+	assert.match(title, /Halted: configuration error: bad\\e\[31mconfig/);
+	assert.equal(title.split("\n").length, 2, "state plus one halt reason; no repeated subtitle or config-error duplicate");
+	assert.ok(!/Config error:|Guarded actions/.test(title));
 	assert.equal(ctx.calls[0]?.options[0], "Re-verify configuration");
 });
 

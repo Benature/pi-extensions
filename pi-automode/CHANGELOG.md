@@ -9,6 +9,8 @@
   redundant On/Off subtitle is gone so the panel opens straight to its actions.
   This is a breaking rename with no legacy alias; earlier beta files need the
   `decisionModel` key.
+- Consolidate the halted/config-error panel display to the state line plus a
+  single reason; the repeated subtitle and duplicate config-error line are gone.
 - Apply `/automode on` and `/automode off` in a single step from Pi's
   interactive terminal; the toggle confirmation dialog is gone. The live TUI
   dispatch is the decision, so any extension able to dispatch a command in
