@@ -237,10 +237,10 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 				: paint(theme, "warning", "Automode: Off");
 		const lines: string[] = [];
 		if (halted) {
-			lines.push("Guarded actions are blocked until configuration is re-verified.");
 			lines.push(`Halted: ${escapeOneLine(deps.gate.haltReason ?? "configuration needs verification", 160)}`);
+		} else if (deps.settings.error) {
+			lines.push(`Config error: ${escapeOneLine(String(deps.settings.error), 160)}`);
 		}
-		if (deps.settings.error) lines.push(`Config error: ${escapeOneLine(String(deps.settings.error), 160)}`);
 		if (ambientShellCustomizations(deps.host()).length) lines.push("Shell customization detected: bash is blocked while on.");
 		if (ctx.mode !== "tui") lines.push("Changes and approvals require the interactive terminal.");
 		if (deps.approval.pendingCount) lines.push(`${deps.approval.pendingCount} awaiting approval`);
