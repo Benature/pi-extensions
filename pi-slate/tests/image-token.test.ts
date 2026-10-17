@@ -53,6 +53,11 @@ test("caret on the token's [ repaints the whole token as one unit", () => {
   assert.equal(paintImageTokenAtCaret(line), "    see \x1b[7m[image-1]\x1b[27m ok   ");
 });
 
+test("Pi 1.3 fake-cursor caret on [ repaints the whole token as one unit", () => {
+  const line = "see \x1b_pi:fc\x07[\x1b_pi:/fc\x07image-1] ok";
+  assert.equal(paintImageTokenAtCaret(line), "see \x1b[7m[image-1]\x1b[27m ok");
+});
+
 test("caret just past the token end repaints the whole token", () => {
   const line = "    see [image-1]\x1b[7m \x1b[0m";
   assert.equal(paintImageTokenAtCaret(line), "    see \x1b[7m[image-1]\x1b[27m\x1b[7m \x1b[0m");
@@ -230,11 +235,11 @@ test("real editor: caret at the token start paints the whole token in the render
   editor.handleInput("\x01"); // line start
   for (let i = 0; i < 4; i += 1) editor.handleInput("\x1b[C"); // token start (col 4)
   const raw = editor.render(60);
-  const caretLine = raw.find((line) => line.includes("\x1b[7m"));
-  assert.ok(caretLine?.includes("\x1b[7m[\x1b[0m"), "editor paints only the [ cell");
+  const caretLine = raw.find((line) => line.includes("\x1b_pi:fc\x07") || line.includes("\x1b[7m"));
+  assert.ok(caretLine, "editor paints a caret cell");
   const painted = paintImageTokenAtCaretLines(raw);
-  const paintedLine = painted.find((line) => line.includes("\x1b[7m"));
-  assert.ok(paintedLine?.includes("\x1b[7m[image-1]\x1b[27m"), "whole token highlighted as one unit");
+  const paintedLine = painted.find((line) => line.includes("\x1b[7m[image-1]\x1b[27m"));
+  assert.ok(paintedLine, "whole token highlighted as one unit");
   assert.equal(strip(paintedLine!), strip(caretLine!), "paint changes styling only, not text");
 });
 
@@ -245,14 +250,12 @@ test("real editor: caret past the token end paints the whole token; one column f
   editor.handleInput("\x1b[D");
   editor.handleInput("\x1b[D"); // col 14, on "o"
   let painted = paintImageTokenAtCaretLines(editor.render(60));
-  let line = painted.find((row) => row.includes("\x1b[7m"))!;
-  assert.ok(!line.includes("\x1b[7m[image-1]\x1b[27m"), "caret next to the token leaves it plain");
+  assert.ok(!painted.some((row) => row.includes("\x1b[7m[image-1]\x1b[27m")), "caret next to the token leaves it plain");
   editor.handleInput("\x1b[D"); // col 13, the token end boundary
   painted = paintImageTokenAtCaretLines(editor.render(60));
-  line = painted.find((row) => row.includes("\x1b[7m"))!;
-  assert.ok(line.includes("\x1b[7m[image-1]\x1b[27m"), "caret on the token end highlights the object");
+  assert.ok(painted.some((row) => row.includes("\x1b[7m[image-1]\x1b[27m")), "caret on the token end highlights the object");
 });
 
 function strip(line: string): string {
-  return line.replace(/\x1b\[[0-9;]*m/g, "");
+  return line.replace(/\x1b\[[0-9;]*m/g, "").replace(/\x1b_[^\x07]*\x07/g, "");
 }

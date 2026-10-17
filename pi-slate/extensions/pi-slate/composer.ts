@@ -60,9 +60,21 @@ export function paintSelectedContent(line: string): string {
   return `${before}${REVERSE_ON}${text}${REVERSE_OFF}${after}`;
 }
 
-const CURSOR_CELL = /\x1b\[7m([\s\S]*?)\x1b\[0m/;
+// Pi 1.3+ editor caret is an APC fake-cursor pair; older builds used reverse video.
+const FAKE_CURSOR_START = "\x1b_pi:fc\x07";
+const CARET_CELL = /(?:\x1b_pi:c\x07)?\x1b_pi:fc\x07([\s\S]*?)\x1b_pi:\/fc\x07|\x1b\[7m([\s\S]*?)\x1b\[(?:0|27)m/;
 const IMAGE_TOKEN_TAIL = /^image[ -]\d+\]/;
 const IMAGE_TOKEN_HEAD = /\[image[ -]\d+\]$/;
+
+type CaretCell = { start: number; end: number; cell: string; marker: string };
+
+function caretCell(line: string): CaretCell | undefined {
+  const match = CARET_CELL.exec(line);
+  if (!match) return undefined;
+  const cell = match[1] ?? match[2] ?? "";
+  const marker = match[0].startsWith(CURSOR_MARKER) ? CURSOR_MARKER : "";
+  return { start: match.index, end: match.index + match[0].length, cell, marker };
+}
 
 /**
  * Highlight a whole `[image-N]` token when the caret treats it as the current
@@ -74,20 +86,18 @@ const IMAGE_TOKEN_HEAD = /\[image[ -]\d+\]$/;
  * without a caret or without an adjacent image token pass through unchanged.
  */
 export function paintImageTokenAtCaret(line: string): string {
-  const caret = CURSOR_CELL.exec(line);
+  const caret = caretCell(line);
   if (!caret) return line;
-  const cellStart = caret.index;
-  const cellEnd = cellStart + caret[0].length;
   // Caret at the token start: the caret cell is "[" and the token tail follows.
-  if (caret[1] === "[") {
-    const tail = IMAGE_TOKEN_TAIL.exec(line.slice(cellEnd));
+  if (caret.cell === "[") {
+    const tail = IMAGE_TOKEN_TAIL.exec(line.slice(caret.end));
     if (tail) {
-      return `${line.slice(0, cellStart)}${REVERSE_ON}[${tail[0]}${REVERSE_OFF}${line.slice(cellEnd + tail[0].length)}`;
+      return `${line.slice(0, caret.start)}${caret.marker}${REVERSE_ON}[${tail[0]}${REVERSE_OFF}${line.slice(caret.end + tail[0].length)}`;
     }
   }
   // Caret at the token end: the token immediately precedes the caret cell
   // (the zero-width IME cursor marker may sit between them; keep it in place).
-  let before = line.slice(0, cellStart);
+  let before = line.slice(0, caret.start);
   if (before.endsWith(CURSOR_MARKER)) before = before.slice(0, before.length - CURSOR_MARKER.length);
   const head = IMAGE_TOKEN_HEAD.exec(before);
   if (!head) return line;
@@ -97,7 +107,7 @@ export function paintImageTokenAtCaret(line: string): string {
 
 /** Paint the caret's image token on the one rendered line that holds the caret. */
 export function paintImageTokenAtCaretLines(lines: string[]): string[] {
-  const index = lines.findIndex((line) => line.includes(REVERSE_ON));
+  const index = lines.findIndex((line) => line.includes(FAKE_CURSOR_START) || line.includes(REVERSE_ON));
   if (index === -1) return lines;
   const painted = paintImageTokenAtCaret(lines[index]!);
   if (painted === lines[index]) return lines;

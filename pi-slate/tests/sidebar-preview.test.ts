@@ -342,6 +342,22 @@ test("unknown values and invalid MCP config remain explicit even when folded", (
   assert(!lines.some(line => line.includes("$0.00")));
 });
 
+test("rejected MCP entries count as Errors without dumping the reason", () => {
+  const { sidebar } = fixture();
+  sidebar.setResources({
+    ...resources,
+    mcp: [
+      { name: "ok", enabled: true, source: "global" },
+      { name: "ok2", enabled: true, source: "global" },
+      { name: "bad", enabled: null, source: "project" },
+    ],
+    mcpError: "MCP configuration has rejected entries",
+  });
+  const lines = plain(sidebar.render(80));
+  assert(lines.some(line => line.includes("MCP · 2 Enabled · 1 Error")), "enabled count stays numeric next to the error count");
+  assert(!lines.some(line => line.includes("rejected entries") || line.includes("config error")));
+});
+
 test("reset discards old images, task rows and hit targets without changing fold preference", () => {
   const { sidebar } = fixture(); sidebar.setFolds({ mcp: true, skills: false, prompts: true }); sidebar.setView(image()); sidebar.setTasks([task(0)]);
   sidebar.render(40); sidebar.reset();

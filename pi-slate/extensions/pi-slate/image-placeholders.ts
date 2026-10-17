@@ -108,17 +108,18 @@ function moveCursorTo(
   text: string,
   handleInput: PatchableEditor["handleInput"],
 ): void {
-  const left = moveLeftKey();
-  const right = moveRightKey();
-  if (!left || !right) return;
   // Upper bound: every keypress moves at least one column or one line.
+  // Require only the direction still needed so atomic delete (always left)
+  // still works when cursorRight is unbound.
   let steps = text.length + text.split("\n").length + 1;
   while (steps-- > 0) {
     const cursor = editor.getCursor();
     if (cursor.line === target.line && cursor.col === target.col) return;
     const beforeTarget = cursor.line < target.line
       || (cursor.line === target.line && cursor.col < target.col);
-    handleInput.call(editor, beforeTarget ? right : left);
+    const key = beforeTarget ? moveRightKey() : moveLeftKey();
+    if (!key) return;
+    handleInput.call(editor, key);
   }
 }
 
