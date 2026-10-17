@@ -335,7 +335,10 @@ test("unknown values and invalid MCP config remain explicit even when folded", (
   const lines = plain(sidebar.render(80));
   assert(lines.some(line => line.includes("—%")));
   assert.match(sidebar.sessionDetails(), /Cache read: —/);
-  assert(lines.some(line => line.includes("config error")));
+  assert(lines.some(line => line.includes("MCP · 6 Enabled · 1 Error")));
+  assert(!lines.some(line => line.includes("MCP config unreadable") || line.includes("config error")));
+  sidebar.setThemeProvider(() => ({ fg: (tone: string, text: string) => tone === "error" ? `\x1b[31m${text}\x1b[0m` : text, bold: (text: string) => text }) as Theme);
+  assert(sidebar.render(80).some(line => line.includes("\x1b[31m · 1 Error\x1b[0m")));
   assert(!lines.some(line => line.includes("$0.00")));
 });
 

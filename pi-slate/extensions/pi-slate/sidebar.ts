@@ -269,17 +269,19 @@ export class Sidebar implements Component {
   private middle(): Row[] {
     const enabled = this.resources.mcp.filter(x => x.enabled === true).length;
     const unknown = this.resources.mcp.some(x => x.enabled === null);
+    const rejected = this.resources.mcp.filter(x => x.enabled === null).length;
+    const errors = this.resources.mcpError
+      ? (this.resources.mcpError === "MCP configuration has rejected entries" && rejected > 0 ? rejected : 1)
+      : 0;
     const loaded = this.resources.skills.filter(x => x.loaded).length;
-    const resourceHeading = (label: string, count: string): string =>
-      this.heading(label) + this.paint("muted", ` · ${count}`);
+    const resourceHeading = (label: string, count: string, failed = 0): string =>
+      this.heading(label) + this.paint("muted", ` · ${count}`)
+      + (failed ? this.paint("error", ` · ${failed} ${failed === 1 ? "Error" : "Errors"}`) : "");
     const rows: Row[] = [{ text: "" }, {
-      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : unknown ? "—" : `${enabled} Enabled`),
+      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, errors || !unknown ? `${enabled} Enabled` : "—", errors),
       action: () => this.toggleSection("mcp"),
     }];
-    if (this.folds.mcp) {
-      if (this.resources.mcpError) rows.push({ text: this.paint("warning", this.resources.mcpError) });
-      rows.push(...this.resourceRows("mcp"));
-    }
+    if (this.folds.mcp) rows.push(...this.resourceRows("mcp"));
     rows.push({ text: "" }, { text: resourceHeading(`${this.folds.skills ? "⌄" : "›"} Skills`, `${loaded} Loaded`), action: () => this.toggleSection("skills") });
     if (this.folds.skills) rows.push(...this.resourceRows("skills"));
     rows.push({ text: "" }, { text: resourceHeading(`${this.folds.prompts ? "⌄" : "›"} Prompts`, `${this.resources.prompts.length}`), action: () => this.toggleSection("prompts") });
