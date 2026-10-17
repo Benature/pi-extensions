@@ -9,7 +9,7 @@ import type { AutomodeHealth } from "../src/runtime/health.js";
 /**
  * UI tests drive the command handler with scripted dialogs and fake stores.
  * No terminal, no model calls. The central properties: authority changes
- * require a live local TUI; the toggle and the classifier picker are
+ * require a live local TUI; the toggle and the decision model picker are
  * single-step (the invocation or selected option is the decision), while
  * rule edits and log clearing still require an explicit confirmation;
  * non-TUI modes never authorize anything; everything displayed is escaped.
@@ -320,31 +320,31 @@ test("rules editor refuses non-TUI modes entirely", async () => {
 	assert.equal(ctx.calls.length, 0);
 });
 
-// ------------------------------------------------------------------ classifier picker
+// ------------------------------------------------------------------ decision model picker
 
 test("picker header discloses the bounded metadata and never asks for consent", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
 		"Decision Models",
 		(_title, options) => {
-			assert.equal(options[0], "Rules only (no classifier)");
+			assert.equal(options[0], "Rules only (no decision model)");
 			return undefined; // Escape.
 		},
 		"Close",
 	]);
 	await createCommandHandler(h.deps)("", ctx);
 	const title = ctx.calls[1]?.title ?? "";
-	assert.equal(title.split("\n")[0], "Classifier — shadow review");
+	assert.equal(title.split("\n")[0], "Decision Models — shadow review");
 	assert.equal(title.split("\n").length, 4, "compact disclosure plus each model's destination");
 	assert.match(title, /bounded metadata/);
 	assert.match(title, /never argument values or file bodies/);
 	assert.match(title, /never approve actions/);
 });
 
-test("picker shows unavailable classifiers with login required and pins the current selection first", async () => {
+test("picker shows unavailable decision models with login required and pins the current selection first", async () => {
 	const h = makeHarness({
 		enabled: true,
-		classifier: { provider: "typesafe", model: "jev-old" },
+		decisionModel: { provider: "typesafe", model: "jev-old" },
 		disclosureConsent: "approved",
 		disclosureProvider: "typesafe",
 		disclosureModel: "jev-old",
@@ -373,7 +373,7 @@ test("picker shows unavailable classifiers with login required and pins the curr
 		},
 	};
 	await createCommandHandler(h.deps)("", ctx);
-	assert.equal(stripAnsi(picker[0] ?? ""), "Rules only (no classifier)");
+	assert.equal(stripAnsi(picker[0] ?? ""), "Rules only (no decision model)");
 	assert.equal(stripAnsi(picker[1] ?? ""), "[current] typesafe/jev-old · login required");
 	assert.equal(stripAnsi(picker[2] ?? ""), "typesafe/jev-1.13.2");
 	assert.equal(stripAnsi(picker[3] ?? ""), "typesafe/jev-sketchy · login required");
@@ -382,7 +382,7 @@ test("picker shows unavailable classifiers with login required and pins the curr
 	assert.equal(h.settings.updates.length, 0, "Escape cancels");
 });
 
-test("a failed availability lookup marks classifiers untested, not missing", async () => {
+test("a failed availability lookup marks decision models untested, not missing", async () => {
 	const h = makeHarness({ enabled: true });
 	let picker: string[] = [];
 	const ctx = h.makeCtx([
@@ -427,7 +427,7 @@ test("picker falls back to availability results when getModelsOfType is unavaila
 	assert.equal(h.settings.updates.length, 0);
 });
 
-test("picking a classifier saves it with consent and all four bindings, no consent dialog", async () => {
+test("picking a decision model saves it with consent and all four bindings, no consent dialog", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
 		"Decision Models",
@@ -437,7 +437,7 @@ test("picking a classifier saves it with consent and all four bindings, no conse
 	await createCommandHandler(h.deps)("", ctx);
 	assert.equal(h.settings.updates.length, 1);
 	const updated = h.settings.current;
-	assert.deepEqual(updated.classifier, { provider: "typesafe", model: "jev-1.13.2" });
+	assert.deepEqual(updated.decisionModel, { provider: "typesafe", model: "jev-1.13.2" });
 	assert.equal(updated.disclosureConsent, "approved", "selecting the model is the consent");
 	assert.equal(updated.disclosureProvider, "typesafe");
 	assert.equal(updated.disclosureModel, "jev-1.13.2");
@@ -447,7 +447,7 @@ test("picking a classifier saves it with consent and all four bindings, no conse
 	assert.ok(ctx.calls.every((call) => !/consent/i.test(call.title)), "no separate consent dialog");
 });
 
-test("invalid classifier endpoint changes nothing", async () => {
+test("invalid decision model endpoint changes nothing", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
 		"Decision Models",
@@ -456,7 +456,7 @@ test("invalid classifier endpoint changes nothing", async () => {
 	]);
 	await createCommandHandler(h.deps)("", ctx);
 	assert.equal(h.settings.updates.length, 0);
-	assert.equal(h.settings.current.classifier, null);
+	assert.equal(h.settings.current.decisionModel, null);
 	assert.equal(h.settings.current.disclosureConsent, "none");
 	assert.equal(h.settings.current.disclosureProvider, null);
 	assert.equal(h.settings.current.disclosureModel, null);
@@ -469,7 +469,7 @@ test("invalid classifier endpoint changes nothing", async () => {
 test("Escape from the picker preserves the previous selection and binding", async () => {
 	const h = makeHarness({
 		enabled: true,
-		classifier: { provider: "typesafe", model: "jev-1.13.2" },
+		decisionModel: { provider: "typesafe", model: "jev-1.13.2" },
 		disclosureConsent: "approved",
 		disclosureProvider: "typesafe",
 		disclosureModel: "jev-1.13.2",
@@ -486,21 +486,21 @@ test("Escape from the picker preserves the previous selection and binding", asyn
 	assert.equal(h.settings.current.disclosureWorkspace, "/work");
 });
 
-test("Rules only clears classifier and consent in one step", async () => {
+test("Rules only clears decision model and consent in one step", async () => {
 	const h = makeHarness({
 		enabled: true,
-		classifier: { provider: "typesafe", model: "jev-1.13.2" },
+		decisionModel: { provider: "typesafe", model: "jev-1.13.2" },
 		disclosureConsent: "approved",
 		disclosureProvider: "typesafe",
 		disclosureModel: "jev-1.13.2",
 		disclosureEndpoint: "https://api.typesafe.ai/v1",
 		disclosureWorkspace: "/work",
 	});
-	const ctx = h.makeCtx(["Decision Models", "Rules only (no classifier)", "Close"]);
+	const ctx = h.makeCtx(["Decision Models", "Rules only (no decision model)", "Close"]);
 	await createCommandHandler(h.deps)("", ctx);
 	assert.equal(h.settings.updates.length, 1);
 	assert.equal(ctx.calls.length, 3, "panel, picker, panel — no confirmation dialog");
-	assert.equal(h.settings.current.classifier, null);
+	assert.equal(h.settings.current.decisionModel, null);
 	assert.equal(h.settings.current.disclosureConsent, "none");
 	assert.equal(h.settings.current.disclosureProvider, null);
 	assert.equal(h.settings.current.disclosureModel, null);
@@ -509,7 +509,7 @@ test("Rules only clears classifier and consent in one step", async () => {
 	assert.match(ctx.notifications.at(-1)?.message ?? "", /Rules only/);
 });
 
-test("a classifier choice made in a stale epoch is discarded, not applied", async () => {
+test("a decision model choice made in a stale epoch is discarded, not applied", async () => {
 	const h = makeHarness({ enabled: true });
 	const ctx = h.makeCtx([
 		"Decision Models",
@@ -521,7 +521,7 @@ test("a classifier choice made in a stale epoch is discarded, not applied", asyn
 	]);
 	await createCommandHandler(h.deps)("", ctx);
 	assert.equal(h.settings.updates.length, 0, "stale choice must not commit");
-	assert.equal(h.settings.current.classifier, null);
+	assert.equal(h.settings.current.decisionModel, null);
 	assert.match(ctx.notifications.at(-1)?.message ?? "", /changed while you were deciding/);
 });
 
@@ -550,10 +550,10 @@ test("escaped-pin collisions still map a row to its own model", async () => {
 	};
 	await createCommandHandler(h.deps)("", ctx);
 	assert.deepEqual(labels.slice(1), ["test/x\\e", "test/x\\e (2)"]);
-	assert.equal(h.settings.current.classifier?.model, "x\\e", "row 2 must save its own model");
+	assert.equal(h.settings.current.decisionModel?.model, "x\\e", "row 2 must save its own model");
 });
 
-test("suffix collisions never fall back to a different classifier", async () => {
+test("suffix collisions never fall back to a different decision model", async () => {
 	const h = makeHarness({ enabled: true });
 	const registered = [
 		{ provider: "test", id: "jev", baseUrl: "https://example.com" },
@@ -578,10 +578,10 @@ test("suffix collisions never fall back to a different classifier", async () => 
 	};
 	await createCommandHandler(h.deps)("", ctx);
 	assert.deepEqual(labels.slice(1), ["test/jev", "test/jev · login required · login required"]);
-	assert.equal(h.settings.current.classifier?.model, "jev · login required");
+	assert.equal(h.settings.current.decisionModel?.model, "jev · login required");
 });
 
-test("classifier labels stay distinct and never emit raw control bytes", async () => {
+test("decision model labels stay distinct and never emit raw control bytes", async () => {
 	const h = makeHarness({ enabled: true });
 	const prefix = "x".repeat(240);
 	const ctx = h.makeCtx([
@@ -607,7 +607,7 @@ test("classifier labels stay distinct and never emit raw control bytes", async (
 		},
 	};
 	await createCommandHandler(h.deps)("", ctx);
-	assert.equal(h.settings.current.classifier?.model, `${prefix}b\x1b[31m`);
+	assert.equal(h.settings.current.decisionModel?.model, `${prefix}b\x1b[31m`);
 	assert.ok(ctx.calls.every((call) => !call.title.includes("\x1b") && call.options.every((option) => !option.includes("\x1b"))));
 });
 
@@ -636,7 +636,7 @@ test("logs viewer shows decisions escaped and detail honestly reports uncaptured
 	]);
 	await handler("logs", ctx);
 	const detail = ctx.calls[1];
-	assert.match(detail?.title ?? "", /classifier: not captured/);
+	assert.match(detail?.title ?? "", /decision model: not captured/);
 	assert.match(detail?.title ?? "", /input: not captured/);
 	assert.ok(!(detail?.title ?? "").includes("\x1b"));
 });
@@ -780,7 +780,7 @@ test("rule workflows retain the epoch of the displayed rule list", async () => {
 	}
 });
 
-test("classifier consent displays normalized destinations without exposing invalid URL credentials", async () => {
+test("decision model consent displays normalized destinations without exposing invalid URL credentials", async () => {
 	const h = makeHarness();
 	const ctx = h.makeCtx(["Decision Models", undefined, "Close"]);
 	await createCommandHandler(h.deps)("", ctx);

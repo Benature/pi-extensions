@@ -28,7 +28,7 @@
  * sources; unknown objects are never spread into the envelope.
  */
 import type {
-	ClassifierChoiceQuestionLike,
+	DecisionModelChoiceQuestionLike,
 	JsonValueLike,
 	ReviewInput,
 	ReviewerEvidence,
@@ -134,9 +134,9 @@ export function buildReviewInput(
 	const blockRules = enabledMessageRules(settings.blocklist);
 	const allowRules = enabledMessageRules(settings.allowlist);
 	if (blockRules.length === 0 && allowRules.length === 0) {
-		return { ok: false, reason: "no message rules to evaluate; no classifier request is needed" };
+		return { ok: false, reason: "no message rules to evaluate; no decision model request is needed" };
 	}
-	const questions: Record<string, ClassifierChoiceQuestionLike> = buildQuestions(settings);
+	const questions: Record<string, DecisionModelChoiceQuestionLike> = buildQuestions(settings);
 
 	if (!isRecord(evidence.action) || typeof evidence.action.tool !== "string" || typeof evidence.action.cwd !== "string") {
 		return { ok: false, reason: "action identity is malformed; review stays local" };

@@ -11,7 +11,7 @@ export interface Rule {
   enabled?: boolean;
 }
 
-export interface ClassifierSelection {
+export interface DecisionModelSelection {
   provider: string;
   model: string;
 }
@@ -21,15 +21,15 @@ export type DisclosureConsent = "none" | "approved" | "declined";
 export interface AutomodeSettings {
   version: 1;
   enabled: boolean;
-  classifier: ClassifierSelection | null;
+  decisionModel: DecisionModelSelection | null;
   disclosureConsent: DisclosureConsent;
-  /** Consent binding: provider id of the classifier at consent time. Null = unbound. */
+  /** Consent binding: provider id of the decision model at consent time. Null = unbound. */
   disclosureProvider: string | null;
-  /** Consent binding: model id of the classifier at consent time. Null = unbound. */
+  /** Consent binding: model id of the decision model at consent time. Null = unbound. */
   disclosureModel: string | null;
   /**
    * Consent binding: normalized (origin+pathname, no userinfo/query/fragment)
-   * base URL of the selected classifier model at consent time. Null = unbound;
+   * base URL of the selected decision model at consent time. Null = unbound;
    * an unbound "approved" cannot upload.
    */
   disclosureEndpoint: string | null;
@@ -48,7 +48,7 @@ export interface AutomodeSettings {
 export const DEFAULT_SETTINGS: AutomodeSettings = Object.freeze({
   version: 1,
   enabled: false,
-  classifier: null,
+  decisionModel: null,
   disclosureConsent: "none",
   disclosureProvider: null,
   disclosureModel: null,
@@ -148,7 +148,7 @@ export interface DecisionLog {
   source: string;
   reason: string;
   matchedRule?: Rule;
-  classifier?: unknown;
+  decisionModel?: unknown;
   input?: unknown;
   output?: unknown;
 }

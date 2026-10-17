@@ -5,7 +5,7 @@
  * Executes 20 fixed cases against an INERT fixture workspace under
  * ../.cache/pi-automode-test/live-jev/workspace. For each case it builds
  * real evidence via the BUILT package (dist/evidence.js), derives the
- * deterministic decision via dist/policy.js, then asks the REAL classifier
+ * deterministic decision via dist/policy.js, then asks the REAL decision model
  * (vercel-ai-gateway/typesafe-ai/jev, via Pi's own ModelRegistry and the
  * operator's Vercel AI Gateway credential in ~/.pi/agent/auth.json) for a
  * SHADOW review via dist/reviewer.js. Shadow receipts never authorize
@@ -51,7 +51,7 @@ const workspace = await fs.realpath(workspaceDir);
 const agentDir = await fs.realpath(fixtureAgentDir);
 const extensionDir = repoRoot;
 
-// --- 2/3. Real registry; resolve the classifier BEFORE any network call ---
+// --- 2/3. Real registry; resolve the decision model BEFORE any network call ---
 const agentDirReal = getAgentDir();
 const runtime = await ModelRuntime.create({
 	authPath: `${agentDirReal}/auth.json`,
@@ -62,18 +62,18 @@ const registry = new ModelRegistry(runtime);
 
 const PROVIDER = "vercel-ai-gateway";
 const MODEL = "typesafe-ai/jev";
-const classifierModel = registry.findOfType("classifier", PROVIDER, MODEL);
-if (!classifierModel) {
+const decisionModel = registry.findOfType("classifier", PROVIDER, MODEL);
+if (!decisionModel) {
 	console.error(`STOP: registry.findOfType("classifier", "${PROVIDER}", "${MODEL}") did not resolve. No network calls made.`);
 	process.exit(2);
 }
-console.log(`classifier resolved: provider=${classifierModel.provider} id=${classifierModel.id} api=${classifierModel.api} baseUrl=${classifierModel.baseUrl}`);
+console.log(`decision model resolved: provider=${decisionModel.provider} id=${decisionModel.id} api=${decisionModel.api} baseUrl=${decisionModel.baseUrl}`);
 
 // Consent endpoint binding: canonical (origin+pathname) form of the resolved
 // model's baseUrl, using the package's own normalizer.
-const disclosureEndpoint = normalizeDisclosureEndpoint(classifierModel.baseUrl);
+const disclosureEndpoint = normalizeDisclosureEndpoint(decisionModel.baseUrl);
 if (disclosureEndpoint === null) {
-	console.error(`STOP: classifier baseUrl ${classifierModel.baseUrl} cannot be normalized for consent binding.`);
+	console.error(`STOP: decision model baseUrl ${decisionModel.baseUrl} cannot be normalized for consent binding.`);
 	process.exit(2);
 }
 console.log(`disclosureEndpoint (normalized baseUrl): ${disclosureEndpoint}`);
@@ -82,7 +82,7 @@ console.log(`disclosureEndpoint (normalized baseUrl): ${disclosureEndpoint}`);
 const baseSettings = {
 	version: 1,
 	enabled: true,
-	classifier: { provider: PROVIDER, model: MODEL },
+	decisionModel: { provider: PROVIDER, model: MODEL },
 	disclosureConsent: "approved",
 	disclosureProvider: PROVIDER,
 	disclosureModel: MODEL,
@@ -132,11 +132,11 @@ const report = {
 	meta: {
 		runAt: new Date().toISOString(),
 		node: process.version,
-		classifier: `${PROVIDER}/${MODEL}`,
-		resolvedClassifier: {
-			provider: classifierModel.provider,
-			id: classifierModel.id,
-			api: classifierModel.api,
+		decisionModel: `${PROVIDER}/${MODEL}`,
+		resolvedDecisionModel: {
+			provider: decisionModel.provider,
+			id: decisionModel.id,
+			api: decisionModel.api,
 			endpoint: disclosureEndpoint,
 		},
 		workspace,

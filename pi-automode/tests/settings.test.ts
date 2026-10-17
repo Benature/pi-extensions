@@ -54,7 +54,7 @@ test("oversized updates preserve the readable file, current settings and epoch",
 test("validateSettings accepts a minimal valid document and applies defaults", () => {
   const s = validateSettings(VALID_MINIMAL);
   assert.equal(s.enabled, true);
-  assert.equal(s.classifier, null);
+  assert.equal(s.decisionModel, null);
   assert.equal(s.disclosureConsent, "none");
   assert.deepEqual(s.allowlist, []);
   assert.equal(s.disclosureEndpoint, null);
@@ -92,11 +92,11 @@ test("validateSettings rejects wrong types", () => {
   assert.throws(() => validateSettings({ version: 2, enabled: true }));
   assert.throws(() => validateSettings({ version: 1, enabled: "true" }));
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, disclosureConsent: "yes" }));
-  assert.throws(() => validateSettings({ ...VALID_MINIMAL, classifier: "typesafe" }));
+  assert.throws(() => validateSettings({ ...VALID_MINIMAL, decisionModel: "typesafe" }));
   assert.throws(() =>
-    validateSettings({ ...VALID_MINIMAL, classifier: { provider: "p", model: "m", key: "k" } }),
+    validateSettings({ ...VALID_MINIMAL, decisionModel: { provider: "p", model: "m", key: "k" } }),
   );
-  assert.throws(() => validateSettings({ ...VALID_MINIMAL, classifier: { provider: "", model: "m" } }));
+  assert.throws(() => validateSettings({ ...VALID_MINIMAL, decisionModel: { provider: "", model: "m" } }));
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: {} }));
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "cmd", text: "ls" }] }));
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "command" }] }));
@@ -131,7 +131,7 @@ test("validateSettings accepts unicode rule text, rejects control characters", (
   assert.equal(withNl.allowlist[0]?.text, "line one\nline two\tend");
 
   assert.throws(() =>
-    validateSettings({ ...VALID_MINIMAL, classifier: { provider: "p", model: "m" } }),
+    validateSettings({ ...VALID_MINIMAL, decisionModel: { provider: "p", model: "m" } }),
   );
 });
 
@@ -219,7 +219,7 @@ function consentedSettings(overrides: Partial<AutomodeSettings>): AutomodeSettin
   return validateSettings({
     version: 1,
     enabled: true,
-    classifier: { provider: "typesafe", model: "jev-1.13.2" },
+    decisionModel: { provider: "typesafe", model: "jev-1.13.2" },
     disclosureConsent: "approved",
     disclosureProvider: "typesafe",
     disclosureModel: "jev-1.13.2",
@@ -242,7 +242,7 @@ test("disclosure consent: approved with missing bindings is NOT consent", () => 
   const unbound = validateSettings({
     version: 1,
     enabled: true,
-    classifier: { provider: "typesafe", model: "jev-1.13.2" },
+    decisionModel: { provider: "typesafe", model: "jev-1.13.2" },
     disclosureConsent: "approved",
   });
   const status = checkDisclosureConsent(unbound, {
@@ -304,9 +304,9 @@ test("disclosure consent: workspace drift is NOT consent", () => {
       false,
     );
   }
-  const noClassifier = consentedSettings({ classifier: null });
+  const noDecisionModel = consentedSettings({ decisionModel: null });
   assert.equal(
-    checkDisclosureConsent(noClassifier, {
+    checkDisclosureConsent(noDecisionModel, {
       endpoint: "https://api.typesafe.example/v1",
       workspace: "/canonical/workspace",
     }).consented,
@@ -334,7 +334,7 @@ test("disclosure consent: approved with endpoint+workspace but wrong/missing pro
   );
   // Binding to a different pair while the selection matches that pair is consent.
   const rebound = consentedSettings({
-    classifier: { provider: "othertype", model: "jev-OLD" },
+    decisionModel: { provider: "othertype", model: "jev-OLD" },
     disclosureProvider: "othertype",
     disclosureModel: "jev-OLD",
   });

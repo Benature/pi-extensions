@@ -12,7 +12,7 @@
     "pi-extension",
     "permission",
     "automode",
-    "classifier",
+    "decision-model",
     "jev"
   ],
   "homepage": "https://github.com/GaganSD/pi-extensions/tree/main/pi-automode",

@@ -42,11 +42,11 @@ This is the **target experience**, not a claim that an installed extension alrea
 |---|---|
 | “Don’t ask me to approve every edit.” | When on, routine workspace reads/edits run quietly on the deterministic floor. Where exact checks cannot settle it, Jev matches the action against allow rules you wrote yourself. |
 | “Don’t let enthusiasm become permission.” | Blocklist rules as written, built-in protected paths, and specific human approval for pushes, publishing, deletion and sensitive access. |
-| “Don’t let the experimental model judge itself.” | The permission reviewer is a separately selected native Jev classifier, never the active coding/chat model. |
+| “Don’t let the experimental model judge itself.” | The permission reviewer is a separately selected native Jev decision model, never the active coding/chat model. |
 | “I haven’t supplied a Jev key.” | Exact command rules and the deterministic floor still work when no block remains unresolved. Message rules are not silently ignored: an unresolved message block takes the local Ask path before any automatic Allow. Unresolved actions ask; there is no silent fail-open or chat-model fallback. |
 | “I need to know when protection is missing.” | On/off, coverage and degraded review states are always visible. Unsupported execution routes stay blocked while on; off claims nothing. |
 | “I want to see what it decided.” | `/automode logs` lists recent decisions as made: the actual action text, Allow/Ask/Block, the matched rule or decision source, and the time. No fabricated model reasoning. |
-| “I want private, offline review later.” | A separately installed and evaluated local classifier can eventually replace Jev without replacing the permission layer. |
+| “I want private, offline review later.” | A separately installed and evaluated local decision model can eventually replace Jev without replacing the permission layer. |
 
 ## Getting started: the intended experience
 
@@ -74,7 +74,7 @@ Settings     ~/.pi/agent/automode.json
 
 `/automode on` does the same thing as the button. Once on, you open `/automode rules`, press `a`, pick rule type **Message**, type `Never deploy to production`, choose **block**, Save. The rule is stored exactly as written. That is the whole onboarding.
 
-The initial Jev integration selects Pi’s `typesafe` provider and a fixed-version classifier entry. Other Jev transports may be explicitly selected after their compatibility tests; we never search for another provider/key to rescue a failed request. A production calibration requires a versioned model/profile, as described below. Use `TYPESAFE_API_KEY` or credentials managed by Pi for the selected provider; **having a key is not consent to upload evidence**.
+The initial Jev integration selects Pi’s `typesafe` provider and a fixed-version decision model entry. Other Jev transports may be explicitly selected after their compatibility tests; we never search for another provider/key to rescue a failed request. A production calibration requires a versioned model/profile, as described below. Use `TYPESAFE_API_KEY` or credentials managed by Pi for the selected provider; **having a key is not consent to upload evidence**.
 
 No TypeSafe SDK, separate auth file, model weights, Python installation, cloud dashboard or agent-facing permission tool is required. Release maintainers supply tested profiles; users choose rules and data disclosure, not calibration thresholds.
 
@@ -83,7 +83,7 @@ No TypeSafe SDK, separate auth file, model weights, Python installation, cloud d
 - **On** (`/automode on`, or the panel control): Automode reviews model-issued actions on verified routes and enforces your rules. The status line shows the guarded state. Turning on re-runs the host checks; if they fail, the panel says so and nothing is guarded.
 - **Off** (`/automode off`, or the panel control): Automode reviewing and enforcement are **disabled, deliberately**. There is no protected/guarded badge because nothing is guarded; the underlying Pi retains exactly its own stock behavior. Off is not sandbox safety and not “paused but still guarded”—it is your choice to relinquish Automode’s checks, and the panel says so in plain words.
 - **Only explicit operator action changes the toggle.** Agent text, tool output, repository instructions and other extensions cannot turn it on or off; the model’s tool schema never includes it. There is no extra permission machinery around the toggle beyond that provenance check.
-- **In-flight transitions are not a race.** Turning Off cancels pending classifier requests and ends held approval requests as *not executed*; nothing waiting is released into execution by the state change, and a late classifier result is discarded, never applied. Turning On applies to new actions only; it never retroactively re-holds completed work.
+- **In-flight transitions are not a race.** Turning Off cancels pending decision model requests and ends held approval requests as *not executed*; nothing waiting is released into execution by the state change, and a late decision model result is discarded, never applied. Turning On applies to new actions only; it never retroactively re-holds completed work.
 
 ### Small command surface
 
@@ -91,7 +91,7 @@ All controls live under one native slash command; nothing new is added to the mo
 
 | Command | Purpose |
 |---|---|
-| `/automode` | The panel: on/off control, status, coverage, pending approvals, review (classifier picker + disclosure consent), usage. |
+| `/automode` | The panel: on/off control, status, coverage, pending approvals, review (Decision Models picker + disclosure consent), usage. |
 | `/automode on` | Enable reviewing/enforcement (after the host checks pass). |
 | `/automode off` | Disable reviewing/enforcement; held work ends not-executed. |
 | `/automode rules` | Open the Pi-native allowlist/blocklist editor (below). |
@@ -99,7 +99,7 @@ All controls live under one native slash command; nothing new is added to the mo
 
 That is the entire command surface—there is no setup, mode-switch or history subcommand beyond these five.
 
-**Panel/dialog actions:** the on/off control uses the same operator-only handler as the on/off commands and applies in one step from the interactive terminal. Allow once / Decline / Inspect, rule add/edit/delete confirmations and log clearing are UI-only. The classifier picker shows the bounded-metadata disclosure and lists Pi's registered classifiers with availability; selecting a model is the disclosure decision and replaces the stored bindings in the same step. These paths add no further commands.
+**Panel/dialog actions:** the on/off control uses the same operator-only handler as the on/off commands and applies in one step from the interactive terminal. Allow once / Decline / Inspect, rule add/edit/delete confirmations and log clearing are UI-only. The Decision Models picker shows the bounded-metadata disclosure and lists Pi's registered decision models with availability; selecting a model is the disclosure decision and replaces the stored bindings in the same step. These paths add no further commands.
 
 Guard removal is an explicit operator configuration/restart action, not an agent-callable escape hatch. Another extension's approval cannot override an Automode block; running multiple permission extensions is unsupported until composition is tested.
 
@@ -115,7 +115,7 @@ Illustrative configuration after turning on and choosing review; a fresh install
 {
   "version": 1,
   "enabled": true,
-  "classifier": { "provider": "typesafe", "model": "jev-1.13.2" },
+  "decisionModel": { "provider": "typesafe", "model": "jev-1.13.2" },
   "disclosureConsent": "approved",
   "allowlist": [
     { "type": "command", "text": "npm test -- parser" },
@@ -131,8 +131,8 @@ Illustrative configuration after turning on and choosing review; a fresh install
 ```
 
 - Top-level `enabled` is the on/off toggle, persisted across restarts. Settings can still be edited and past logs viewed while Off; no action is reviewed then.
-- `classifier` is the native decision-model selection: a **classifier-typed** entry from Pi’s own model registry (`provider` + `model`). The panel picker filters classifier-typed models only; it never changes your coding/chat model. A moving alias such as `jev-latest` stays shadow-only until a tested fixed-version profile exists.
-- `disclosureConsent` is `none` / `approved` / `declined`. A stored Pi credential is not consent; nothing is transmitted while this is not `approved`. Selecting a classifier replaces the stored consent and all four bindings in one step; **Rules only (no classifier)** clears them.
+- `decisionModel` is the Decision Models selection: a **classifier-typed** entry from Pi’s own model registry (`provider` + `model`). The panel picker filters `classifier`-typed models only; it never changes your coding/chat model. A moving alias such as `jev-latest` stays shadow-only until a tested fixed-version profile exists.
+- `disclosureConsent` is `none` / `approved` / `declined`. A stored Pi credential is not consent; nothing is transmitted while this is not `approved`. Selecting a decision model replaces the stored consent and all four bindings in one step; **Rules only (no decision model)** clears them.
 - `allowlist` / `blocklist` store the rule type (`message` or `command`) and text exactly as written. List membership determines allow/block. Optional per-rule `enabled` defaults to `true`; disabling sets it to `false` in this same file. Decision metadata (ids, timestamps) stays internal.
 - `logRetentionDays` / `logMaxEntries` bound local decision-log retention.
 
@@ -151,9 +151,9 @@ There are no capability templates, fingerprints, canonical target forms or polic
 **How matching works, honestly:**
 
 - **Command rules** match the exact invocation text; quoting, whitespace and operators are not rewritten into a different command. Keyless mode does this deterministically. A `git push --force` rule does not match `git push --force origin main`; use a Message instruction when you mean a whole category.
-- **Message rules** are instructions; deciding whether an action violates `Never deploy to production` is semantic and needs the Jev classifier. Keyless mode cannot determine that, so when relevance cannot be settled deterministically, Automode **asks**—it never guesses.
+- **Message rules** are instructions; deciding whether an action violates `Never deploy to production` is semantic and needs the Jev decision model. Keyless mode cannot determine that, so when relevance cannot be settled deterministically, Automode **asks**—it never guesses.
 - **Ambiguity always resolves to Ask**, never to Allow.
-- The **blocklist is checked before the allowlist**; a block hit is final and cannot be overridden by an allow rule, a one-shot approval or a confident classifier.
+- The **blocklist is checked before the allowlist**; a block hit is final and cannot be overridden by an allow rule, a one-shot approval or a confident decision model.
 - Your saved rules are operator authority. Repository text, tool output and agent messages are **not** authority: they cannot create rules or approvals, however they are phrased.
 
 Rule edits apply to future decisions—including pending held asks, which are re-checked against the new policy before they may run (a block added while its approval dialog is open stops that action). Saved rules persist in `automode.json` across restarts.
@@ -182,7 +182,7 @@ Source:    policy · remote mutation needs a matching allow rule or one-shot app
 
 ### `/automode logs`: decisions as made
 
-`/automode logs` shows recent decisions **as they were made**: the time, the actual action/command text (and, where relevant, the matched message-rule text), the outcome (**Allow / Ask / Block**), and the source—a matched rule, your dialog answer, deterministic policy, or the classifier (`provider/model` and its answer). Expanding an entry shows the exact input/output captured at decision time. **No chain-of-thought is recorded or invented**: a classifier row shows its typed answer and probability, never a fabricated “reasoning” paragraph, and a payload that was not captured is reported as unavailable rather than reconstructed.
+`/automode logs` shows recent decisions **as they were made**: the time, the actual action/command text (and, where relevant, the matched message-rule text), the outcome (**Allow / Ask / Block**), and the source—a matched rule, your dialog answer, deterministic policy, or the decision model (`provider/model` and its answer). Expanding an entry shows the exact input/output captured at decision time. **No chain-of-thought is recorded or invented**: a decision model row shows its typed answer and probability, never a fabricated “reasoning” paragraph, and a payload that was not captured is reported as unavailable rather than reconstructed.
 
 **An honest revision of the earlier retention promise.** Previous drafts of this spec promised metadata-only receipts. The customer choice here is to keep exact local action text so the log is genuinely useful. Consequences we state plainly: that text can contain sensitive data; the logs stay **local only** (no telemetry or trace upload from this extension); retention is **bounded and configurable in the same `automode.json`** (`logRetentionDays`, `logMaxEntries`, defaults 7 days / 500 entries) with a clear control; and the log store receives the same protected-path treatment as the extension’s own files.
 
@@ -197,7 +197,7 @@ These translate the monorepo’s **Minimal by Design, Keyless by Default, Pi-Nat
 5. **Minimal context, not missing evidence.** No always-on system prompt, copied conversation, permission skill or additional agent tool. Supply the reviewer a bounded structured envelope; never truncate away a decisive command suffix.
 6. **Native before custom.** Reuse Pi’s model registry/auth, lifecycle, dialogs, themes and branch-aware session entries. No second provider client or independent terminal renderer.
 7. **No invisible downgrade.** Missing credentials, failed initialization, unguarded children and unavailable service gates are visible states, never reasons to let unknown actions through. Off is a visible operator choice, not a downgrade path.
-8. **Do not overclaim.** A classifier is fallible; a tool hook is not OS isolation. Least privilege and sandboxing remain valuable independent defenses.
+8. **Do not overclaim.** A decision model is fallible; a tool hook is not OS isolation. Least privilege and sandboxing remain valuable independent defenses.
 9. **Earn complexity.** One semantic request when needed, no reasoning-model cascade, autonomous reviewer agent, persistent approval cache or policy DSL in v1.
 
 ## Why not use only deterministic rules?
@@ -348,7 +348,7 @@ Keep original execution bytes locally even when preparing a reduced remote repre
 - A secret scanner is not proof that arbitrary code is non-sensitive. Remote review is restricted to the user-approved workspace/data scope; confidential work can remain in Rules mode.
 - The reviewer’s own request is a narrowly authorized host operation, not a global exemption for every `models.classify()` call. It must not recursively ask itself for approval.
 - No telemetry or trace upload from this extension. Decision logs keep the exact local action text so they stay useful (see `/automode logs`); that text can be sensitive, so retention is bounded and configurable in `automode.json` (defaults: 7 days, 500 entries), the log store is protected like the extension’s own files, and nothing is uploaded. Where a payload was not captured, the log says so rather than reconstructing it.
-- Pi’s own transcripts, main-model traffic and telemetry settings are separate. “Rules mode makes no classifier requests” does not mean the entire Pi process is offline.
+- Pi’s own transcripts, main-model traffic and telemetry settings are separate. “Rules mode makes no decision model requests” does not mean the entire Pi process is offline.
 
 ## Coverage: the hardest feature, not a footnote
 
@@ -423,7 +423,7 @@ This spec supersedes the earlier extension name **pi-auto-mode** with **pi-autom
 | Plain-text rules, exact-action approval, revocation and the deterministic floor | Shared child broker with direct operator escalation |
 | Native status/dialogs, decision logs, no new agent tool or always-on prompt | Published platform/language support matrix backed by tests |
 | Guarded startup and final-action integrity on every advertised parent route | The same integrity and refusal invariants across advertised nested/child routes |
-| Measured interruption benefit and absolute risk gates for semantic enforcement | End-to-end bypass tests and task outcomes, not just isolated classifier accuracy |
+| Measured interruption benefit and absolute risk gates for semantic enforcement | End-to-end bypass tests and task outcomes, not just isolated decision model accuracy |
 
 Neither milestone can waive guarded-start or final-action checks. A keyless-only release can proceed without a validated Jev profile; it must not claim semantic automation.
 
@@ -440,9 +440,9 @@ General chat-model judges, automatic reviewer cascades, training, GPU/cloud prov
 | **2. Native Jev in shadow** | Registry integration, disclosure filter, bounded state, profile/versioning and replay evaluation | Shadow never weakens Rules/manual enforcement; no raw trace upload without consent. |
 | **3. Parent-only guarded beta** | Calibrated semantic auto-approval for the verified subset | Safety/usability gates below pass; unsupported children/codemode remain blocked. |
 | **4. Nested/child integration → v1** | Shared broker, service gate, direct operator escalation and platform/language matrix | Every advertised route passes end-to-end bypass tests; otherwise keep the beta label. |
-| **Later, independently** | Local classifier adapter/profile | Separate memory, privacy, calibration and language gates pass. Not on the Jev launch critical path. |
+| **Later, independently** | Local decision model adapter/profile | Separate memory, privacy, calibration and language gates pass. Not on the Jev launch critical path. |
 
-Proposed package modules: `index.ts` (lifecycle/command), `policy.ts` (pure rule matching + precedence), `settings.ts` (atomic validated `automode.json`), `evidence.ts` (canonical envelope), `reviewer.ts` (native classifier), `approval.ts` (operator UI/broker client), `logs.ts`, plus focused tests. Extract a shared broker only when integrating children; do not build a generic framework first. Reuse concepts from `pi-web-search/src/jev/api.ts`, but never its fail-soft search behavior as permission policy.
+Proposed package modules: `index.ts` (lifecycle/command), `policy.ts` (pure rule matching + precedence), `settings.ts` (atomic validated `automode.json`), `evidence.ts` (canonical envelope), `reviewer.ts` (native decision model), `approval.ts` (operator UI/broker client), `logs.ts`, plus focused tests. Extract a shared broker only when integrating children; do not build a generic framework first. Reuse concepts from `pi-web-search/src/jev/api.ts`, but never its fail-soft search behavior as permission policy.
 
 ## How we decide this deserves to ship
 
@@ -452,7 +452,7 @@ Proposed package modules: `index.ts` (lifecycle/command), `policy.ts` (pure rule
 2. **Fair baselines:** conservative Rules, Jev without deterministic assistance for diagnostic purposes only, full Rules+Jev, and optionally pinned pi-verdict configurations. Use equivalent evidence, reviewed labels and the same supported scope; do not weaken Rules to make Jev look good.
 3. **Freeze calibration before test:** separate by scenario family/repository lineage, keep paraphrases and translations in the same split, and never choose a threshold on the release test.
 4. **Report both costs:** unsafe-Allow rate = gold Ask/Block cases auto-allowed ÷ all gold Ask/Block cases; unnecessary-Ask rate = authorized cases escalated ÷ all authorized cases. Timeout/queue-induced Asks count in this end-to-end rate; breakdowns identify model, policy and infrastructure causes. Also report wrongful blocks, task completion, interruptions/task, time waiting for the user and mode-degradation frequency. Report English/Chinese and severe-risk categories separately.
-5. **Model pinning:** bind threshold to provider, fixed model version, policy/question and envelope versions. `jev-latest` is a discovery/shadow convenience, not an enforcement pin. The inspected Pi 1.1.0 System One wrapper returns the requested `model.id`, not the provider’s resolved version, so that field cannot verify a moving alias. Require a tested fixed-version classifier entry through Pi’s native catalog/provider mechanism before enforcement; otherwise stay shadow/Rules. Model/profile changes invalidate calibration.
+5. **Model pinning:** bind threshold to provider, fixed model version, policy/question and envelope versions. `jev-latest` is a discovery/shadow convenience, not an enforcement pin. The inspected Pi 1.1.0 System One wrapper returns the requested `model.id`, not the provider’s resolved version, so that field cannot verify a moving alias. Require a tested fixed-version decision model entry through Pi’s native catalog/provider mechanism before enforcement; otherwise stay shadow/Rules. Model/profile changes invalidate calibration.
 6. **Systems tests:** rejected calls invoke no executor; no key/401/429/timeout/malformed output/late completion; no-UI/RPC disconnect or agent-controlled confirm; concurrent approvals and rule revocation; pending-dialog reload; branch/compaction provenance; changed arguments/scripts/symlinks and shell prefix/spawn hooks; guard load failure; Allow-once → child-launch bypass; child impersonation; codemode services; exact-approval replay; protected-path writes and user-config tampering; toggle provenance (agent text, tool output and pi-ask answers cannot switch Automode off or rewrite `automode.json`).
 
 ### Proposed pilot targets—not achieved results
@@ -462,7 +462,7 @@ Proposed package modules: `index.ts` (lifecycle/command), `policy.ts` (pure rule
 - Deterministic gate overhead **p95 < 10 ms**; semantic gate **p95 < 1 second**, **2-second hard deadline**, excluding human response time. Measure full end-to-end client latency and realistic batches, not vendor inference numbers.
 - **No new model-facing tools or always-on prompt tokens**; bounded per-decision reviewer input and recorded reviewer spend. Control the state size through completeness, not arbitrary lossy truncation.
 
-Before semantic enforcement, the product owner/release maintainer must approve the absolute unsafe-Allow tolerance, reviewed evaluation capacity and operating threshold—not ask each customer to calibrate a classifier. No fixed review count has been authorized. If evidence is too sparse, publish an experimental/shadow profile—not a safety claim. If Jev does not earn its interruption advantage, ship the useful keyless slice and keep semantic enforcement off.
+Before semantic enforcement, the product owner/release maintainer must approve the absolute unsafe-Allow tolerance, reviewed evaluation capacity and operating threshold—not ask each customer to calibrate a decision model. No fixed review count has been authorized. If evidence is too sparse, publish an experimental/shadow profile—not a safety claim. If Jev does not earn its interruption advantage, ship the useful keyless slice and keep semantic enforcement off.
 
 ### Remaining launch decisions
 

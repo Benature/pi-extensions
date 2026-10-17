@@ -1,5 +1,5 @@
 /**
- * Narrow typed questions sent to the native classifier, in one request.
+ * Narrow typed questions sent to the native decision model, in one request.
  *
  * Two choice questions only: a blocklist message-rule match
  * (match / clear / uncertain) and an allowlist message-rule match
@@ -10,7 +10,7 @@
  * Shadow-only beta: these answers are captured as evidence. No answer here —
  * at any confidence — authorizes an action or clears an unresolved block.
  */
-import type { ClassifierChoiceQuestionLike, ReviewerSettings, Rule } from "./contract.js";
+import type { DecisionModelChoiceQuestionLike, ReviewerSettings, Rule } from "./contract.js";
 
 export const QUESTION_VERSION = 1;
 
@@ -41,8 +41,8 @@ const UNCERTAIN_CLAUSE =
 	"Missing, incomplete, oversized, conflicting, or ambiguous evidence means " +
 	"uncertainty; never guess.";
 
-export function buildQuestions(settings: ReviewerSettings): Record<string, ClassifierChoiceQuestionLike> {
-	const questions: Record<string, ClassifierChoiceQuestionLike> = {};
+export function buildQuestions(settings: ReviewerSettings): Record<string, DecisionModelChoiceQuestionLike> {
+	const questions: Record<string, DecisionModelChoiceQuestionLike> = {};
 	if (enabledMessageRules(settings.blocklist).length > 0) {
 		questions[BLOCK_QUESTION_ID] = {
 			type: "choice",
