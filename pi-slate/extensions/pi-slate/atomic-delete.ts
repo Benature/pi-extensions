@@ -38,6 +38,18 @@ export function imageTokenEnclosing(text: string, cursor: Cursor): ImageTokenRan
  * Snap an interior caret to the nearest token boundary (ties go to the token
  * start). A caret that is not inside a token is returned unchanged.
  */
+/** Token under the caret including both boundary columns. */
+export function imageTokenCovering(text: string, cursor: Cursor): ImageTokenRange | undefined {
+  const line = text.split("\n")[cursor.line];
+  if (line === undefined) return undefined;
+  for (const match of line.matchAll(IMAGE_TOKEN_RE)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (cursor.col >= start && cursor.col <= end) return { start, end, token: match[0] };
+  }
+  return undefined;
+}
+
 export function snapCursorOutOfToken(text: string, cursor: Cursor): Cursor {
   const token = imageTokenEnclosing(text, cursor);
   if (!token) return cursor;
