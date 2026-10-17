@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
-  backgroundAnsi, foregroundAnsi, rgbColor, truncateToWidth, visibleWidth, type Component, type TerminalColorMode,
+  foregroundAnsi, rgbColor, truncateToWidth, visibleWidth, type Component, type TerminalColorMode,
 } from "@earendil-works/pi-tui";
 import { hairlineTextWidth, wrapHairlineText, symmetricHairline } from "./hairline.ts";
 import { sidebarText } from "./sidebar-data.ts";
@@ -21,13 +21,22 @@ function colorMode(theme: Theme): TerminalColorMode {
   return typeof theme.getColorMode === "function" ? theme.getColorMode() : "truecolor";
 }
 
-/** Stock Pi mark, 25% larger: 5 cells × 2 rows of half-blocks. Brand colors stay fixed. */
-export function piLogoLines(theme: Theme): [string, string] {
+/**
+ * Stock Pi mark, 25% larger: 5 cells × 3 rows of half-blocks. Brand colors stay fixed.
+ *
+ *   coral coral coral coral .
+ *   coral coral coral coral .
+ *   blue  blue  .     coral .
+ *   blue  blue  blue  .     yellow
+ *   blue  blue  .     .     yellow
+ */
+export function piLogoLines(theme: Theme): [string, string, string] {
   const mode = colorMode(theme);
   const fg = (color: typeof CORAL) => foregroundAnsi(color, mode);
   return [
-    `${fg(CORAL)}${backgroundAnsi(BLUE, mode)}▀▀${RESET}${fg(CORAL)}▀█${RESET} `,
-    `${fg(BLUE)}██▀${RESET} ${fg(YELLOW)}█${RESET}`,
+    `${fg(CORAL)}████${RESET} `,
+    `${fg(BLUE)}██▄${RESET}${fg(CORAL)}▀${RESET}${fg(YELLOW)}▄${RESET}`,
+    `${fg(BLUE)}▀▀${RESET}  ${fg(YELLOW)}▀${RESET}`,
   ];
 }
 
@@ -65,16 +74,17 @@ export function renderSlateHeader(input: {
   const model = sidebarText(input.identity?.model);
   const thinking = sidebarText(input.identity?.thinking);
   const rawPath = sidebarText(input.path);
-  const path = rawPath ? basename(rawPath) || rawPath : rawPath;
+  const dir = rawPath ? basename(rawPath) : "";
+  const path = dir && dir !== "/" ? `/${dir}` : rawPath;
   const showLogo = input.logo ?? supportsPiLogo();
   const modelLine = [model, thinking].filter(Boolean).join(" · ");
   const rows: string[] = [];
   if (showLogo && width >= 12) {
-    const [top, bottom] = piLogoLines(input.theme);
+    const [top, middle, bottom] = piLogoLines(input.theme);
     rows.push(
       logoRow(top, input.theme.fg("text", `Pi Agent v${version}`), width),
-      logoRow(bottom, modelLine ? input.theme.fg("muted", modelLine) : "", width),
-      padLine(`${" ".repeat(LOGO_CELLS + 1)}${truncateToWidth(input.theme.fg("dim", path), Math.max(0, width - LOGO_CELLS - 1), "…")}`, width),
+      logoRow(middle, modelLine ? input.theme.fg("muted", modelLine) : "", width),
+      logoRow(bottom, input.theme.fg("dim", path), width),
     );
   } else {
     const mark = piWordmark(input.theme);

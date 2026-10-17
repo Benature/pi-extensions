@@ -259,8 +259,8 @@ export class Sidebar implements Component {
       { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      { text: this.pair(stat("in", formatCompactTokenCount(s.usage.input)), stat("cache", formatCompactTokenCount(s.usage.cacheRead)), width), action: branchUsage },
-      { text: this.pair(stat("out", formatCompactTokenCount(s.usage.output)), stat("uncached", formatCompactTokenCount(sidebarUncached(s.usage))), width), action: branchUsage },
+      { text: this.pair(stat("IN", formatCompactTokenCount(s.usage.input)), stat("CACHE", formatCompactTokenCount(s.usage.cacheRead)), width), action: branchUsage },
+      { text: this.pair(stat("OUT", formatCompactTokenCount(s.usage.output)), stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), width), action: branchUsage },
       { text: "" },
       { text: this.paint("dim", "─".repeat(width)) },
     ];
