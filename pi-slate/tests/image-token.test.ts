@@ -58,9 +58,9 @@ test("Pi 1.3 fake-cursor caret on [ repaints the whole token as one unit", () =>
   assert.equal(paintImageTokenAtCaret(line), "see \x1b[7m[image-1]\x1b[27m ok");
 });
 
-test("caret just past the token end repaints the whole token", () => {
+test("caret just past the token end is a normal caret", () => {
   const line = "    see [image-1]\x1b[7m \x1b[0m";
-  assert.equal(paintImageTokenAtCaret(line), "    see \x1b[7m[image-1]\x1b[27m\x1b[7m \x1b[0m");
+  assert.equal(paintImageTokenAtCaret(line), line);
 });
 
 test("space variant token is repainted whole", () => {
@@ -73,9 +73,9 @@ test("caret on the character after the token's trailing space does not highlight
   assert.equal(paintImageTokenAtCaret(line), line);
 });
 
-test("caret on the space right after the token still counts as on the object", () => {
+test("caret on the space right after the token is a normal caret", () => {
   const line = "[image-1]\x1b[7m \x1b[0mok";
-  assert.equal(paintImageTokenAtCaret(line), "\x1b[7m[image-1]\x1b[27m\x1b[7m \x1b[0mok");
+  assert.equal(paintImageTokenAtCaret(line), line);
 });
 
 test("caret next to the token on the left does not highlight it", () => {
@@ -95,9 +95,9 @@ test("non-image bracketed text is left alone", () => {
   assert.equal(paintImageTokenAtCaret(plain), plain);
 });
 
-test("IME cursor marker between token and caret is preserved", () => {
+test("IME cursor marker after the token does not highlight it", () => {
   const line = "a [image-1]\x1b_pi:c\x07\x1b[7m \x1b[0m";
-  assert.equal(paintImageTokenAtCaret(line), "a \x1b[7m[image-1]\x1b[27m\x1b_pi:c\x07\x1b[7m \x1b[0m");
+  assert.equal(paintImageTokenAtCaret(line), line);
 });
 
 test("paintImageTokenAtCaretLines only touches the caret line", () => {
@@ -135,6 +135,11 @@ function stubEditor(initial: string, cursor: { line: number; col: number }) {
           state.cursor.line += 1;
           state.cursor.col = 0;
         }
+      } else if (data.length === 1 && data >= " ") {
+        const line = lines[state.cursor.line]!;
+        lines[state.cursor.line] = line.slice(0, state.cursor.col) + data + line.slice(state.cursor.col);
+        state.text = lines.join("\n");
+        state.cursor.col += 1;
       }
     },
     handleMouse(_event: TuiMouseEvent) {
@@ -148,11 +153,12 @@ function stubEditor(initial: string, cursor: { line: number; col: number }) {
   return { editor: editor as unknown as CustomEditor, state };
 }
 
-test("stub: a printable keypress cannot leave the caret inside a token", () => {
+test("stub: a printable keypress cannot land inside a token", () => {
   const { editor, state } = stubEditor("see [image-1] ok", { line: 0, col: 8 });
   const uninstall = installEditorPatch(new Map(), () => {}, editor);
   (editor as unknown as { handleInput(data: string): void }).handleInput("x");
-  assert.deepEqual(state.cursor, { line: 0, col: 4 }, "snapped to the nearer (start) boundary");
+  assert.equal(state.text, "see x[image-1] ok", "inserts at the token start, not inside");
+  assert.deepEqual(state.cursor, { line: 0, col: 5 });
   uninstall();
 });
 
@@ -243,17 +249,15 @@ test("real editor: caret at the token start paints the whole token in the render
   assert.equal(strip(paintedLine!), strip(caretLine!), "paint changes styling only, not text");
 });
 
-test("real editor: caret past the token end paints the whole token; one column further does not", (t) => {
+test("real editor: caret at the token end is a normal caret", (t) => {
   const { editor, placeholders } = realEditor();
   t.after(() => placeholders.dispose());
   editor.setText("see [image-1] ok"); // token 4..12, end 13; caret starts at col 16
   editor.handleInput("\x1b[D");
   editor.handleInput("\x1b[D"); // col 14, on "o"
-  let painted = paintImageTokenAtCaretLines(editor.render(60));
-  assert.ok(!painted.some((row) => row.includes("\x1b[7m[image-1]\x1b[27m")), "caret next to the token leaves it plain");
   editor.handleInput("\x1b[D"); // col 13, the token end boundary
-  painted = paintImageTokenAtCaretLines(editor.render(60));
-  assert.ok(painted.some((row) => row.includes("\x1b[7m[image-1]\x1b[27m")), "caret on the token end highlights the object");
+  const painted = paintImageTokenAtCaretLines(editor.render(60));
+  assert.ok(!painted.some((row) => row.includes("\x1b[7m[image-1]\x1b[27m")), "caret after the token is not an object highlight");
 });
 
 function strip(line: string): string {

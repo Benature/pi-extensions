@@ -8,7 +8,7 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   atomicImageTokenDelete,
-  imageTokenEnclosing,
+  imageTokenCovering,
   snapCursorOutOfToken,
   type Cursor,
 } from "./atomic-delete.ts";
@@ -160,39 +160,43 @@ export function installEditorPatch(
     onTokensChanged();
   }
   function handleInputPatch(this: CustomEditor, data: string) {
-    const direction = atomicDeleteDirection(data);
-    if (direction && !instance.isInPaste) {
-      const edit = atomicImageTokenDelete(this.getText(), this.getCursor(), direction);
-      if (edit) {
-        // Mirror the editor: a control key cancels an armed jump mode and
-        // falls through to normal handling — the atomic delete is that handling.
-        if (instance.jumpMode != null) instance.jumpMode = null;
-        // One setText = one undo snapshot, so a single undo restores the
-        // whole token (never a partial token).
-        const pastes = instance.pastes;
-        const savedPastes = pastes instanceof Map && pastes.size > 0 ? new Map(pastes) : undefined;
-        const pasteCounter = instance.pasteCounter;
-        instance.setText(edit.text);
-        if (savedPastes && instance.pastes instanceof Map && instance.pastes.size === 0) {
-          instance.pastes = savedPastes;
-          if (typeof pasteCounter === "number") instance.pasteCounter = pasteCounter;
+    if (!instance.isInPaste) {
+      // Snap before the keystroke so a printable char cannot land inside a token
+      // and break atomic delete.
+      snapCaretOutOfToken(this, originalHandleInput);
+      const direction = atomicDeleteDirection(data);
+      if (direction) {
+        const edit = atomicImageTokenDelete(this.getText(), this.getCursor(), direction);
+        if (edit) {
+          if (instance.jumpMode != null) instance.jumpMode = null;
+          const pastes = instance.pastes;
+          const savedPastes = pastes instanceof Map && pastes.size > 0 ? new Map(pastes) : undefined;
+          const pasteCounter = instance.pasteCounter;
+          instance.setText(edit.text);
+          if (savedPastes && instance.pastes instanceof Map && instance.pastes.size === 0) {
+            instance.pastes = savedPastes;
+            if (typeof pasteCounter === "number") instance.pasteCounter = pasteCounter;
+          }
+          moveCursorTo(this, edit.cursor, edit.text, originalHandleInput);
+          onTokensChanged();
+          return;
         }
-        moveCursorTo(this, edit.cursor, edit.text, originalHandleInput);
-        onTokensChanged();
-        return;
+      }
+      const step = cursorStepDirection(data);
+      const covering = step ? imageTokenCovering(this.getText(), this.getCursor()) : undefined;
+      if (step && covering) {
+        const col = this.getCursor().col;
+        if (step === "right" && col === covering.start) {
+          moveCursorTo(this, { line: this.getCursor().line, col: covering.end }, this.getText(), originalHandleInput);
+          return;
+        }
+        if (step === "left" && col === covering.end) {
+          moveCursorTo(this, { line: this.getCursor().line, col: covering.start }, this.getText(), originalHandleInput);
+          return;
+        }
       }
     }
-    const step = instance.isInPaste ? undefined : cursorStepDirection(data);
     const result = originalHandleInput.call(this, data);
-    if (step) {
-      // One arrow keypress crosses the whole token: keep stepping while the
-      // caret sits inside one. Tokens are short ASCII; the bound only guards
-      // against a handler that stops moving the caret.
-      for (let guard = 0; guard < 64 && imageTokenEnclosing(this.getText(), this.getCursor()); guard += 1) {
-        originalHandleInput.call(this, data);
-      }
-      return result;
-    }
     if (!instance.isInPaste) snapCaretOutOfToken(this, originalHandleInput);
     return result;
   }
