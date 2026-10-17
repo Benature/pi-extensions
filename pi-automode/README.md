@@ -91,7 +91,7 @@ Rules can be edited, disabled, moved between allow/block, or deleted.
 
 You can skip this entirely. It adds **shadow review**, not automatic approval.
 
-In `/automode`, choose **Classifier (optional)** to open a picker that lists
+In `/automode`, choose **Decision Models** to open a picker that lists
 every classifier in Pi's registry—including models such as
 vercel-ai-gateway's Jev (`typesafe-ai/jev`). Entries are marked
 `login required` when that provider is not authenticated and `untested` when

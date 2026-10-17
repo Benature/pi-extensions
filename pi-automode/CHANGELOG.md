@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rename the panel's state toggle to **Toggle OFF** / **Toggle ON** and the
+  classifier entry to **Decision Models**, and drop the redundant On/Off
+  subtitle so the panel opens straight to its actions.
 - Apply `/automode on` and `/automode off` in a single step from Pi's
   interactive terminal; the toggle confirmation dialog is gone. The live TUI
   dispatch is the decision, so any extension able to dispatch a command in
