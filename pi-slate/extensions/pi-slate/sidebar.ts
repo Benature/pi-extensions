@@ -273,14 +273,14 @@ export class Sidebar implements Component {
     const resourceHeading = (label: string, count: string): string =>
       this.heading(label) + this.paint("muted", ` · ${count}`);
     const rows: Row[] = [{ text: "" }, {
-      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : `${unknown ? "—" : enabled} enabled`),
+      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : `${unknown ? "—" : enabled} Enabled`),
       action: () => this.toggleSection("mcp"),
     }];
     if (this.folds.mcp) {
       if (this.resources.mcpError) rows.push({ text: this.paint("warning", this.resources.mcpError) });
       rows.push(...this.resourceRows("mcp"));
     }
-    rows.push({ text: "" }, { text: resourceHeading(`${this.folds.skills ? "⌄" : "›"} Skills`, `${loaded} loaded`), action: () => this.toggleSection("skills") });
+    rows.push({ text: "" }, { text: resourceHeading(`${this.folds.skills ? "⌄" : "›"} Skills`, `${loaded} Loaded`), action: () => this.toggleSection("skills") });
     if (this.folds.skills) rows.push(...this.resourceRows("skills"));
     rows.push({ text: "" }, { text: resourceHeading(`${this.folds.prompts ? "⌄" : "›"} Prompts`, `${this.resources.prompts.length}`), action: () => this.toggleSection("prompts") });
     if (this.folds.prompts) rows.push(...this.resourceRows("prompts"));
