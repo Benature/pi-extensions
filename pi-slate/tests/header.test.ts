@@ -14,12 +14,12 @@ test("header uses the stock Pi mark and the product stack, not a greeting", () =
     logo: true, theme,
   });
   const plain = lines.map(stripVTControlCharacters);
-  assert.equal(plain.length, 4);
+  assert.equal(plain.length, 3);
   assert.match(plain[0]!, /Pi Agent v1\.0\.4/);
   assert.match(plain[1]!, /grok-4\.6 \(bedrock\) · medium/);
   assert.match(plain[2]!, /\/pi-extensions/);
   assert.doesNotMatch(plain[2]!, /\/Users/);
-  assert.equal(plain[3], "─".repeat(72));
+  assert(!plain.some(line => /^─+$/.test(line)), "no plain hairline under the header");
   assert.doesNotMatch(plain.join("\n"), /Ready when you are|slate \/ /);
   assert(plain[0]!.includes("▀"));
   assert(plain.every(line => visibleWidth(line) <= 72));
