@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { packages } from "./packages.mjs";
-import { packageSpecs, piCliVersion } from "./quickstart-ci.mjs";
+import { packageSpecs, piCliVersion, waitForRegistryPackage } from "./quickstart-ci.mjs";
 
 test("quickstart package downloads match the release allowlist and exact manifests", () => {
   const specs = packageSpecs();
@@ -23,6 +23,28 @@ test("quickstart smoke uses the pinned Pi CLI and the dedicated workflow is rele
   assert.match(workflow, /workflows: \["Main CI and releases"\]/);
   assert.match(workflow, /schedule:/);
   assert.match(workflow, /node scripts\/quickstart-ci\.mjs/);
+});
+
+test("quickstart waits through npm's post-publish processing delay", () => {
+  let calls = 0;
+  const version = waitForRegistryPackage("demo@1.2.3", {
+    timeoutMs: 50,
+    intervalMs: 1,
+    sleepMs: () => {},
+    check: () => {
+      calls += 1;
+      if (calls < 3) throw new Error("notarget");
+      return "1.2.3";
+    },
+  });
+  assert.equal(version, "1.2.3");
+  assert.equal(calls, 3);
+  assert.throws(() => waitForRegistryPackage("missing@1.0.0", {
+    timeoutMs: 0,
+    intervalMs: 1,
+    sleepMs: () => {},
+    check: () => { throw new Error("notarget"); },
+  }), /Timed out waiting for missing@1\.0\.0/);
 });
 
 test("README badges point at workflows that run on main", () => {

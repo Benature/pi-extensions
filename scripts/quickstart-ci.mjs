@@ -36,6 +36,37 @@ function run(command, args, options = {}) {
   }).trim();
 }
 
+function sleep(milliseconds) {
+  if (milliseconds > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+export function waitForRegistryPackage(
+  spec,
+  {
+    timeoutMs = 10 * 60_000,
+    intervalMs = 15_000,
+    check = value => run(npm, ["view", value, "version", "--silent"], { stdio: ["ignore", "pipe", "pipe"] }),
+    sleepMs = sleep,
+  } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  for (;;) {
+    try {
+      const version = check(spec);
+      if (version) return version;
+      lastError = new Error(`${spec} is not visible on npm yet`);
+    } catch (error) {
+      lastError = error;
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    console.log(`Waiting for npm to finish processing ${spec}`);
+    sleepMs(Math.min(intervalMs, remaining));
+  }
+  throw new Error(`Timed out waiting for ${spec} on npm: ${lastError instanceof Error ? lastError.message : "not visible"}`);
+}
+
 function retry(command, args, options = {}) {
   let lastError;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -98,6 +129,7 @@ export function quickstartSmoke() {
     console.log("Root `pi install .` smoke: PASS");
 
     for (const item of packageSpecs()) {
+      waitForRegistryPackage(item.spec);
       const file = downloadOne(item.spec, downloads);
       console.log(`Registry download ${item.spec}: PASS (${file})`);
     }
