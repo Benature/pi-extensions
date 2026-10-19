@@ -108,6 +108,8 @@ Previews are bounded: 256 KiB snapshots, 2,000 parsed rows, 16 collapsed / 400 e
 
 ### Claude Code Tool Style (opt-in)
 
+![Slate Claude Code-style tool transcript with grouped calls, edit counts, and an intentional demo failure](assets/slate-claudecode-tools.png)
+
 Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`. Omit it or use `"default"` for existing Slate cards. This is an independently implemented presentation inspired by [pi-pretty](https://github.com/heyhuynhgiabuu/pi-pretty), not copied code.
 
 - Compact `✓ Name (args)` calls with `└` result summaries, execution duration (including zero and failures), bash timeout, and green/red edit counts. Pending/running/error states remain visible.
