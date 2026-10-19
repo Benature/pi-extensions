@@ -319,7 +319,10 @@ test("dashboard uses live branch facts and session-scoped tasks; commands preser
   f.manager.appendMessage({ role: "user", content: "hi", timestamp: 0 });
   f.manager.appendMessage({ role: "assistant", api: "anthropic-messages", provider: "anthropic", model: "fixture", timestamp: 1, stopReason: "stop", content: [{ type: "text", text: "done" }], usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 50, totalTokens: 470, cost: { input: .1, output: .2, cacheRead: .03, cacheWrite: .02, total: .35 } } });
   await f.emit("session_info_changed");
-  assert.match(rail(), /Dashboard test/); assert.match(rail(), /PID/); assert.match(rail(), /450\s+In/); assert.match(rail(), /Uncached\s+100/); assert.match(rail(), /\$0.35/);
+  assert.doesNotMatch(rail(), /Dashboard test|Unnamed session|Untitled session/);
+  assert.ok(rail().includes(`Session ${f.manager.getSessionId().slice(0, 8)} · PID ${process.pid}`));
+  assert.doesNotMatch(railOf(f).sessionDetails(), /Dashboard test/);
+  assert.ok(railOf(f).sessionDetails().startsWith(`Session ${f.manager.getSessionId()} · PID ${process.pid}`)); assert.match(rail(), /450\s+In/); assert.match(rail(), /Uncached\s+100/); assert.match(rail(), /\$0.35/);
   assert(!/Summary|Activity Preview|Context\s*\n/.test(rail()));
   f.extraCommands.push({ name: "skill:review", source: "skill", sourceInfo: { path: "/skills/review/SKILL.md", scope: "user" } });
   await f.emit("message_end", { message: { role: "toolResult", toolName: "codemode", toolCallId: "outer", content: [], isError: false, nestedCalls: { calls: [{ id: "nested-read", name: "read", arguments: { path: "/skills/review/SKILL.md" }, status: "ok" }], complete: true } } });

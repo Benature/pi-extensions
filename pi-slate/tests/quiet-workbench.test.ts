@@ -12,7 +12,7 @@ import { Sidebar } from "../extensions/pi-slate/sidebar.ts";
 import type { SidebarSession } from "../extensions/pi-slate/sidebar-data.ts";
 
 const theme = loadThemeFromPath(new URL("../themes/tokyo-night.json", import.meta.url).pathname, "truecolor");
-const session: SidebarSession = { id: "example-session", name: "Quiet workbench", pid: 8421, cwd: "/tmp/project",
+const session: SidebarSession = { id: "example-session", pid: 8421, cwd: "/tmp/project",
   model: "sample-model", thinking: "medium", tokens: 55000, percent: 11, contextWindow: 500000,
   estimated: false, rate: 82, startedAt: 1000, lastTurnMs: 14000, working: true, turns: 4, messages: 8,
   usage: { input: 128400, output: 6800, total: 135200, cacheRead: 94000, cacheWrite: 22000, cost: 1.24 } };
@@ -87,7 +87,7 @@ test("growing usage and money keep a stable label lane and value edge with the r
 test("context meter keeps a thin track and dim separator with the real theme", () => {
   const sidebar = new Sidebar(() => 10000);
   sidebar.attach({ terminal: { rows: 50, columns: 140 }, requestRender() {} } as unknown as TUI, theme);
-  assert.equal(sessionSidebarSlots(50, 0, false).header, 13, "meter merged the old context pair and block bar rows");
+  assert.equal(sessionSidebarSlots(50, 0, false).header, 11, "single identity row removes the section/name rows");
   for (const width of [28, 40, 80]) {
     sidebar.setSession(session);
     const rows = sidebar.render(width);

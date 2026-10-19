@@ -21,7 +21,7 @@ export type SidebarActions = {
   persistFold?(section: keyof SidebarFolds, expanded: boolean): SidebarFolds | undefined;
 };
 const EMPTY_SESSION: SidebarSession = {
-  id: "", name: "Session", pid: process.pid, cwd: "", model: "—", thinking: "—", tokens: null,
+  id: "", pid: process.pid, cwd: "", model: "—", thinking: "—", tokens: null,
   percent: null, contextWindow: null, estimated: false, rate: null, startedAt: 0,
   lastTurnMs: null, working: false, turns: 0, messages: 0,
   usage: { input: null, output: null, total: null, cacheRead: null, cacheWrite: null, cost: null },
@@ -148,7 +148,7 @@ export class Sidebar implements Component {
     const s = this.session;
     const uncached = sidebarUncached(s.usage);
     const hit = s.usage.input !== null && s.usage.cacheRead !== null && s.usage.input > 0 ? `${Math.round(s.usage.cacheRead / s.usage.input * 100)}%` : "—";
-    return [`${sidebarText(s.name)} · ${s.id || "—"}`, `PID: ${s.pid}`, `Model: ${s.model} · ${s.thinking}`,
+    return [`Session ${sidebarText(s.id) || "—"} · PID ${s.pid}`, `Model: ${s.model} · ${s.thinking}`,
       `Context: ${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}${s.estimated ? " (estimated)" : ""}`,
       `Wall time (this runtime): ${sidebarDuration(s.startedAt > 0 ? this.now() - s.startedAt : null)}`,
       `Last turn: ${sidebarDuration(s.lastTurnMs)}`, `Turns: ${s.turns} · Messages: ${s.messages}`,
@@ -237,7 +237,7 @@ export class Sidebar implements Component {
     const s = this.session;
     const percent = s.percent !== null && Number.isFinite(s.percent) ? s.percent : null;
     const tone = percent !== null && percent >= 80 ? "warning" : "accent";
-    const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · PID ${s.pid}`;
+    const identity = `Session ${sidebarText(s.id).slice(0, 8) || "—"} · PID ${s.pid}`;
     const occupancy = `${s.estimated ? "~" : ""}${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}`
       + ` · ${sidebarCost(s.usage.cost)} · ${sidebarRate(s.rate)}`;
     const meter = ((): string => {
@@ -255,9 +255,7 @@ export class Sidebar implements Component {
     const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
     const statRight = (label: string, value: string): string => `${this.paint("text", value)} ${this.paint("muted", label)}`;
     return [
-      { text: this.paint("muted", "SESSION"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) },
-      { text: this.heading(sidebarText(s.name) || "Untitled session") },
-      { text: this.paint("muted", visibleWidth(identity) > width ? this.pair(sidebarText(s.id).slice(0, 8), `PID ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
+      { text: this.heading(visibleWidth(identity) > width ? this.pair(`Session ${sidebarText(s.id).slice(0, 8) || "—"}`, `· PID ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
       { text: "" },
       { text: this.pair(this.paint("text", sidebarText(s.model)), this.paint("dim", sidebarText(s.thinking)), width) },
       { text: "" },

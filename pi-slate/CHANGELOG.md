@@ -14,6 +14,7 @@
 
 ### Changed
 
+- Sidebar starts with one `Session <short-id> · PID <pid>` identity row instead of section/name/ID rows. Session names are no longer fetched or displayed; click still copies the full ID, and details show the full identity. The freed rows return to sidebar content.
 - Prompt frame uses square corners to match the sidebar border.
 
 - Sidebar has a complete border with joined corners and separators, matching inner gutters, and a thin context track instead of shaded blocks.

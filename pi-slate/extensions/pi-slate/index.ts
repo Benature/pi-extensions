@@ -297,7 +297,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     const mcpCount = resources.mcp.filter(server => server.enabled === true).length;
     if (owns("sidebar") && !sidebarYielded) {
       sidebar.setSession({
-        id: ctx.sessionManager.getSessionId?.() ?? "", name: ctx.sessionManager.getSessionName?.() ?? "Unnamed session",
+        id: ctx.sessionManager.getSessionId?.() ?? "",
         pid: process.pid, cwd: ctx.cwd, model: modelStatusLabel(ctx.model, config.modelDisplay), thinking: ctx.thinkingLevel ?? "—",
         tokens, percent, contextWindow, estimated,
         rate: tokenRate.rate() > 0 ? tokenRate.rate() : null, startedAt: sessionStartedAt, lastTurnMs,

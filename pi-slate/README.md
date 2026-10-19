@@ -132,7 +132,7 @@ Slate uses Kitty Graphics Protocol to display rich media inside your terminal.
 
 The dashboard replaces the old Summary, Activity Preview, and Context dock. It keeps session facts visible without sending them to a model:
 
-- Session name, copyable session ID, host PID, model/thinking level and context meter.
+- One identity row: `Session <short-id> · PID <pid>`. No session names; click to copy the full session ID. Model/thinking level and context meter remain below.
 - **Occupancy merges tokens, cost and rate** (`188k / 500k · $0.71 · ~420/s`) beneath the context meter, followed by two usage rows: left lane **Cached/Uncached** label-first, right lane value-first (`61.4k In`, `876 Out`). Cached is cache-read; uncached is inbound minus cache read/write. Growing totals are abbreviated, rather than squeezing neighboring numbers. Click a usage row or `/slate session` for full accounting, including cache write and hit share.
 - Runtime wall time, last-turn duration and turns/messages stay in session details.
 - Input includes uncached input plus both cache categories; reasoning is not counted again. Context occupancy is separate from cumulative usage. Unavailable metrics show `—`; estimated context is marked `~`.
