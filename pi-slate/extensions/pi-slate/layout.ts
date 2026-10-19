@@ -162,8 +162,9 @@ export function formatFocusedContextResources(
 ): string {
   const skillCount = Math.max(0, Math.round(skills));
   const serverCount = mcpCount === null ? 0 : Math.max(0, Math.round(mcpCount));
-  if (skillCount === 0 && serverCount === 0) return "";
 
+  // Focused mode owns the only inline cost readout; keep it even when no
+  // skills or MCP servers are loaded.
   const parts = [formatSpend(spend)];
   if (skillCount > 0) parts.push(`${skillCount} ${skillCount === 1 ? "skill" : "skills"}`);
   if (serverCount > 0) parts.push(`${serverCount} ${serverCount === 1 ? "MCP" : "MCPs"}`);
@@ -365,7 +366,7 @@ export type SlateArgs =
   | { ok: true; kind: "message-length-menu" }
   | { ok: true; kind: "message-length"; value?: number | "all" }
   | { ok: true; kind: "theme-menu" }
-  | { ok: true; kind: "named-theme"; name: "tokyo-night" }
+  | { ok: true; kind: "named-theme"; name: "system" | "tokyo-night" }
   | { ok: true; kind: "theme"; flavor?: Flavor; style?: Style }
   | { ok: true; kind: "style"; value?: Style }
   | { ok: true; kind: "bug-menu" }
@@ -394,7 +395,8 @@ export function parseSlateArgs(raw: string): SlateArgs {
   if (head === "theme") {
     if (words.length > 3) return { ok: false };
     if (!tail) return { ok: true, kind: "theme-menu" };
-    if ((tail === "tokyo-night" || tail === "tokyonight" || tail === "default") && !extra) return { ok: true, kind: "named-theme", name: "tokyo-night" };
+    if (tail === "default" && !extra) return { ok: true, kind: "named-theme", name: "system" };
+    if ((tail === "tokyo-night" || tail === "tokyonight") && !extra) return { ok: true, kind: "named-theme", name: "tokyo-night" };
     const flavor = parseFlavor(tail);
     if (flavor) {
       if (!extra) return { ok: true, kind: "theme", flavor };

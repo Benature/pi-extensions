@@ -45,14 +45,14 @@ test("chrome paint uses the theme border token", () => {
 });
 
 test("inscribed border keeps rounded corners and truncates the right label first", () => {
-  const line = inscribedBorder(" left ", " right ", 16, (text) => text, "╰", "╯");
-  assert.equal(line[0], "╰");
-  assert.equal(line.at(-1), "╯");
+  const line = inscribedBorder(" left ", " right ", 16, (text) => text, "└", "┘");
+  assert.equal(line[0], "└");
+  assert.equal(line.at(-1), "┘");
   assert.ok(line.includes("left"));
-  const squeezed = inscribedBorder(" project / main ", " model · high ", 18, (text) => text, "╰", "╯");
+  const squeezed = inscribedBorder(" project / main ", " model · high ", 18, (text) => text, "└", "┘");
   assert.equal(visibleWidth(squeezed), 18);
-  assert.ok(squeezed.startsWith("╰"));
-  assert.ok(squeezed.endsWith("╯"));
+  assert.ok(squeezed.startsWith("└"));
+  assert.ok(squeezed.endsWith("┘"));
   assert.ok(squeezed.includes("project"));
 });
 
@@ -120,8 +120,8 @@ test("focused context sits on the composer top edge", () => {
     80,
     (text) => text,
   );
-  assert.equal(line[0], "╭");
-  assert.equal(line.at(-1), "╮");
+  assert.equal(line[0], "┌");
+  assert.equal(line.at(-1), "┐");
   assert.doesNotMatch(line, /tokens/);
   assert.match(line, /\$7\.47/);
   const squeezed = composerContextEdge("$7.47 · 14 skills", 28, (text) => text, 3);
@@ -129,10 +129,11 @@ test("focused context sits on the composer top edge", () => {
   assert.match(squeezed, /↑ 3 more/);
 });
 
-test("focused prompt edge hides empty resource counts and shows loaded skills", () => {
+test("focused prompt edge keeps cost, hides empty resource counts, and shows loaded skills", () => {
   const empty = composerContextEdge(formatFocusedContextResources(1.234, 0, 0), 40, (text) => text);
-  assert.equal(empty, "╭" + "─".repeat(38) + "╮");
-  assert.doesNotMatch(empty, /0 skills|0 MCP|\$1\.23/);
+  assert.equal(visibleWidth(empty), 40);
+  assert.match(empty, /\$1\.23/);
+  assert.doesNotMatch(empty, /0 skills|0 MCP/);
 
   const withSkill = composerContextEdge(formatFocusedContextResources(1.234, 1, 0), 80, (text) => text);
   assert.match(withSkill, /\$1\.23 · 1 skill/);
@@ -181,9 +182,9 @@ test("working status stays left of the focused context edge", () => {
     "pondering...",
   );
   assert.equal(visibleWidth(line), 80);
-  assert.match(line, /^╭── pondering\.\.\./);
+  assert.match(line, /^┌── pondering\.\.\./);
   assert.ok(line.indexOf("pondering") < line.indexOf("$7.47"));
-  assert.match(line, /\$7\.47 · 14 skills · 2 MCPs ╮$/);
+  assert.match(line, /\$7\.47 · 14 skills · 2 MCPs ┐$/);
 });
 
 test("live status keeps its label when resources are long", () => {
@@ -208,15 +209,15 @@ test("top edge right suffix stays pinned and survives truncation", () => {
   const pid = `PID-${process.pid}`;
   const wide = composerStatusContextEdge("$7.47 · 14 skills · 2 MCPs", 80, (text) => text, 0, "", undefined, pid);
   assert.equal(visibleWidth(wide), 80);
-  assert.match(wide, new RegExp(`2 MCPs +${pid} ╮$`));
+  assert.match(wide, new RegExp(`2 MCPs +${pid} ┐$`));
 
   const narrow = composerStatusContextEdge("$7.47 · 14 skills · 2 MCPs", 30, (text) => text, 0, "", undefined, pid);
   assert.equal(visibleWidth(narrow), 30);
-  assert.ok(stripVTControlCharacters(narrow).endsWith(`${pid} ╮`));
+  assert.ok(stripVTControlCharacters(narrow).endsWith(`${pid} ┐`));
 
   const alone = composerStatusContextEdge("", 40, (text) => text, 0, "", undefined, pid);
   assert.equal(visibleWidth(alone), 40);
-  assert.ok(stripVTControlCharacters(alone).endsWith(`${pid} ╮`));
+  assert.ok(stripVTControlCharacters(alone).endsWith(`${pid} ┐`));
 });
 
 test("top edge fits every width with ANSI and wide suffixes", () => {
@@ -248,7 +249,7 @@ test("overflow count stays visible before static resource decorations", () => {
 test("composer top border omits the PID suffix when PID display is off", () => {
   const off = composerStatusContextEdge("$7.47 · 14 skills", 80, (text) => text, 0, "", undefined, "");
   assert.doesNotMatch(stripVTControlCharacters(off), /PID-/);
-  assert.ok(stripVTControlCharacters(off).endsWith("╮"));
+  assert.ok(stripVTControlCharacters(off).endsWith("┐"));
 });
 
 test("composer editor renders PID only when enabled and hides it if it cannot fit", () => {
@@ -290,7 +291,7 @@ test("working wave sits in the composer top border without growing the frame", (
       const lines = editor.render(80);
       assert.equal(lines.length, idle.length, `tick ${tick}: frame never grows`);
       assert.equal(visibleWidth(lines[0]!), 80, `tick ${tick}: border keeps its width`);
-      assert.match(lines[0]!, /^╭── [▁▂▃▄▅▆▇█]{7} /, `tick ${tick}: wave sits in the word slot`);
+      assert.match(lines[0]!, /^┌── [▁▂▃▄▅▆▇█]{7} /, `tick ${tick}: wave sits in the word slot`);
       advanceWave();
     }
     setWaveActive(false);
@@ -325,7 +326,7 @@ test("non-working statuses still render while the wave runs", () => {
 test("empty composer frames sides and prompt without a hint row", () => {
   const width = 40;
   const lines = frameComposerLines(
-    ["╭" + "─".repeat(width - 2) + "╮", " ".repeat(width), "╰" + "─".repeat(width - 2) + "╯"],
+    ["┌" + "─".repeat(width - 2) + "┐", " ".repeat(width), "└" + "─".repeat(width - 2) + "┘"],
     { width, empty: true, paddingX: 4, paint: (text) => text },
   );
   assert.equal(lines.length, 3);
@@ -339,7 +340,7 @@ test("composer keeps a one-cell reverse cursor", () => {
   const width = 24;
   const cursorLine = `    \x1b[7m \x1b[0m${" ".repeat(width - 5)}`;
   const lines = frameComposerLines(
-    ["╭" + "─".repeat(width - 2) + "╮", cursorLine, "╰" + "─".repeat(width - 2) + "╯"],
+    ["┌" + "─".repeat(width - 2) + "┐", cursorLine, "└" + "─".repeat(width - 2) + "┘"],
     { width, empty: false, paddingX: 4, paint: (text) => text },
   );
   const body = lines[1] ?? "";
@@ -351,7 +352,7 @@ test("composer keeps a one-cell reverse cursor", () => {
 test("composer pins a right rail even when the source line is full width", () => {
   const width = 20;
   const lines = frameComposerLines(
-    ["╭" + "─".repeat(width - 2) + "╮", "x".repeat(width), "╰" + "─".repeat(width - 2) + "╯"],
+    ["┌" + "─".repeat(width - 2) + "┐", "x".repeat(width), "└" + "─".repeat(width - 2) + "┘"],
     { width, empty: false, paddingX: 4, paint: (text) => text },
   );
   const body = stripVTControlCharacters(lines[1] ?? "");
@@ -363,7 +364,7 @@ test("composer pins a right rail even when the source line is full width", () =>
 test("typed composer retains the quiet prompt without adding a hint row", () => {
   const width = 20;
   const lines = frameComposerLines(
-    ["╭" + "─".repeat(width - 2) + "╮", "    hello           ", "╰" + "─".repeat(width - 2) + "╯"],
+    ["┌" + "─".repeat(width - 2) + "┐", "    hello           ", "└" + "─".repeat(width - 2) + "┘"],
     { width, empty: false, paddingX: 4, paint: (text) => text },
   );
   assert.equal(lines.length, 3);
@@ -376,15 +377,15 @@ test("typed composer retains the quiet prompt without adding a hint row", () => 
 test("composer shelf pads to four rows without moving the footer", () => {
   const width = 20;
   const lines = padComposerFrame(
-    ["╭" + "─".repeat(width - 2) + "╮", "│ ›               │", "╰" + "─".repeat(width - 2) + "╯"],
+    ["┌" + "─".repeat(width - 2) + "┐", "│ ›               │", "└" + "─".repeat(width - 2) + "┘"],
     width,
     (text) => text,
   );
   assert.equal(lines.length, 4);
-  assert.equal(lines[0]?.startsWith("╭"), true);
+  assert.equal(lines[0]?.startsWith("┌"), true);
   assert.equal(stripVTControlCharacters(lines[1] ?? "").startsWith("│"), true);
   assert.equal(stripVTControlCharacters(lines[2] ?? ""), "│" + " ".repeat(width - 2) + "│");
-  assert.equal(lines[3]?.startsWith("╰"), true);
+  assert.equal(lines[3]?.startsWith("└"), true);
 });
 
 test("frameRow closes both sides and keeps a reverse-video cell intact", () => {
@@ -398,17 +399,17 @@ test("frameRow closes both sides and keeps a reverse-video cell intact", () => {
 
 test("inscribed titles use composer corners", () => {
   assert.equal(visibleWidth(inscribedTitle("Summary", 16, (text) => text, "top")), 16);
-  assert.match(inscribedTitle("Summary", 16, (text) => text, "top"), /^╭─ Summary /);
+  assert.match(inscribedTitle("Summary", 16, (text) => text, "top"), /^┌─ Summary /);
   assert.ok(inscribedTitle("Preview", 16, (text) => text, "mid").startsWith("├"));
-  assert.ok(inscribedTitle("Context", 20, (text) => text, "bottom", "0%").endsWith("╯"));
+  assert.ok(inscribedTitle("Context", 20, (text) => text, "bottom", "0%").endsWith("┘"));
 });
 
 test("selection paint happens before rails so the frame stays uninverted", () => {
   const width = 20;
   const painted = [
-    "╭" + "─".repeat(width - 2) + "╮",
+    "┌" + "─".repeat(width - 2) + "┐",
     paintSelectedContent("    hello           "),
-    "╰" + "─".repeat(width - 2) + "╯",
+    "└" + "─".repeat(width - 2) + "┘",
   ];
   const lines = padComposerFrame(
     frameComposerLines(painted, { width, empty: false, paddingX: 4, paint: (text) => text }),

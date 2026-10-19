@@ -224,6 +224,12 @@ token must report under a specific organization.
 
 Snyk's free tier covers public repositories without a monthly test limit.
 
+`@earendil-works/pi-coding-agent@1.3.0` depends on `undici@8.10.2`, which has high-severity advisories, so every package resolves it transitively. Every package manifest therefore pins `overrides.undici` to the first Snyk-clean line, `8.12.2`, and every lockfile records that exact version. Remove the override only after the Pi SDK updates its dependency and the Snyk job passes without it.
+
+## Quickstart CI
+
+`quickstart.yml` validates the README's live quickstart after the main CI/release workflow completes successfully, on a daily schedule, and on manual dispatch. It installs the pinned Pi CLI into an isolated temporary agent directory, runs `pi install .` from a fresh checkout without `node_modules`, verifies Pi starts far enough to print help, and downloads every publishable package from npm at the exact version in its manifest. The post-release trigger avoids checking a new version before the publish job has made it downloadable.
+
 ## Dependency and Actions updates
 
 Dependabot proposes weekly Actions and npm updates. Actions use commit SHA

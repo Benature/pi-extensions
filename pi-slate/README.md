@@ -66,13 +66,13 @@ Slate renders cleanly into your terminal and stays customizable without adding n
 
 The selected header restores the stock Pi mark plus version, model, and path. Composer keeps project/branch and model. Context, cost, Cached, Uncached, and Rate live on the rail. Native transcript, thinking, keyboard, paste and selection behavior stay intact.
 
-For the full workbench, select `/slate surfaces full`, turn `/slate focused off`, then `/reload`. Select `/slate theme default` for Tokyo Night. Other surface combinations and existing preferences remain supported.
+For the full workbench, select `/slate surfaces full`, turn `/slate focused off`, then `/reload`. Select `/slate theme tokyo-night` for Tokyo Night, or `/slate theme default` for Pi's system default. Other surface combinations and existing preferences remain supported.
 
 - `/slate focused [on|off]` controls the saved focused state; fresh settings still start focused.
 - `/slate pid [on|off]` controls the optional prompt-edge PID label, off by default.
 - `/slate progress [waves|dna-helix|snake|cylon-scanner]` picks the prompt-edge working animation; `waves` is the default.
 - Working/thinking status stays on the prompt edge; the editor keeps its draft and Slate density across host setup.
-- Below **100 columns** or **30 rows**, the rail hides without changing your focus/width preferences. Context and cost return to the composer, with model/thinking when space permits. `/slate session` still reaches details, catalogs, tasks and image controls.
+- Below **100 columns** or **30 rows**, the rail hides without changing your focus/width preferences. The composer keeps directory/branch on the bottom left, cost/resources on the top edge, and `ctx %` before model/thinking on the bottom right. `/slate session` still reaches details, catalogs, tasks and image controls.
 - Runtime and message counts stay in `/slate session` details. Cache, Uncached, and Rate are visible on the rail usage lane.
 - Choosing a sidebar width restores standard mode only when the sidebar surface is selected.
 
@@ -106,6 +106,20 @@ Consecutive `read` cards collapse into one line: `read x.md` stays as-is, then `
 
 Previews are bounded: 256 KiB snapshots, 2,000 parsed rows, 16 collapsed / 400 expanded. Binary or oversized previous content shows a notice, not a fake overwrite.
 
+### Claude Code Tool Style (opt-in)
+
+![Slate Claude Code-style tool transcript with grouped calls, edit counts, and an intentional demo failure](assets/slate-claudecode-tools.png)
+
+Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`. Omit it or use `"default"` for existing Slate cards. This is an independently implemented presentation inspired by [pi-pretty](https://github.com/heyhuynhgiabuu/pi-pretty), not copied code.
+
+- Compact `✓ Name (args)` calls with `└` result summaries, execution duration (including zero and failures), bash timeout, and green/red edit counts. Pending/running/error states remain visible.
+- Consecutive supported calls form `Done (…)` / `Running (…)` trees in compatible fullscreen hosts. Click a tool or use your configured tool-expansion binding; hints come from Pi's keybindings. Expanding any member restores the individual cards.
+- Covers read, bash, grep, find, ls, write, edit, apply_patch, codemode, and recall without registering replacement tools for styling. Slate's existing edit/write tools still provide its expanded diff views; schemas, structured read output, execution and model-facing results remain unchanged.
+- Expanded tools delegate to their existing renderers with isolated component state. Unsupported tools, assistant text, visible thinking and images break groups. The legacy read-only grouper is not installed in this mode.
+- Uses the host's `outputPad`. Summaries are cached by content/details identity; grouping visits current chat children, never replays the session, and adds no polling timer or background process. It patches only the selected chat instance and restores owned methods on shutdown.
+
+Requires a Pi host with `registerToolRenderer` (tested on 1.3.0). Older hosts keep default cards with a warning; non-fullscreen hosts keep compact individual cards without grouping. Slate retains its existing composer, user-message styling and native thinking labels/`Ctrl+T`: it does not globally relabel historical thoughts with potentially incorrect durations. Switching the saved style requires `/reload`.
+
 ### Rich Media Rendering
 
 Slate uses Kitty Graphics Protocol to display rich media inside your terminal.
@@ -118,7 +132,7 @@ Slate uses Kitty Graphics Protocol to display rich media inside your terminal.
 
 The dashboard replaces the old Summary, Activity Preview, and Context dock. It keeps session facts visible without sending them to a model:
 
-- Session name, copyable session ID, host PID, model/thinking level and context meter.
+- One identity row: `Session <short-id> · PID <pid>`. No session names; click to copy the full session ID. Model/thinking level and context meter remain below.
 - **Occupancy merges tokens, cost and rate** (`188k / 500k · $0.71 · ~420/s`) beneath the context meter, followed by two usage rows: left lane **Cached/Uncached** label-first, right lane value-first (`61.4k In`, `876 Out`). Cached is cache-read; uncached is inbound minus cache read/write. Growing totals are abbreviated, rather than squeezing neighboring numbers. Click a usage row or `/slate session` for full accounting, including cache write and hit share.
 - Runtime wall time, last-turn duration and turns/messages stay in session details.
 - Input includes uncached input plus both cache categories; reasoning is not counted again. Context occupancy is separate from cumulative usage. Unavailable metrics show `—`; estimated context is marked `~`.
@@ -129,7 +143,7 @@ The dashboard replaces the old Summary, Activity Preview, and Context dock. It k
 
 Click a task/resource to inspect it in a separate scrolling dialog. `/slate session` provides keyboard access to details, folds, the command catalog, tasks and image controls. Inserted commands never execute. In short terminals, the image body shrinks before the task shelf; its controls remain accessible through that command.
 
-Focused and compact modes hide the dashboard and retain condensed composer metadata. Legacy screenshots elsewhere in this README predate the Quiet Workbench.
+Focused and compact modes hide the dashboard. The prompt frame keeps directory/branch on the bottom left, cost/resources on the top edge, and context before model metadata on the bottom right. Legacy screenshots elsewhere in this README predate the Quiet Workbench.
 
 ### Cooperative Sub-agent Conversations
 
@@ -166,9 +180,9 @@ With `header` selected, Pi and package updates appear as a centered hairline. St
 
 ### Themes
 
-The composer, transcript and session dashboard share the selected theme. **Tokyo Night** is Slate's default theme choice: subdued navy panels, blue accents, pale text and quiet tool backgrounds, using the [Tokyo Night palette](https://github.com/folke/tokyonight.nvim).
+The composer, transcript and session dashboard share the selected theme. **Tokyo Night** is Slate's bundled theme: subdued navy panels, blue accents, pale text and quiet tool backgrounds, using the [Tokyo Night palette](https://github.com/folke/tokyonight.nvim).
 
-Your current theme remains unchanged on install. `/slate theme default` or `/slate theme tokyo-night` selects and saves Tokyo Night explicitly. Black Metal remains available in Pi's theme settings, alongside Catppuccin Mocha styles. `/slate theme mocha default` selects the Catppuccin Default style; `/slate style default` remains its compatible alias.
+Your current theme remains unchanged on install. `/slate theme default` selects Pi's system default; `/slate theme tokyo-night` selects and saves Tokyo Night explicitly. Black Metal remains available in Pi's theme settings, alongside Catppuccin Mocha styles. `/slate theme mocha default` selects the Catppuccin Default style; `/slate style default` remains its compatible alias.
 
 `/slate` → Theme picks one. Or set it directly:
 
@@ -216,7 +230,7 @@ These work when `editor` is selected. No terminal configuration.
 | Message length | `/slate message-length [default\|all\|<count>]` | How many chat messages stay on screen. `default` is 100. |
 | Density | `/slate density [comfortable\|compact]` | Comfortable shows a › prompt in the composer; compact is tighter. |
 | Composer metadata | `/slate footer [standard\|minimal]` | Legacy command alias: standard shows model and thinking on the composer; minimal hides them. Not footer-slot ownership. |
-| Theme | `/slate theme [default\|tokyo-night\|quiet\|mauve\|sapphire\|peach\|teal]` | Default is Tokyo Night. Other styles select Catppuccin; `/slate style` retains Catppuccin aliases. |
+| Theme | `/slate theme [default\|tokyo-night\|quiet\|mauve\|sapphire\|peach\|teal]` | Default restores Pi's system theme. Tokyo Night is explicit; other styles select Catppuccin; `/slate style` retains Catppuccin aliases. |
 | Bugs | `/slate bug [file\|open]` | Copy a bug report, or open the npm package page. |
 
 ## Model Display

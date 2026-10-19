@@ -17,7 +17,7 @@ test("header uses the stock Pi mark and the product stack, not a greeting", () =
   assert.equal(plain.length, 3);
   assert.match(plain[0]!, /Pi Agent v1\.0\.4/);
   assert.match(plain[1]!, /grok-4\.6 \(bedrock\) · medium/);
-  assert.match(plain[2]!, /\/pi-extensions/);
+  assert.match(plain[2]!, /~\/pi-extensions/);
   assert.doesNotMatch(plain[2]!, /\/Users/);
   assert(!plain.some(line => /^─+$/.test(line)), "no plain hairline under the header");
   assert.doesNotMatch(plain.join("\n"), /Ready when you are|slate \/ /);

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import test, { type TestContext } from "node:test";
+import { stripVTControlCharacters } from "node:util";
 import { SessionManager, type ExtensionAPI, type ExtensionContext, type ExtensionEvent, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Container, Editor, ScrollView, Text, TuiAltScreen, type Component, type EditorTheme, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import piSlate from "../extensions/pi-slate/index.ts";
@@ -54,8 +55,13 @@ async function fixture(t: TestContext, text: string | undefined, mode = "tui", c
     registerCommand(name: string, command: typeof commands extends Map<string, infer V> ? V : never) { commands.set(name, command); },
     registerShortcut() {},
     registerTool(tool: ToolDefinition) { tools.push(tool); },
+    registerToolRenderer() { calls.push("tool-renderer"); },
     getCommands: () => extraCommands,
-    getAllTools: () => tools.map((tool) => ({ ...tool, sourceInfo: { path: conflict ? "/foreign/cards.ts" : new URL("../extensions/pi-slate/index.ts", import.meta.url).pathname } })),
+    getAllTools: () => [
+      ...tools.map((tool) => ({ ...tool, sourceInfo: { path: conflict ? "/foreign/cards.ts" : new URL("../extensions/pi-slate/index.ts", import.meta.url).pathname } })),
+      // Claude mode deliberately keeps the host's read registration.
+      ...tools.some((tool) => tool.name === "read") ? [] : [{ name: "read", sourceInfo: { path: "/host/read.ts" } }],
+    ],
     exec: async () => { calls.push("branch-git"); return { code: 0, stdout: "test-branch\n", stderr: "", killed: false }; },
     events: {
       on(name: string, handler?: (value: unknown) => void) {
@@ -174,6 +180,50 @@ for (const surfaces of [[], ["editor"], [...FRESH_SURFACES], [...SURFACES], ["he
   });
 }
 
+test("focused composer keeps cost only on top and places context before model", async (t) => {
+  const f = await fixture(t, JSON.stringify({ surfaces: ["editor", "header"], focused: true }));
+  Object.assign(f.ctx, { getContextUsage: () => ({ tokens: 10000, percent: 10, contextWindow: 100000 }) });
+  f.extraCommands.push({ name: "skill:review", source: "skill", sourceInfo: { path: "/skills/review/SKILL.md", scope: "user" } });
+  f.manager.appendMessage({ role: "assistant", api: "anthropic-messages", provider: "anthropic", model: "fixture", timestamp: 1, stopReason: "stop", content: [{ type: "text", text: "done" }], usage: { input: 100, output: 20, cacheRead: 0, cacheWrite: 0, totalTokens: 120, cost: { input: .1, output: .2, cacheRead: 0, cacheWrite: .05, total: .35 } } });
+  await f.emit("agent_settled");
+  await new Promise(resolve => setImmediate(resolve));
+
+  const lines = f.composer!.render(100).map(stripVTControlCharacters);
+  const text = lines.join("\n");
+  const bottom = lines.at(-1)!;
+  assert.equal((text.match(/\$0\.35/g) ?? []).length, 1, "top resource edge owns cost");
+  assert.match(lines[0]!, /\$0\.35 · 1 skill/);
+  assert.match(bottom, new RegExp(`${basename(f.ctx.cwd)} / test-branch`));
+  assert.match(bottom, /ctx 10%/);
+  assert.ok(bottom.indexOf("ctx 10%") > bottom.indexOf("test-branch"));
+  assert.ok(bottom.indexOf("ctx 10%") < bottom.indexOf("no model"));
+});
+
+test("Claude tool style is opt-in, surface-scoped, and does not install legacy read grouping", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }));
+  assert.deepEqual(f.tools.map((tool) => tool.name).sort(), ["edit", "write"]);
+  assert.ok(f.calls.includes("tool-renderer"));
+  assert.ok(!f.notices.some((notice) => notice.includes("tool-cards unavailable")), "native read registration is not a conflict");
+  assert.ok(f.calls.includes("widget"), "grouping acquires only a zero-row TUI handle, not the composer");
+  assert.ok(!f.calls.includes("editor"));
+  await f.commands.get("slate")!.handler("focused off", f.ctx);
+  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, "claudecode");
+});
+
+test("Claude mode still warns about lost edit/write registrations, not native read", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }), "tui", true, true);
+  const notice = f.notices.find((value) => value.includes("tool-cards unavailable"));
+  assert.match(notice ?? "", /edit, write/);
+  assert.doesNotMatch(notice ?? "", /read/);
+});
+
+test("unselected cards ignore Claude tool style entirely", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: [], toolStyle: "claudecode" }));
+  assert.deepEqual(f.tools, []);
+  assert.ok(!f.calls.includes("tool-renderer"));
+  assert.ok(!f.calls.includes("widget"));
+});
+
 test("surface saves require reload; focus/width never enable an unselected sidebar", async (t) => {
   const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], focused: true, footer: "minimal" }));
   const command = f.commands.get("slate")!;
@@ -253,15 +303,20 @@ test("real host below-editor widget renderer adds no rows for the TUI handle", (
 
 const unstyled = (text: string) => text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
 
-test("Tokyo Night is an explicit default choice and preserves unrelated native settings", async t => {
+test("system default and explicit Tokyo Night preserve unrelated native settings", async t => {
   const f = await fixture(t, JSON.stringify({ surfaces: ["sidebar"] }));
   const settingsPath = join(dirname(f.path), "settings.json");
   await writeFile(settingsPath, JSON.stringify({ theme: "existing-theme", quietStartup: true, packages: ["keep-this-package"] }));
   const themes: string[] = [];
   t.mock.method(f.ctx.ui, "setTheme", (name: string) => { themes.push(name); return { success: true }; });
   await f.commands.get("slate")!.handler("theme default", f.ctx);
-  assert.deepEqual(themes, ["tokyo-night"]);
-  const saved = JSON.parse(await readFile(settingsPath, "utf8"));
+  assert.deepEqual(themes, ["system"]);
+  let saved = JSON.parse(await readFile(settingsPath, "utf8"));
+  assert.equal(saved.theme, "system"); assert.equal(saved.quietStartup, true);
+  assert.deepEqual(saved.packages, ["keep-this-package"]);
+  await f.commands.get("slate")!.handler("theme tokyo-night", f.ctx);
+  assert.deepEqual(themes, ["system", "tokyo-night"]);
+  saved = JSON.parse(await readFile(settingsPath, "utf8"));
   assert.equal(saved.theme, "tokyo-night"); assert.equal(saved.quietStartup, true);
   assert.deepEqual(saved.packages, ["keep-this-package"]);
 });
@@ -289,7 +344,10 @@ test("dashboard uses live branch facts and session-scoped tasks; commands preser
   f.manager.appendMessage({ role: "user", content: "hi", timestamp: 0 });
   f.manager.appendMessage({ role: "assistant", api: "anthropic-messages", provider: "anthropic", model: "fixture", timestamp: 1, stopReason: "stop", content: [{ type: "text", text: "done" }], usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 50, totalTokens: 470, cost: { input: .1, output: .2, cacheRead: .03, cacheWrite: .02, total: .35 } } });
   await f.emit("session_info_changed");
-  assert.match(rail(), /Dashboard test/); assert.match(rail(), /PID/); assert.match(rail(), /450\s+In/); assert.match(rail(), /Uncached\s+100/); assert.match(rail(), /\$0.35/);
+  assert.doesNotMatch(rail(), /Dashboard test|Unnamed session|Untitled session/);
+  assert.ok(rail().includes(`Session ${f.manager.getSessionId().slice(0, 8)} · PID ${process.pid}`));
+  assert.doesNotMatch(railOf(f).sessionDetails(), /Dashboard test/);
+  assert.ok(railOf(f).sessionDetails().startsWith(`Session ${f.manager.getSessionId()} · PID ${process.pid}`)); assert.match(rail(), /450\s+In/); assert.match(rail(), /Uncached\s+100/); assert.match(rail(), /\$0.35/);
   assert(!/Summary|Activity Preview|Context\s*\n/.test(rail()));
   f.extraCommands.push({ name: "skill:review", source: "skill", sourceInfo: { path: "/skills/review/SKILL.md", scope: "user" } });
   await f.emit("message_end", { message: { role: "toolResult", toolName: "codemode", toolCallId: "outer", content: [], isError: false, nestedCalls: { calls: [{ id: "nested-read", name: "read", arguments: { path: "/skills/review/SKILL.md" }, status: "ok" }], complete: true } } });
@@ -428,4 +486,24 @@ test("receiver and 24-row renderer show current work before historical failures"
     { id: "live", label: "currently running", state: "running", kind: "subagent", startedAt: Date.now() },
   ] });
   assert.match(unstyled(railOf(f).render(40).join("\n")), /currently running/);
+});
+
+test("completed turn appends one UI receipt without adding session messages", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["editor"], focused: true }));
+  const start = new Date(2026, 9, 19, 9, 36, 6).getTime();
+  let now = start;
+  t.mock.method(Date, "now", () => now);
+  const count = f.manager.getBranch().length;
+  await f.emit("agent_start");
+  now += 54000;
+  await f.emit("agent_end");
+  const receipts = () => f.chat.children.flatMap(child => child.render(100)).filter(line => line.includes("Worked for"));
+  assert.deepEqual(receipts(), ["Worked for 54s • 09:37"]);
+  assert.equal(f.manager.getBranch().length, count);
+  await f.emit("agent_end");
+  assert.equal(receipts().length, 1, "duplicate end events do not add receipts");
+  await f.emit("agent_start");
+  now += 65000;
+  await f.emit("agent_end");
+  assert.deepEqual(receipts(), ["Worked for 54s • 09:37", "Worked for 1m 5s • 09:38"]);
 });

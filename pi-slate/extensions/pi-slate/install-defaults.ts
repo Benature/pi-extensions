@@ -1,6 +1,7 @@
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 
 export const SLATE_THEME = "tokyo-night";
+export const SLATE_NATIVE_THEME = "system";
 
 export function shouldApplyInstallDefault(applied: boolean | undefined): boolean {
   return applied !== true;

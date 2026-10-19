@@ -3,22 +3,23 @@ import test from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 import { KeybindingsManager } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/keybindings.js";
-import { loadThemeFromPath } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { loadThemeFromPath, SYSTEM_THEME_NAME } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { ComposerEditor, type ComposerSource } from "../extensions/pi-slate/composer.ts";
 import { dashboardColumnWidth, formatCompactTokenCount, parseSlateArgs } from "../extensions/pi-slate/layout.ts";
-import { SLATE_THEME } from "../extensions/pi-slate/install-defaults.ts";
+import { SLATE_NATIVE_THEME, SLATE_THEME } from "../extensions/pi-slate/install-defaults.ts";
 import { sessionSidebarSlots, sidebarCost } from "../extensions/pi-slate/sidebar-layout.ts";
 import { Sidebar } from "../extensions/pi-slate/sidebar.ts";
 import type { SidebarSession } from "../extensions/pi-slate/sidebar-data.ts";
 
 const theme = loadThemeFromPath(new URL("../themes/tokyo-night.json", import.meta.url).pathname, "truecolor");
-const session: SidebarSession = { id: "example-session", name: "Quiet workbench", pid: 8421, cwd: "/tmp/project",
+const session: SidebarSession = { id: "example-session", pid: 8421, cwd: "/tmp/project",
   model: "sample-model", thinking: "medium", tokens: 55000, percent: 11, contextWindow: 500000,
   estimated: false, rate: 82, startedAt: 1000, lastTurnMs: 14000, working: true, turns: 4, messages: 8,
   usage: { input: 128400, output: 6800, total: 135200, cacheRead: 94000, cacheWrite: 22000, cost: 1.24 } };
 
 test("bundled default Tokyo Night loads with the native validator and restrained backgrounds", () => {
   assert.equal(SLATE_THEME, "tokyo-night"); assert.equal(theme.name, SLATE_THEME);
+  assert.equal(SLATE_NATIVE_THEME, SYSTEM_THEME_NAME);
   assert.match(theme.fg("accent", "x"), /38;2;122;162;247/);
   assert.match(theme.fg("text", "x"), /38;2;192;202;245/);
   assert.equal(theme.getBgAnsi("toolPendingBg"), theme.getBgAnsi("userMessageBg"));
@@ -26,9 +27,9 @@ test("bundled default Tokyo Night loads with the native validator and restrained
   assert.notEqual(theme.getBgAnsi("customMessageBg"), theme.getBgAnsi("userMessageBg"));
 });
 
-test("default command selects Tokyo Night while explicit Catppuccin default remains available", () => {
+test("default restores the system theme while Tokyo Night remains explicit", () => {
   for (const name of ["default", "tokyo-night", "tokyonight"])
-    assert.deepEqual(parseSlateArgs("theme " + name), { ok: true, kind: "named-theme", name: "tokyo-night" });
+    assert.deepEqual(parseSlateArgs("theme " + name), { ok: true, kind: "named-theme", name: name === "default" ? "system" : "tokyo-night" });
   assert.deepEqual(parseSlateArgs("theme mocha default"), { ok: true, kind: "theme", flavor: "mocha", style: "default" });
   assert.deepEqual(parseSlateArgs("style default"), { ok: true, kind: "style", value: "default" });
   assert.deepEqual(parseSlateArgs("theme tokyo-night extra"), { ok: false });
@@ -84,36 +85,36 @@ test("growing usage and money keep a stable label lane and value edge with the r
   sidebar.dispose();
 });
 
-test("context meter keeps a shaded track and dim separator with the real theme", () => {
+test("context meter keeps a thin track and dim separator with the real theme", () => {
   const sidebar = new Sidebar(() => 10000);
   sidebar.attach({ terminal: { rows: 50, columns: 140 }, requestRender() {} } as unknown as TUI, theme);
-  assert.equal(sessionSidebarSlots(50, 0, false).header, 13, "meter merged the old context pair and block bar rows");
+  assert.equal(sessionSidebarSlots(50, 0, false).header, 11, "single identity row removes the section/name rows");
   for (const width of [28, 40, 80]) {
     sidebar.setSession(session);
     const rows = sidebar.render(width);
     const meter = rows.find(row => stripVTControlCharacters(row).includes("Context"))!;
     assert(meter, `meter at ${width}`);
-    assert.match(stripVTControlCharacters(meter), /^│ Context [█░]+ │ 11%$/, `structure at ${width}`);
-    assert(!stripVTControlCharacters(meter).includes("─"), "meter track is never the divider glyph");
+    assert.match(stripVTControlCharacters(meter), /^│ Context [━─]+ │ 11% │$/, `structure at ${width}`);
+    assert.doesNotMatch(stripVTControlCharacters(meter), /[█░]/, "no solid or shaded blocks");
     assert.equal(visibleWidth(meter), width);
-    const track = stripVTControlCharacters(meter).match(/░+/)![0];
+    const track = stripVTControlCharacters(meter).match(/─+/)![0];
     const dimOpen = theme.fg("dim", "").replace(/\u001b\[39m$/, "");
-    assert(meter.includes(`${dimOpen}${track}`), "empty cells use the dim shaded track");
+    assert(meter.includes(`${dimOpen}${track}`), "empty cells use the dim thin track");
   }
   sidebar.setSession({ ...session, percent: 83 });
   const warning = sidebar.render(40);
-  const fill = stripVTControlCharacters(warning.find(row => stripVTControlCharacters(row).includes("Context"))!).match(/█+/)![0];
+  const fill = stripVTControlCharacters(warning.find(row => stripVTControlCharacters(row).includes("Context"))!).match(/━+/)![0];
   assert(warning.some(row => row.includes(theme.fg("warning", fill))), "fill shifts to the warning tone at >= 80%");
   sidebar.setSession({ ...session, percent: null });
   const empty = stripVTControlCharacters(sidebar.render(40).find(row => stripVTControlCharacters(row).includes("Context"))!);
-  assert(empty.includes("░") && !empty.includes("█") && empty.endsWith("—%"), "null percent is an empty track with a dash");
+  assert(empty.includes("─") && !empty.includes("━") && empty.endsWith("—% │"), "null percent is an empty track with a dash");
   sidebar.dispose();
 });
 
 test("quiet editor avoids duplicate identity/model and restores compact facts without losing its draft", () => {
   const source: ComposerSource = { project: "project", branch: "feat/workbench", model: { id: "sample-model", provider: "sample" },
     thinking: "medium", footer: "standard", theme, paddingX: 4, workspaceHeader: true, dashboardVisible: true,
-    context: { tokens: "11%/500k tokens", resources: "", summary: "ctx 11% · $1.24" } };
+    context: { tokens: "11%/500k tokens", resources: "$1.24 · 2 skills · 2 MCPs", summary: "ctx 11%" } };
   const editor = new ComposerEditor({ terminal: { rows: 40, columns: 140 }, requestRender() {} } as unknown as TUI,
     { borderColor: text => text } as EditorTheme, new KeybindingsManager(), () => source, { paddingX: 4 });
   editor.setPaddingX(0); // Native host copies its own padding after the factory returns.
@@ -130,9 +131,16 @@ test("quiet editor avoids duplicate identity/model and restores compact facts wi
     const lines = editor.render(width);
     assert(lines.every(line => visibleWidth(line) <= width));
     text = lines.map(stripVTControlCharacters).join("\n");
-    assert.match(text, /ctx 11% · \$1\.24/);
-    assert.doesNotMatch(text, /feat\/workbench/);
+    assert.equal((text.match(/\$1\.24/g) ?? []).length, 1, "cost remains only on the top resource edge");
+    assert.match(text, /ctx 11%/);
+    assert.match(text, /project/);
+    if (width >= 42) assert.match(text, /project \/ feat\/workbench/);
+    if (width >= 66) {
+      const bottom = stripVTControlCharacters(lines.at(-1)!);
+      assert.match(bottom, /ctx 11% · sample-model/);
+      assert.ok(bottom.indexOf("ctx 11%") < bottom.indexOf("sample-model"));
+    }
   }
   assert.equal(editor.getText(), "Preserve this draft");
-  assert.match(editor.render(100).map(stripVTControlCharacters).join("\n"), /sample-model/);
+  assert.match(editor.render(100).map(stripVTControlCharacters).join("\n"), /sample-model · medium/);
 });

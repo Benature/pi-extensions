@@ -10,7 +10,7 @@ import { sessionSidebarSlots, sidebarCost, sidebarDuration, sidebarListOffset, s
 
 export const DOUBLE_CLICK_MS = 400;
 type ListName = "mcp" | "skills" | "prompts" | "tasks";
-type Row = { text: string; action?: () => void; list?: ListName; item?: number };
+type Row = { divider?: boolean; text: string; action?: () => void; list?: ListName; item?: number };
 type Hit = { y: number; x0: number; x1: number; action: () => void };
 export type SidebarActions = {
   copy(text: string): void;
@@ -21,7 +21,7 @@ export type SidebarActions = {
   persistFold?(section: keyof SidebarFolds, expanded: boolean): SidebarFolds | undefined;
 };
 const EMPTY_SESSION: SidebarSession = {
-  id: "", name: "Session", pid: process.pid, cwd: "", model: "—", thinking: "—", tokens: null,
+  id: "", pid: process.pid, cwd: "", model: "—", thinking: "—", tokens: null,
   percent: null, contextWindow: null, estimated: false, rate: null, startedAt: 0,
   lastTurnMs: null, working: false, turns: 0, messages: 0,
   usage: { input: null, output: null, total: null, cacheRead: null, cacheWrite: null, cost: null },
@@ -148,7 +148,7 @@ export class Sidebar implements Component {
     const s = this.session;
     const uncached = sidebarUncached(s.usage);
     const hit = s.usage.input !== null && s.usage.cacheRead !== null && s.usage.input > 0 ? `${Math.round(s.usage.cacheRead / s.usage.input * 100)}%` : "—";
-    return [`${sidebarText(s.name)} · ${s.id || "—"}`, `PID: ${s.pid}`, `Model: ${s.model} · ${s.thinking}`,
+    return [`Session ${sidebarText(s.id) || "—"} · PID ${s.pid}`, `Model: ${s.model} · ${s.thinking}`,
       `Context: ${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}${s.estimated ? " (estimated)" : ""}`,
       `Wall time (this runtime): ${sidebarDuration(s.startedAt > 0 ? this.now() - s.startedAt : null)}`,
       `Last turn: ${sidebarDuration(s.lastTurnMs)}`, `Turns: ${s.turns} · Messages: ${s.messages}`,
@@ -209,15 +209,15 @@ export class Sidebar implements Component {
     const chrome = height >= 12 ? 1 : 0;
     const slots = sessionSidebarSlots(height, this.tasks.length, Boolean(this.imageView()));
     if (chrome) slots.middle = Math.max(0, slots.middle - 2);
-    const inner = Math.max(0, width - 2);
+    const inner = Math.max(0, width - 4);
     const lines: string[] = [];
     const add = (row: Row): void => {
       const y = lines.length;
-      lines.push(this.decorateLine(row.text, width));
-      if (row.action && inner > 0) this.hits.push({ y, x0: 2, x1: width, action: row.action });
+      lines.push(row.divider ? this.dividerLine(width, "├") : this.decorateLine(row.text, width));
+      if (row.action && inner > 0) this.hits.push({ y, x0: 2, x1: width - 2, action: row.action });
       if (row.list) this.listRows.push({ y, list: row.list });
     };
-    if (chrome) add({ text: this.paint("dim", "─".repeat(inner)) });
+    if (chrome) lines.push(this.dividerLine(width, "┌"));
     for (const row of this.headerRows(inner).slice(0, slots.header)) add(row);
     const middle = this.middle();
     this.middleRows = middle.length; this.middleHeight = slots.middle; this.middleStart = lines.length;
@@ -228,7 +228,7 @@ export class Sidebar implements Component {
     lines.push(...this.imageLines(width, slots.image, lines.length));
     if (slots.footer) add({ text: this.paint("dim", "/slate session · details"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) });
     while (lines.length < height - chrome) lines.push(this.decorateLine("", width));
-    if (chrome) add({ text: this.paint("dim", "─".repeat(inner)) });
+    if (chrome) lines.push(this.dividerLine(width, "└"));
     this.cached = { key, lines: lines.slice(0, height) };
     return this.cached.lines;
   }
@@ -237,7 +237,7 @@ export class Sidebar implements Component {
     const s = this.session;
     const percent = s.percent !== null && Number.isFinite(s.percent) ? s.percent : null;
     const tone = percent !== null && percent >= 80 ? "warning" : "accent";
-    const identity = `${sidebarText(s.id).slice(0, 8) || "—"} · PID ${s.pid}`;
+    const identity = `Session ${sidebarText(s.id).slice(0, 8) || "—"} · PID ${s.pid}`;
     const occupancy = `${s.estimated ? "~" : ""}${formatCompactTokenCount(s.tokens)} / ${formatCompactTokenCount(s.contextWindow)}`
       + ` · ${sidebarCost(s.usage.cost)} · ${sidebarRate(s.rate)}`;
     const meter = ((): string => {
@@ -248,16 +248,14 @@ export class Sidebar implements Component {
       const filledCells = percent === null ? 0 : Math.round(Math.max(0, Math.min(100, percent)) * barWidth / 100);
       const label = truncateToWidth("Context ", Math.max(0, width - barWidth - visibleWidth(suffix)), "…");
       return this.paint("muted", label)
-        + (filledCells ? this.paint(tone, "█".repeat(filledCells)) : "")
-        + this.paint("dim", "░".repeat(barWidth - filledCells) + suffix);
+        + (filledCells ? this.paint(tone, "━".repeat(filledCells)) : "")
+        + this.paint("dim", "─".repeat(barWidth - filledCells) + suffix);
     })();
     const branchUsage = () => this.actions?.inspect?.("Branch usage", this.sessionDetails());
     const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
     const statRight = (label: string, value: string): string => `${this.paint("text", value)} ${this.paint("muted", label)}`;
     return [
-      { text: this.paint("muted", "SESSION"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) },
-      { text: this.heading(sidebarText(s.name) || "Untitled session") },
-      { text: this.paint("muted", visibleWidth(identity) > width ? this.pair(sidebarText(s.id).slice(0, 8), `PID ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
+      { text: this.heading(visibleWidth(identity) > width ? this.pair(`Session ${sidebarText(s.id).slice(0, 8) || "—"}`, `· PID ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
       { text: "" },
       { text: this.pair(this.paint("text", sidebarText(s.model)), this.paint("dim", sidebarText(s.thinking)), width) },
       { text: "" },
@@ -267,7 +265,7 @@ export class Sidebar implements Component {
       { text: this.pair(stat("Cached", formatCompactTokenCount(s.usage.cacheRead)), statRight("In", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
       { text: this.pair(stat("Uncached", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("Out", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
       { text: "" },
-      { text: this.paint("dim", "─".repeat(width)) },
+      { text: "", divider: true },
     ];
   }
   private middle(): Row[] {
@@ -343,7 +341,7 @@ export class Sidebar implements Component {
   private imageLines(width: number, height: number, start: number): string[] {
     const view = this.imageView();
     if (height <= 0 || !view) return [];
-    const inner = Math.max(0, width - 2);
+    const inner = Math.max(0, width - 4);
     const lines = [this.decorateLine(this.heading("Preview"), width)];
     if (height === 1) return lines;
     const controls: Array<{ label: string; action: () => void }> = [
@@ -480,14 +478,25 @@ export class Sidebar implements Component {
 
 
 
+  private dividerLine(width: number, junction: string): string {
+    if (width <= 0) return "";
+    const paint = this.theme ? chromePaint(this.theme) : (text: string) => text;
+    if (width === 1) return paint(junction);
+    const right = junction === "┌" ? "┐" : junction === "└" ? "┘" : "┤";
+    return paint(junction + "─".repeat(Math.max(0, width - 2)) + right);
+  }
+
   private decorateLine(line: string, width: number): string {
     if (width <= 0) return "";
     const border = this.theme ? chromePaint(this.theme)("│") : "│";
     if (width === 1) return border;
-    if (line.includes("\x1b_G") || line.includes("\x1b]1337;File=")) return `${border} ${line}`;
-    const body = truncateToWidth(line, Math.max(0, width - 2), "…");
-    // No panel background: the sidebar blends into the terminal chrome.
-    return `${border} ${body}${" ".repeat(Math.max(0, width - 2 - visibleWidth(body)))}`;
+    const inner = Math.max(0, width - 4);
+    const image = line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
+    const body = image ? line : truncateToWidth(line, inner, "…");
+    // Reserve both rails and matching inner gutters, including tiny viewports.
+    return border + (width >= 3 ? " " : "") + body
+      + " ".repeat(Math.max(0, inner - visibleWidth(body)))
+      + (width >= 4 ? " " : "") + border;
   }
 }
 

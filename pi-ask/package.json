@@ -49,7 +49,7 @@
     "typebox": "*"
   },
   "overrides": {
-    "undici": "8.10.2"
+    "undici": "8.12.2"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "1.3.0",

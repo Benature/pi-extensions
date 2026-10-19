@@ -24,6 +24,8 @@ import { installExitCommand } from "./exit.ts";
 import { installPromptPicker } from "./prompts.ts";
 import { installDiff } from "./diff.ts";
 import { installRead } from "./read.ts";
+import { installToolStyle } from "./tool-style.ts";
+import { ToolGroups } from "./tool-groups.ts";
 import { GitBranchPoller } from "./git-branch.ts";
 import { formatSurfaces, has, parseSurfaceConfig, type SurfaceConfig } from "./surfaces.ts";
 import { Sidebar } from "./sidebar.ts";
@@ -32,7 +34,7 @@ import { commandResources, parseSidebarFolds, sidebarMessageCounts, sidebarText,
 import { inspectSidebarText } from "./sidebar-inspector.ts";
 import { pickSidebarItem } from "./sidebar-picker.ts";
 import { loadSidebarMcpHost } from "./sidebar-mcp.ts";
-import { sidebarCost } from "./sidebar-layout.ts";
+import { TurnCompletion } from "./turn-completion.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
@@ -83,7 +85,7 @@ import {
   type Flavor,
   type Style,
 } from "./catppuccin.ts";
-import { persistTheme, SLATE_THEME } from "./install-defaults.ts";
+import { persistTheme, SLATE_NATIVE_THEME, SLATE_THEME } from "./install-defaults.ts";
 
 const PROGRESS_LABELS: Record<ProgressStyle, string> = {
   waves: "Waves",
@@ -100,6 +102,7 @@ type SlateConfig = SurfaceConfig & {
   modelDisplay?: ModelDisplay;
   showPid?: boolean;
   progress?: ProgressStyle;
+  toolStyle?: "default" | "claudecode";
   sidebarSections: SidebarFolds;
 };
 
@@ -151,6 +154,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
+      ...(value.toolStyle === "claudecode" ? { toolStyle: "claudecode" as const } : {}),
       ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
@@ -199,9 +203,12 @@ export default function piSlate(pi: ExtensionAPI): void {
   // Runtime ownership is fixed until /reload, even when a command saves a new set.
   const selected = [...config.surfaces];
   const owns = (surface: typeof selected[number]): boolean => has(selected, surface);
+  const requestedClaudeTools = owns("tool-cards") && config.toolStyle === "claudecode";
+  const claudeTools = requestedClaudeTools && typeof pi.registerToolRenderer === "function";
   if (owns("tool-cards")) {
     installDiff(pi);
-    installRead(pi);
+    if (claudeTools) installToolStyle(pi);
+    else installRead(pi);
   }
   if (owns("editor")) installPromptPicker(pi);
   installExitCommand(pi);
@@ -233,6 +240,14 @@ export default function piSlate(pi: ExtensionAPI): void {
     && (typeof currentContext.ui.getEditorComponent !== "function" || currentContext.ui.getEditorComponent() === editorFactory);
   let conversations: ReturnType<typeof installConversationBridge> | undefined;
   let messageWindow: MessageWindow | undefined;
+  let toolGroups: ToolGroups | undefined;
+  const syncToolGroups = (): void => {
+    if (!claudeTools || currentContext?.mode !== "tui") return;
+    const chat = findChatContainer(layoutRootOf(activeTui));
+    if (!chat || toolGroups?.container === chat) return;
+    toolGroups?.dispose();
+    toolGroups = new ToolGroups(chat, () => currentContext!.ui.theme);
+  };
   const tokenRate = new TokenRateTracker();
   const thinkingFold = new ThinkingFoldTracker({ onChange: () => syncThinkingStatus() });
   const updates = new UpdateWatcher();
@@ -240,11 +255,12 @@ export default function piSlate(pi: ExtensionAPI): void {
   let contextEdge = {
     tokens: formatFocusedContextTokens(null, null, null),
     resources: formatFocusedContextResources(null, 0, 0),
-    summary: "ctx — · —",
+    summary: "ctx —",
   };
   let requestRender = (_force = false) => {};
 
   const syncVisibleMessages = (): void => {
+    syncToolGroups();
     if (!owns("transcript") || currentContext?.mode !== "tui") return;
     messageWindow = syncMessageWindow(messageWindow, activeTui, resolveMessageLength(config.messageLength));
   };
@@ -280,7 +296,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     const mcpCount = resources.mcp.filter(server => server.enabled === true).length;
     if (owns("sidebar") && !sidebarYielded) {
       sidebar.setSession({
-        id: ctx.sessionManager.getSessionId?.() ?? "", name: ctx.sessionManager.getSessionName?.() ?? "Unnamed session",
+        id: ctx.sessionManager.getSessionId?.() ?? "",
         pid: process.pid, cwd: ctx.cwd, model: modelStatusLabel(ctx.model, config.modelDisplay), thinking: ctx.thinkingLevel ?? "—",
         tokens, percent, contextWindow, estimated,
         rate: tokenRate.rate() > 0 ? tokenRate.rate() : null, startedAt: sessionStartedAt, lastTurnMs,
@@ -290,7 +306,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     contextEdge = {
       tokens: formatFocusedContextTokens(percent, tokenRate.rate(), contextWindow),
       resources: formatFocusedContextResources(spend, skillCount, mcpCount),
-      summary: `ctx ${estimated && percent !== null ? "~" : ""}${formatPercent(percent)} · ${sidebarCost(spend)}`,
+      summary: `ctx ${estimated && percent !== null ? "~" : ""}${formatPercent(percent)}`,
     };
   };
   const refreshResources = (ctx: ExtensionContext): void => {
@@ -320,6 +336,9 @@ export default function piSlate(pi: ExtensionAPI): void {
   }
 
   const install = (ctx: ExtensionContext): void => {
+    if (ctx.mode === "tui" && requestedClaudeTools && !claudeTools) {
+      ctx.ui.notify("Slate Claude Code tool style requires a host with registerToolRenderer; keeping default cards", "warning");
+    }
     sessionEpoch += 1; sidebarYielded = false;
     if (!owns("header")) {
       noticeFilterDispose?.(); noticeFilterDispose = undefined; noticeFilterActive = false;
@@ -342,9 +361,11 @@ export default function piSlate(pi: ExtensionAPI): void {
     if (loaded.error) ctx.ui.notify(loaded.error, "warning");
     if (ctx.mode !== "tui") return;
     if (owns("tool-cards")) {
-      // Pi uses first registration per tool name. Report, never repair, a lost slot.
+      // Only check tools Slate registers. Claude mode styles the native read
+      // renderer without owning its registration, so native read is not a loss.
       try {
-        const lost = pi.getAllTools().filter((tool) => ["edit", "write", "read"].includes(tool.name)
+        const registeredCards = claudeTools ? ["edit", "write"] : ["edit", "write", "read"];
+        const lost = pi.getAllTools().filter((tool) => registeredCards.includes(tool.name)
           && resolve(tool.sourceInfo.path) !== fileURLToPath(import.meta.url));
         if (lost.length) ctx.ui.notify(`Slate tool-cards unavailable for: ${lost.map((tool) => tool.name).join(", ")} (first registration wins)`, "warning");
       } catch { /* Older hosts cannot expose tool ownership. */ }
@@ -423,10 +444,11 @@ export default function piSlate(pi: ExtensionAPI): void {
     }
     // belowEditor has no host leading spacer. This factory renders exactly zero rows.
     // It is a TUI handle, not a chrome owner or application bootstrap header.
-    if (owns("sidebar") || owns("transcript")) {
+    if (owns("sidebar") || owns("transcript") || claudeTools) {
       ctx.ui.setWidget("pi-slate:surface-host", (tui, theme) => {
         activeTui = tui;
         requestRender = (force = false) => tui.requestRender(force);
+        queueMicrotask(syncToolGroups);
         if (owns("sidebar")) {
           sidebar.attach(tui, theme, () => { sidebarYielded = true; stopDashboard(); });
           if (sidebar.splitActive && !dashboardClock) {
@@ -576,7 +598,9 @@ export default function piSlate(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => { mcpFiles.setHost(await mcpHost); install(ctx); });
   pi.on("agent_start", (_event, ctx) => {
     currentContext = ctx;
-    if (owns("sidebar") && ctx.mode === "tui") { turnStartedAt = Date.now(); syncSidebar(ctx); }
+    if (ctx.mode === "tui" && (owns("sidebar") || editorActive() || owns("transcript"))) {
+      turnStartedAt = Date.now(); syncSidebar(ctx);
+    }
     if (!editorActive()) return;
     thinkingFold.stop();
     if (waveHost(ctx)) {
@@ -591,7 +615,17 @@ export default function piSlate(pi: ExtensionAPI): void {
     currentContext = ctx;
     thinkingFold.stop();
     stopWave();
-    if (turnStartedAt !== undefined) { lastTurnMs = Date.now() - turnStartedAt; turnStartedAt = undefined; }
+    if (turnStartedAt !== undefined) {
+      const finishedAt = Date.now();
+      lastTurnMs = Math.max(0, finishedAt - turnStartedAt);
+      turnStartedAt = undefined;
+      if (ctx.mode === "tui") {
+        const chat = findChatContainer(layoutRootOf(activeTui));
+        chat?.addChild(new TurnCompletion(lastTurnMs, finishedAt, () => currentContext?.ui.theme ?? ctx.ui.theme));
+        syncVisibleMessages();
+        requestRender();
+      }
+    }
     if (owns("sidebar")) { background.clearShells(); sidebar.setTasks(background.snapshot()); }
     syncSidebar(ctx);
   });
@@ -691,6 +725,8 @@ export default function piSlate(pi: ExtensionAPI): void {
     background.reset("");
     branch.dispose();
     updates.dispose();
+    toolGroups?.dispose();
+    toolGroups = undefined;
     messageWindow?.dispose();
     messageWindow = undefined;
     noticeFilterDispose?.(); noticeFilterDispose = undefined; noticeFilterActive = false;
@@ -772,7 +808,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     return STYLES.find((style) => STYLE_LABELS[style] === key);
   };
 
-  const applyNamedTheme = (ctx: ExtensionContext, name: string, message: string): void => {
+  const applyNamedTheme = (ctx: ExtensionContext, name: string, message?: string): void => {
     const result = ctx.ui.setTheme(name);
     if (!result.success) {
       ctx.ui.notify(result.error ?? `Could not load ${name}. Run /reload first.`, "error");
@@ -780,7 +816,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     }
     persistTheme(ctx.cwd, name);
     requestRender(true);
-    ctx.ui.notify(message, "info");
+    ctx.ui.notify(message ?? `Theme set to ${name === SLATE_NATIVE_THEME ? "system default" : name}`, "info");
   };
 
   const applyCatppuccin = (ctx: ExtensionContext, flavor: Flavor, style: Style): void => {
@@ -791,12 +827,14 @@ export default function piSlate(pi: ExtensionAPI): void {
   const pickTheme = async (ctx: ExtensionContext): Promise<void> => {
     const mocha = currentCatppuccin(ctx).style;
     const value = await ctx.ui.select("Theme", [
-      withCurrent("Tokyo Night (default)", ctx.ui.theme.name === SLATE_THEME),
+      withCurrent("System default", ctx.ui.theme.name === SLATE_NATIVE_THEME),
+      withCurrent("Tokyo Night", ctx.ui.theme.name === SLATE_THEME),
       ...STYLES.map((style) => withCurrent(STYLE_LABELS[style], ctx.ui.theme.name?.startsWith("catppuccin-") === true && style === mocha)),
     ]);
     if (!value) return;
     const key = withoutCurrent(value);
-    if (key === "Tokyo Night (default)") { applyNamedTheme(ctx, SLATE_THEME, "Theme set to Tokyo Night"); return; }
+    if (key === "System default") { applyNamedTheme(ctx, SLATE_NATIVE_THEME); return; }
+    if (key === "Tokyo Night") { applyNamedTheme(ctx, SLATE_THEME, "Theme set to Tokyo Night"); return; }
     const style = STYLES.find((item) => STYLE_LABELS[item] === key);
     if (style) applyCatppuccin(ctx, currentCatppuccin(ctx).flavor, style);
   };
@@ -1098,7 +1136,7 @@ export default function piSlate(pi: ExtensionAPI): void {
       }
 
       if (parsed.kind === "named-theme") {
-        applyNamedTheme(ctx, parsed.name, "Theme set to Tokyo Night"); return;
+        applyNamedTheme(ctx, parsed.name); return;
       }
 
       if (parsed.kind === "theme") {

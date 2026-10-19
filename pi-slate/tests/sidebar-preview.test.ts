@@ -10,8 +10,8 @@ import type { BackgroundTask } from "../extensions/pi-slate/background-tasks.ts"
 
 const theme = (code = 32) => ({ fg: (_tone: string, text: string) => `\x1b[${code}m${text}\x1b[0m`, bold: (text: string) => text }) as Theme;
 const stripAnsi = (text: string) => text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
-const plain = (lines: string[]) => lines.map(line => stripAnsi(line).replace(/^│ ?/, "").trimEnd());
-const session: SidebarSession = { id: "session-a", name: "Sidebar redesign", pid: 8421, cwd: "/tmp/project", model: "sonnet-4.6", thinking: "medium", tokens: 31600, percent: 16, contextWindow: 200000, estimated: false, rate: 82, startedAt: 1000, lastTurnMs: 5000, working: true, turns: 2, messages: 5, usage: { input: 61400, output: 876, total: 62276, cacheRead: 48000, cacheWrite: 6100, cost: 0.12 } };
+const plain = (lines: string[]) => lines.map(line => stripAnsi(line).replace(/^│ ?/, "").replace(/ ?│$/, "").trimEnd());
+const session: SidebarSession = { id: "session-a", pid: 8421, cwd: "/tmp/project", model: "sonnet-4.6", thinking: "medium", tokens: 31600, percent: 16, contextWindow: 200000, estimated: false, rate: 82, startedAt: 1000, lastTurnMs: 5000, working: true, turns: 2, messages: 5, usage: { input: 61400, output: 876, total: 62276, cacheRead: 48000, cacheWrite: 6100, cost: 0.12 } };
 const resources: SidebarResources = {
   mcp: Array.from({ length: 7 }, (_, i) => ({ name: `server-${i}`, enabled: i !== 2, source: "global" })),
   skills: Array.from({ length: 6 }, (_, i) => ({ name: `skill-${i}`, path: `/tmp/skills/${i}/SKILL.md`, loaded: i === 0, source: "project" })),
@@ -43,16 +43,30 @@ function task(i: number): BackgroundTask {
 test("quiet session rail merges usage into context and hides empty shelves", () => {
   const { sidebar } = fixture();
   const lines = plain(sidebar.render(80));
-  for (const label of ["SESSION", "Sidebar redesign", "PID 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "61.4k In", "876 Out", "Cached 48k", "Uncached 7.3k", "MCP · 6 Enabled", "Skills · 1 Loaded", "Prompts · 6"])
+  for (const label of ["Session session- · PID 8421", "sonnet-4.6", "16%", "31.6k / 200k · $0.12 · ~82/s", "61.4k In", "876 Out", "Cached 48k", "Uncached 7.3k", "MCP · 6 Enabled", "Skills · 1 Loaded", "Prompts · 6"])
     assert(lines.some(line => line.includes(label)), label);
   for (const label of ["Stats", "Tokens · branch", "Commands ·", "Tasks", "Preview", "no selection", "/run-0", "prompt-0"])
     assert(!lines.some(line => line.includes(label)), label);
   assert.match(sidebar.sessionDetails(), /Cache read: 48k/);
 });
 
+test("session identity copies the full ID and never substitutes a session name", () => {
+  const { sidebar } = fixture();
+  const copied: string[] = [];
+  const id = "01234567-89ab-cdef-0123-456789abcdef";
+  sidebar.setSession({ ...session, id });
+  sidebar.setActions({ copy: (value) => copied.push(value), openFile() {} });
+  assert.equal(plain(sidebar.render(40))[1], "Session 01234567 · PID 8421");
+  sidebar.handleMouse(mouse(row(sidebar, "Session 01234567")));
+  assert.deepEqual(copied, [id]);
+  assert.ok(sidebar.sessionDetails().startsWith(`Session ${id} · PID 8421\n`));
+  sidebar.setSession({ ...session, id: "" });
+  assert.equal(plain(sidebar.render(40))[1], "Session — · PID 8421");
+});
+
 test("all sizes allocate exact bounded rows, including zero, Unicode, and tiny terminals", () => {
   const { sidebar, terminal } = fixture();
-  sidebar.setSession({ ...session, name: "长会话 👩‍💻 café\n\x1b[2J", model: "非常长的模型名字".repeat(8) });
+  sidebar.setSession({ ...session, id: "长会话 👩‍💻 café\n\x1b[2J", model: "非常长的模型名字".repeat(8) });
   sidebar.setView(image()); sidebar.setTasks([task(0), task(1), task(2), task(3)]);
   for (let height = 0; height <= 60; height++) {
     terminal.rows = height;
@@ -80,47 +94,48 @@ test("usage is a single stable label/value lane; full accounting stays in detail
   assert.match(sidebar.sessionDetails(), /~82 tokens\/sec/);
 });
 
-test("native blend header is 13 rows matching the slot constant, ending in the hairline", () => {
+test("session identity occupies one row and the 11-row header matches its slots", () => {
   const { sidebar } = fixture();
-  assert.equal(sessionSidebarSlots(60, 0, false).header, 13);
-  assert.equal(sessionSidebarSlots(30, 0, false).header, 13);
-  assert.equal(sessionSidebarSlots(29, 0, false).header, 6, "small-terminal fallback unchanged");
+  assert.equal(sessionSidebarSlots(60, 0, false).header, 11);
+  assert.equal(sessionSidebarSlots(30, 0, false).header, 11);
+  assert.equal(sessionSidebarSlots(29, 0, false).header, 4, "compact header also releases the removed rows");
   const lines = plain(sidebar.render(40));
-  assert.match(lines[0]!, /^─+$/, "top bar");
-  assert.match(lines.at(-1)!, /^─+$/, "bottom bar");
-  const hairline = lines.findIndex((line, i) => i > 0 && i < lines.length - 1 && /^─+$/.test(line));
-  assert.equal(hairline, 13, "hairline closes a 13-row header under the top bar");
-  assert(/^Context [█░]+ │ 16%$/.test(lines[7]!), "single context meter row");
-  assert(lines[8]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
-  assert(lines[10]!.includes("61.4k In") && lines[10]!.includes("Cached 48k"));
-  assert(lines[10]!.indexOf("Cached 48k") < lines[10]!.indexOf("61.4k In"), "Cached lanes left, In right with value first");
-  assert(lines[11]!.includes("876 Out") && lines[11]!.includes("Uncached 7.3k"));
-  assert(lines[11]!.indexOf("Uncached 7.3k") < lines[11]!.indexOf("876 Out"), "Uncached lanes left, Out right with value first");
+  assert.match(lines[0]!, /^┌─+┐$/, "top bar");
+  assert.match(lines.at(-1)!, /^└─+┘$/, "bottom bar");
+  const hairline = lines.findIndex((line, i) => i > 0 && i < lines.length - 1 && /^├─+┤$/.test(line));
+  assert.equal(hairline, 11, "hairline closes an 11-row header under the top bar");
+  assert.equal(lines[1], "Session session- · PID 8421");
+  assert(/^Context [━─]+ │ 16%$/.test(lines[5]!), "single context meter row");
+  assert(lines[6]!.includes("31.6k / 200k · $0.12 · ~82/s"), "merged occupancy line");
+  assert(lines[8]!.includes("61.4k In") && lines[8]!.includes("Cached 48k"));
+  assert(lines[8]!.indexOf("Cached 48k") < lines[8]!.indexOf("61.4k In"), "Cached lanes left, In right with value first");
+  assert(lines[9]!.includes("876 Out") && lines[9]!.includes("Uncached 7.3k"));
+  assert(lines[9]!.indexOf("Uncached 7.3k") < lines[9]!.indexOf("876 Out"), "Uncached lanes left, Out right with value first");
 });
 
-test("context meter fills the rail with a shaded track and degrades gracefully when narrow", () => {
+test("context meter fills the rail with a thin track and degrades gracefully when narrow", () => {
   const { sidebar } = fixture();
   const meter = (width: number) => {
     const line = plain(sidebar.render(width)).find(line => line.startsWith("Context") || line.endsWith("%"));
-    assert(line, `meter at width ${width}`); assert(!line.includes("─"), "meter never uses the divider glyph"); return line;
+    assert(line, `meter at width ${width}`); assert.doesNotMatch(line, /[█░]/, "meter avoids block glyphs"); return line;
   };
-  assert.equal(meter(80), `Context ${"█".repeat(10)}${"░".repeat(54)} │ 16%`);
-  assert.equal(meter(40), `Context ${"█".repeat(4)}${"░".repeat(20)} │ 16%`);
-  assert.equal(meter(28), `Context ${"█".repeat(2)}${"░".repeat(10)} │ 16%`);
+  assert.equal(meter(80), `Context ${"━".repeat(10)}${"─".repeat(52)} │ 16%`);
+  assert.equal(meter(40), `Context ${"━".repeat(4)}${"─".repeat(18)} │ 16%`);
+  assert.equal(meter(28), `Context ${"━".repeat(2)}${"─".repeat(8)} │ 16%`);
   sidebar.setSession({ ...session, percent: null });
-  assert.equal(meter(40), `Context ${"░".repeat(25)} │ —%`, "null percent is an empty track");
+  assert.equal(meter(40), `Context ${"─".repeat(23)} │ —%`, "null percent is an empty track");
   sidebar.setSession({ ...session, percent: 0 });
-  assert.equal(meter(40), `Context ${"░".repeat(25)} │ 0%`);
+  assert.equal(meter(40), `Context ${"─".repeat(23)} │ 0%`);
   sidebar.setSession({ ...session, percent: 100 });
-  assert.equal(meter(40), `Context ${"█".repeat(23)} │ 100%`);
+  assert.equal(meter(40), `Context ${"━".repeat(21)} │ 100%`);
   sidebar.setSession(session);
   for (const width of [8, 12, 20]) {
     const line = meter(width);
-    assert(visibleWidth(line) <= width - 2, `bounded at ${width}`);
+    assert(visibleWidth(line) <= width - 4, `bounded at ${width}`);
     assert(line.includes("16%"), `percent survives at ${width}`);
     if (width < 16) assert(!line.includes("Context"), `label yields before the percent at ${width}`);
   }
-  for (const line of plain(sidebar.render(3))) assert(visibleWidth(line) <= 1, "degenerate rail stays bounded");
+  for (const line of sidebar.render(3)) assert(visibleWidth(line) <= 3, "degenerate rail stays bounded");
 });
 
 test("context meter fill follows the theme accent and shifts to the warning tone at 80% and above", () => {
@@ -132,12 +147,12 @@ test("context meter fill follows the theme accent and shifts to the warning tone
   for (const [percent, code] of [[0, 36], [79, 36], [80, 33], [100, 33]] as const) {
     sidebar.setSession({ ...session, percent }); sidebar.invalidate();
     const line = meterLine();
-    const fill = line.match(/█+/)?.[0] ?? "";
+    const fill = line.match(/━+/)?.[0] ?? "";
     if (fill) assert(line.includes(`\x1b[${code}m${fill}\x1b[0m`), `${percent}% fills with code ${code}`);
     assert(line.includes("\x1b[2m"), "track and separator stay dim");
   }
   sidebar.setSession({ ...session, percent: null }); sidebar.invalidate();
-  assert(!/█/.test(stripAnsi(meterLine())), "null percent fills nothing");
+  assert(!/━/.test(stripAnsi(meterLine())), "null percent fills nothing");
 });
 
 test("occupancy and stat rows keep the branch usage inspect action; nulls render as dashes", () => {
@@ -373,4 +388,21 @@ test("DiffWorkspaceView remains independently usable for transcript diffs", () =
   const lines = preview.render(80, 3);
   assert.deepEqual(lines.map(stripAnsi), [" context", "-removed", "+added"]);
   assert.equal(preview.handleWheel(1), false);
+});
+
+test("sidebar closes both rails and joins every horizontal divider at the right edge", () => {
+  const { sidebar } = fixture();
+  for (const width of [4, 8, 28, 40, 80]) {
+    const lines = sidebar.render(width).map(stripAnsi);
+    assert.equal(lines[0], "┌" + "─".repeat(width - 2) + "┐");
+    assert.equal(lines.at(-1), "└" + "─".repeat(width - 2) + "┘");
+    assert.equal(lines[11], "├" + "─".repeat(width - 2) + "┤");
+    for (const line of lines) {
+      assert.equal(visibleWidth(line), width);
+      assert.match(line, /^[│┌├└]/);
+      assert.match(line, /[│┐┤┘]$/);
+    }
+  }
+  sidebar.setView(image());
+  for (const line of sidebar.render(40).map(stripAnsi)) assert.match(line, /[│┐┤┘]$/, "preview rows keep the right border");
 });

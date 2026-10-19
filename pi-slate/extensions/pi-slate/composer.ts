@@ -25,7 +25,7 @@ const ESCAPE_SEQUENCE = /\x1b(?:\[[0-?]*[ -/]*[@-~]|_[^\x07]*(?:\x07|$)|\][^\x07
 const REVERSE_ON = "\x1b[7m";
 const REVERSE_OFF = "\x1b[27m";
 const RESET = "\x1b[0m";
-const FRAME_CHROME = /[│╭╮╰╯├┤─›]/u;
+const FRAME_CHROME = /[│╭╮╰╯┌┐└┘├┤─›]/u;
 
 /** Invert prompt text only. Leading/trailing space and box chrome stay unselected. */
 export function paintSelectedContent(line: string): string {
@@ -125,7 +125,7 @@ export function padComposerFrame(
   const out = lines.slice();
   let bottom = out.length - 1;
   for (let i = out.length - 1; i >= 1; i--) {
-    if (stripVTControlCharacters(out[i] ?? "").includes("╰")) {
+    if (stripVTControlCharacters(out[i] ?? "").match(/[╰└]/u)) {
       bottom = i;
       break;
     }
@@ -153,7 +153,7 @@ export function inscribedTitle(
   kind: "top" | "mid" | "bottom",
   right = "",
 ): string {
-  const ends = { top: ["╭", "╮"], mid: ["├", "┤"], bottom: ["╰", "╯"] }[kind];
+  const ends = { top: ["┌", "┐"], mid: ["├", "┤"], bottom: ["└", "┘"] }[kind];
   const left = title ? `─ ${title} ` : "";
   const tail = right ? ` ${right} ` : "";
   return inscribedBorder(left, tail, width, paint, ends[0]!, ends[1]!);
@@ -233,7 +233,7 @@ export function frameComposerLines(
   if (lines.length < 2) return lines;
   let bottom = -1;
   for (let i = lines.length - 1; i >= 1; i--) {
-    if (stripVTControlCharacters(lines[i] ?? "").includes("╰")) {
+    if (stripVTControlCharacters(lines[i] ?? "").match(/[╰└]/u)) {
       bottom = i;
       break;
     }
@@ -283,7 +283,7 @@ export function composerContextEdge(
   hiddenLineCount = 0,
 ): string {
   const more = hiddenLineCount > 0 ? ` ↑ ${hiddenLineCount} more ` : "";
-  return inscribedBorder(more, resources ? ` ${resources} ` : "", width, paint, "╭", "╮");
+  return inscribedBorder(more, resources ? ` ${resources} ` : "", width, paint, "┌", "┐");
 }
 
 export type ComposerStatusIndicator = {
@@ -315,8 +315,8 @@ export function composerStatusContextEdge(
   rightSuffix = "",
 ): string {
   if (width <= 0) return "";
-  if (width === 1) return paint("╭");
-  if (width === 2) return paint("╭╮");
+  if (width === 1) return paint("┌");
+  if (width === 2) return paint("┌┐");
 
   const innerWidth = width - 2;
   const more = hiddenLineCount > 0 ? paint(` ↑ ${hiddenLineCount} more `) : "";
@@ -333,7 +333,7 @@ export function composerStatusContextEdge(
   if (body && more && visibleWidth(left) + visibleWidth(more) <= leftBudget) left += more;
   const right = truncateToWidth(resources ? ` ${resources} ` : "", leftBudget - visibleWidth(left), "");
   const fill = innerWidth - visibleWidth(left) - visibleWidth(right) - suffixWidth;
-  return `${paint("╭")}${left}${paint("─".repeat(fill))}${right}${suffix}${paint("╮")}`;
+  return `${paint("┌")}${left}${paint("─".repeat(fill))}${right}${suffix}${paint("┐")}`;
 }
 
 type WorkingStatusIndicatorParameter = Parameters<CustomEditor["setWorkingStatusIndicator"]>[0];
@@ -478,14 +478,17 @@ export class ComposerEditor extends CustomEditor {
       width,
     );
     if (src.dashboardVisible === false && src.context) {
-      const facts = src.theme.fg("muted", ` ${src.context.summary ?? src.context.tokens} `);
-      const model = src.footer === "standard" && width >= 66
-        ? src.theme.fg("muted", ` ${modelStatusLabel(src.model, src.modelDisplay)}${width >= 80 && src.thinking ? ` · ${src.thinking}` : ""} `) : "";
-      return inscribedBorder(`${more}${facts}${src.workspaceHeader ? "" : left}`, model, width, text => this.borderColor(text), "╰", "╯");
+      const rightParts = [src.context.summary ?? src.context.tokens];
+      if (src.footer === "standard" && width >= 66) {
+        rightParts.push(modelStatusLabel(src.model, src.modelDisplay));
+        if (width >= 80 && src.thinking) rightParts.push(src.thinking);
+      }
+      const right = src.theme.fg("muted", ` ${rightParts.join(src.theme.fg("borderMuted", " · "))} `);
+      return inscribedBorder(`${more}${left}`, right, width, text => this.borderColor(text), "└", "┘");
     }
-    if (src.dashboardVisible) return inscribedBorder(`${more}${left}`, right, width, text => this.borderColor(text), "╰", "╯");
+    if (src.dashboardVisible) return inscribedBorder(`${more}${left}`, right, width, text => this.borderColor(text), "└", "┘");
     const compactRight = src.footer === "minimal" ? (src.context?.tokens ? src.theme.fg("muted", ` ${src.context.tokens} `) : "") : right;
-    return inscribedBorder(`${more}${left}`, compactRight, width, (text) => this.borderColor(text), "╰", "╯");
+    return inscribedBorder(`${more}${left}`, compactRight, width, (text) => this.borderColor(text), "└", "┘");
   }
 
   render(width: number): string[] {

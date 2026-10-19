@@ -2,15 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- Optional Claude Code-style tool transcripts with compact statuses, result summaries, diff counts, and grouped call trees while preserving Pi's native expanded renderers.
+- Quiet Workbench refinements: bordered sidebar/context meter, turn-completion receipts, cleaner header, safer image tokens, and a focused prompt with directory/branch, resource cost, context, and model metadata.
+
 ### Changed
 
-- Header shows the session directory as `/<name>` instead of the absolute path, and the decorative full-width hairline under the header is gone (update notices keep their framing hairlines).
-- Sidebar usage rows reorganized: left lane `Cached`/`Uncached` label-first, right lane value-first (`61.4k In`, `876 Out`).
-- Sidebar rail has top and bottom horizontal bars.
-- Session and task rows show `PID` uppercase; MCP/Skills fold counts are capitalized (`Enabled`, `Loaded`).
-- Header no longer shows a `New session started` chip; the stock transcript banner stays filtered.
-- Image placeholders `[image-N]` are a single composer object: the caret cannot enter the token, and the whole token highlights.
-- MCP heading shows `· N Error(s)` in red instead of dumping the config error text.
+- Simplified session identity to `Session <id> · PID <pid>`, reorganized usage/resource rows, aligned prompt and sidebar chrome, and made `/slate theme default` restore Pi's system theme.
+
+### Fixed
+
+- Removed duplicate focused-mode cost metadata, false native-read conflict warnings, and transcript grouping/rendering issues found during review.
+
+### Security
+
+- Updated the development dependency lock to `undici` 8.12.2 to clear Snyk's critical/high findings.
 
 ## 0.1.15
 
