@@ -14,6 +14,8 @@ Chrome is last-writer-wins; tools are first-registration-wins, with losses repor
 
 Observed TUI thinking adds elapsed seconds and available token rate to the composer-edge working word (`Pondering · 7s · ↑↓42`). Native thinking visibility, streaming labels, and toggles remain unchanged; per-message settled durations await a host API.
 
+Opt-in `toolStyle: "claudecode"` in pi-slate.json with tool-cards selected requires /reload. Uses Pi registerToolRenderer (tested 1.3.0), compact status/args/result/duration/timeout/diff rows and scoped consecutive-tool trees on compatible fullscreen hosts. No tool re-registration for styling, global prototype patches, session replay or extra timers. Legacy read grouper is disabled in this mode. Expanded original renderers/state, native thinking visibility and schemas remain intact; images, assistant text, unsupported tools and visible thoughts break groups. Older hosts keep default cards with a warning.
+
 Highlighted diffs use responsive split edits, unified writes, and character-level emphasis. They follow `/slate theme`. Native model-facing results are preserved; bounded write patches are stored in TUI result details for session restore.
 
 Header uses the stock Pi mark plus version, model, session dir as ~/<name>, and an optional update hairline. Composer keeps project/branch and model, with square corners matching the fully bordered sidebar. Completed turns add a UI-only elapsed-time receipt with local finish time (Worked for 54s • 09:37). Image placeholders are a single caret object. The rail shows session (PID uppercase), context, a merged tokens/cost/rate occupancy line, left-lane Cached/Uncached and right-lane value-first In/Out rows, folded MCP/Skills/Prompts (Enabled/Loaded counts, MCP error counts in red), and live background shells. Commands stay behind / and /slate session commands. Empty task/image shelves disappear. Below 100 columns or 30 rows the rail hides without changing preferences; condensed context/cost returns to the composer. Pin/inspection and session/root ownership protections remain intact.
@@ -25,6 +27,8 @@ Header uses the stock Pi mark plus version, model, session dir as ~/<name>, and 
 - [Surfaces](extensions/pi-slate/surfaces.ts): closed enum, parsing, migration
 - [Diff](extensions/pi-slate/diff.ts): edit/write rendering
 - [Read groups](extensions/pi-slate/read-group.ts): consecutive-read compaction
+- [Tool style](extensions/pi-slate/tool-style.ts): presentation-only compact cards
+- [Tool groups](extensions/pi-slate/tool-groups.ts): scoped chat-instance trees and native mouse routing
 - [Thinking status](extensions/pi-slate/thinking-fold.ts): live composer timing, native transcript fallback
 - [Tokyo Night theme](themes/tokyo-night.json): default explicit theme choice
 - [Black Metal theme](themes/black-metal.json): optional theme, not an install default

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- Opt-in `toolStyle: "claudecode"` in `pi-slate.json`: compact tool status/argument rows, result summaries with duration/timeout and colored diff counts, and consecutive-call trees on compatible fullscreen hosts. Existing expanded renderers and custom expansion keybindings are preserved. Default cards remain unchanged.
+- Renderer and grouping regression tests for expansion, padding, terminal safety, errors, native thinking visibility, lifecycle cleanup and message-window coexistence. Styling uses Pi's renderer API without tool re-registration or global prototype patches; output summaries are cached and grouping adds no timers.
+- Review hardening: activated native renderers receive completion after collapse so their redraw clocks stop; grep context is counted as lines, search limit/truncation notices remain explicit without inflating result counts, and response-length warnings are never folded away.
+
 ### Changed
 
 - Prompt frame uses square corners to match the sidebar border.

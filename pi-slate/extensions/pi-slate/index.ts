@@ -24,6 +24,8 @@ import { installExitCommand } from "./exit.ts";
 import { installPromptPicker } from "./prompts.ts";
 import { installDiff } from "./diff.ts";
 import { installRead } from "./read.ts";
+import { installToolStyle } from "./tool-style.ts";
+import { ToolGroups } from "./tool-groups.ts";
 import { GitBranchPoller } from "./git-branch.ts";
 import { formatSurfaces, has, parseSurfaceConfig, type SurfaceConfig } from "./surfaces.ts";
 import { Sidebar } from "./sidebar.ts";
@@ -101,6 +103,7 @@ type SlateConfig = SurfaceConfig & {
   modelDisplay?: ModelDisplay;
   showPid?: boolean;
   progress?: ProgressStyle;
+  toolStyle?: "default" | "claudecode";
   sidebarSections: SidebarFolds;
 };
 
@@ -152,6 +155,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
+      ...(value.toolStyle === "claudecode" ? { toolStyle: "claudecode" as const } : {}),
       ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
@@ -200,9 +204,12 @@ export default function piSlate(pi: ExtensionAPI): void {
   // Runtime ownership is fixed until /reload, even when a command saves a new set.
   const selected = [...config.surfaces];
   const owns = (surface: typeof selected[number]): boolean => has(selected, surface);
+  const requestedClaudeTools = owns("tool-cards") && config.toolStyle === "claudecode";
+  const claudeTools = requestedClaudeTools && typeof pi.registerToolRenderer === "function";
   if (owns("tool-cards")) {
     installDiff(pi);
-    installRead(pi);
+    if (claudeTools) installToolStyle(pi);
+    else installRead(pi);
   }
   if (owns("editor")) installPromptPicker(pi);
   installExitCommand(pi);
@@ -234,6 +241,14 @@ export default function piSlate(pi: ExtensionAPI): void {
     && (typeof currentContext.ui.getEditorComponent !== "function" || currentContext.ui.getEditorComponent() === editorFactory);
   let conversations: ReturnType<typeof installConversationBridge> | undefined;
   let messageWindow: MessageWindow | undefined;
+  let toolGroups: ToolGroups | undefined;
+  const syncToolGroups = (): void => {
+    if (!claudeTools || currentContext?.mode !== "tui") return;
+    const chat = findChatContainer(layoutRootOf(activeTui));
+    if (!chat || toolGroups?.container === chat) return;
+    toolGroups?.dispose();
+    toolGroups = new ToolGroups(chat, () => currentContext!.ui.theme);
+  };
   const tokenRate = new TokenRateTracker();
   const thinkingFold = new ThinkingFoldTracker({ onChange: () => syncThinkingStatus() });
   const updates = new UpdateWatcher();
@@ -246,6 +261,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   let requestRender = (_force = false) => {};
 
   const syncVisibleMessages = (): void => {
+    syncToolGroups();
     if (!owns("transcript") || currentContext?.mode !== "tui") return;
     messageWindow = syncMessageWindow(messageWindow, activeTui, resolveMessageLength(config.messageLength));
   };
@@ -321,6 +337,9 @@ export default function piSlate(pi: ExtensionAPI): void {
   }
 
   const install = (ctx: ExtensionContext): void => {
+    if (ctx.mode === "tui" && requestedClaudeTools && !claudeTools) {
+      ctx.ui.notify("Slate Claude Code tool style requires a host with registerToolRenderer; keeping default cards", "warning");
+    }
     sessionEpoch += 1; sidebarYielded = false;
     if (!owns("header")) {
       noticeFilterDispose?.(); noticeFilterDispose = undefined; noticeFilterActive = false;
@@ -424,10 +443,11 @@ export default function piSlate(pi: ExtensionAPI): void {
     }
     // belowEditor has no host leading spacer. This factory renders exactly zero rows.
     // It is a TUI handle, not a chrome owner or application bootstrap header.
-    if (owns("sidebar") || owns("transcript")) {
+    if (owns("sidebar") || owns("transcript") || claudeTools) {
       ctx.ui.setWidget("pi-slate:surface-host", (tui, theme) => {
         activeTui = tui;
         requestRender = (force = false) => tui.requestRender(force);
+        queueMicrotask(syncToolGroups);
         if (owns("sidebar")) {
           sidebar.attach(tui, theme, () => { sidebarYielded = true; stopDashboard(); });
           if (sidebar.splitActive && !dashboardClock) {
@@ -704,6 +724,8 @@ export default function piSlate(pi: ExtensionAPI): void {
     background.reset("");
     branch.dispose();
     updates.dispose();
+    toolGroups?.dispose();
+    toolGroups = undefined;
     messageWindow?.dispose();
     messageWindow = undefined;
     noticeFilterDispose?.(); noticeFilterDispose = undefined; noticeFilterActive = false;

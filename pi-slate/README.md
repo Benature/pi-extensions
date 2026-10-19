@@ -106,6 +106,18 @@ Consecutive `read` cards collapse into one line: `read x.md` stays as-is, then `
 
 Previews are bounded: 256 KiB snapshots, 2,000 parsed rows, 16 collapsed / 400 expanded. Binary or oversized previous content shows a notice, not a fake overwrite.
 
+### Claude Code Tool Style (opt-in)
+
+Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`. Omit it or use `"default"` for existing Slate cards. This is an independently implemented presentation inspired by [pi-pretty](https://github.com/heyhuynhgiabuu/pi-pretty), not copied code.
+
+- Compact `✓ Name (args)` calls with `└` result summaries, execution duration (including zero and failures), bash timeout, and green/red edit counts. Pending/running/error states remain visible.
+- Consecutive supported calls form `Done (…)` / `Running (…)` trees in compatible fullscreen hosts. Click a tool or use your configured tool-expansion binding; hints come from Pi's keybindings. Expanding any member restores the individual cards.
+- Covers read, bash, grep, find, ls, write, edit, apply_patch, codemode, and recall without registering replacement tools for styling. Slate's existing edit/write tools still provide its expanded diff views; schemas, structured read output, execution and model-facing results remain unchanged.
+- Expanded tools delegate to their existing renderers with isolated component state. Unsupported tools, assistant text, visible thinking and images break groups. The legacy read-only grouper is not installed in this mode.
+- Uses the host's `outputPad`. Summaries are cached by content/details identity; grouping visits current chat children, never replays the session, and adds no polling timer or background process. It patches only the selected chat instance and restores owned methods on shutdown.
+
+Requires a Pi host with `registerToolRenderer` (tested on 1.3.0). Older hosts keep default cards with a warning; non-fullscreen hosts keep compact individual cards without grouping. Slate retains its existing composer, user-message styling and native thinking labels/`Ctrl+T`: it does not globally relabel historical thoughts with potentially incorrect durations. Switching the saved style requires `/reload`.
+
 ### Rich Media Rendering
 
 Slate uses Kitty Graphics Protocol to display rich media inside your terminal.

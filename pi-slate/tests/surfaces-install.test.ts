@@ -54,6 +54,7 @@ async function fixture(t: TestContext, text: string | undefined, mode = "tui", c
     registerCommand(name: string, command: typeof commands extends Map<string, infer V> ? V : never) { commands.set(name, command); },
     registerShortcut() {},
     registerTool(tool: ToolDefinition) { tools.push(tool); },
+    registerToolRenderer() { calls.push("tool-renderer"); },
     getCommands: () => extraCommands,
     getAllTools: () => tools.map((tool) => ({ ...tool, sourceInfo: { path: conflict ? "/foreign/cards.ts" : new URL("../extensions/pi-slate/index.ts", import.meta.url).pathname } })),
     exec: async () => { calls.push("branch-git"); return { code: 0, stdout: "test-branch\n", stderr: "", killed: false }; },
@@ -173,6 +174,23 @@ for (const surfaces of [[], ["editor"], [...FRESH_SURFACES], [...SURFACES], ["he
     assert.equal(f.chat.children.length, 105);
   });
 }
+
+test("Claude tool style is opt-in, surface-scoped, and does not install legacy read grouping", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }));
+  assert.deepEqual(f.tools.map((tool) => tool.name).sort(), ["edit", "write"]);
+  assert.ok(f.calls.includes("tool-renderer"));
+  assert.ok(f.calls.includes("widget"), "grouping acquires only a zero-row TUI handle, not the composer");
+  assert.ok(!f.calls.includes("editor"));
+  await f.commands.get("slate")!.handler("focused off", f.ctx);
+  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, "claudecode");
+});
+
+test("unselected cards ignore Claude tool style entirely", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: [], toolStyle: "claudecode" }));
+  assert.deepEqual(f.tools, []);
+  assert.ok(!f.calls.includes("tool-renderer"));
+  assert.ok(!f.calls.includes("widget"));
+});
 
 test("surface saves require reload; focus/width never enable an unselected sidebar", async (t) => {
   const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], focused: true, footer: "minimal" }));
