@@ -4,31 +4,20 @@
 
 ### Added
 
-- Opt-in `toolStyle: "claudecode"` in `pi-slate.json`: compact tool status/argument rows, result summaries with duration/timeout and colored diff counts, and consecutive-call trees on compatible fullscreen hosts. Existing expanded renderers and custom expansion keybindings are preserved. Default cards remain unchanged.
-- Renderer and grouping regression tests for expansion, padding, terminal safety, errors, native thinking visibility, lifecycle cleanup and message-window coexistence. Styling uses Pi's renderer API without tool re-registration or global prototype patches; output summaries are cached and grouping adds no timers.
-- Review hardening: activated native renderers receive completion after collapse so their redraw clocks stop; grep context is counted as lines, search limit/truncation notices remain explicit without inflating result counts, and response-length warnings are never folded away.
-
-### Fixed
-
-- `/slate theme default` now restores Pi's system default instead of re-selecting Tokyo Night. `/slate theme tokyo-night` remains the explicit Tokyo Night command.
-- Claude Code tool style no longer reports a false first-registration conflict for the native `read` tool. Ownership checks cover only the edit/write tools Slate registers in this mode; genuine registration conflicts still warn.
+- Optional Claude Code-style tool transcripts with compact statuses, result summaries, diff counts, and grouped call trees while preserving Pi's native expanded renderers.
+- Quiet Workbench refinements: bordered sidebar/context meter, turn-completion receipts, cleaner header, safer image tokens, and a focused prompt with directory/branch, resource cost, context, and model metadata.
 
 ### Changed
 
-- Focused composer bottom edge now keeps the directory/branch on the left and places `ctx %` before model/thinking on the right. Cost stays only on the top resource edge, removing the duplicate bottom label.
-- Sidebar starts with one `Session <short-id> · PID <pid>` identity row instead of section/name/ID rows. Session names are no longer fetched or displayed; click still copies the full ID, and details show the full identity. The freed rows return to sidebar content.
-- Prompt frame uses square corners to match the sidebar border.
+- Simplified session identity to `Session <id> · PID <pid>`, reorganized usage/resource rows, aligned prompt and sidebar chrome, and made `/slate theme default` restore Pi's system theme.
 
-- Sidebar has a complete border with joined corners and separators, matching inner gutters, and a thin context track instead of shaded blocks.
-- Completed turns show a UI-only `Worked for 54s • 09:37` receipt with local finish time.
+### Fixed
 
-- Header shows the session directory as `~/<name>` instead of the absolute path, and the decorative full-width hairline under the header is gone (update notices keep their framing hairlines).
-- Sidebar usage rows reorganized: left lane `Cached`/`Uncached` label-first, right lane value-first (`61.4k In`, `876 Out`).
-- Sidebar rail has top and bottom horizontal bars.
-- Session and task rows show `PID` uppercase; MCP/Skills fold counts are capitalized (`Enabled`, `Loaded`).
-- Header no longer shows a `New session started` chip; the stock transcript banner stays filtered.
-- Image placeholders `[image-N]` are a single composer object: the caret cannot enter the token, and the whole token highlights.
-- MCP heading shows `· N Error(s)` in red instead of dumping the config error text.
+- Removed duplicate focused-mode cost metadata, false native-read conflict warnings, and transcript grouping/rendering issues found during review.
+
+### Security
+
+- Updated the development dependency lock to `undici` 8.12.2 to clear Snyk's critical/high findings.
 
 ## 0.1.15
 
