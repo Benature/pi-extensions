@@ -289,7 +289,7 @@ test("dashboard uses live branch facts and session-scoped tasks; commands preser
   f.manager.appendMessage({ role: "user", content: "hi", timestamp: 0 });
   f.manager.appendMessage({ role: "assistant", api: "anthropic-messages", provider: "anthropic", model: "fixture", timestamp: 1, stopReason: "stop", content: [{ type: "text", text: "done" }], usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 50, totalTokens: 470, cost: { input: .1, output: .2, cacheRead: .03, cacheWrite: .02, total: .35 } } });
   await f.emit("session_info_changed");
-  assert.match(rail(), /Dashboard test/); assert.match(rail(), /PID/); assert.match(rail(), /450\s+IN/); assert.match(rail(), /UNCACHED\s+100/); assert.match(rail(), /\$0.35/);
+  assert.match(rail(), /Dashboard test/); assert.match(rail(), /PID/); assert.match(rail(), /450\s+In/); assert.match(rail(), /Uncached\s+100/); assert.match(rail(), /\$0.35/);
   assert(!/Summary|Activity Preview|Context\s*\n/.test(rail()));
   f.extraCommands.push({ name: "skill:review", source: "skill", sourceInfo: { path: "/skills/review/SKILL.md", scope: "user" } });
   await f.emit("message_end", { message: { role: "toolResult", toolName: "codemode", toolCallId: "outer", content: [], isError: false, nestedCalls: { calls: [{ id: "nested-read", name: "read", arguments: { path: "/skills/review/SKILL.md" }, status: "ok" }], complete: true } } });
@@ -428,4 +428,24 @@ test("receiver and 24-row renderer show current work before historical failures"
     { id: "live", label: "currently running", state: "running", kind: "subagent", startedAt: Date.now() },
   ] });
   assert.match(unstyled(railOf(f).render(40).join("\n")), /currently running/);
+});
+
+test("completed turn appends one UI receipt without adding session messages", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["editor"], focused: true }));
+  const start = new Date(2026, 9, 19, 9, 36, 6).getTime();
+  let now = start;
+  t.mock.method(Date, "now", () => now);
+  const count = f.manager.getBranch().length;
+  await f.emit("agent_start");
+  now += 54000;
+  await f.emit("agent_end");
+  const receipts = () => f.chat.children.flatMap(child => child.render(100)).filter(line => line.includes("Worked for"));
+  assert.deepEqual(receipts(), ["Worked for 54s • 09:37"]);
+  assert.equal(f.manager.getBranch().length, count);
+  await f.emit("agent_end");
+  assert.equal(receipts().length, 1, "duplicate end events do not add receipts");
+  await f.emit("agent_start");
+  now += 65000;
+  await f.emit("agent_end");
+  assert.deepEqual(receipts(), ["Worked for 54s • 09:37", "Worked for 1m 5s • 09:38"]);
 });

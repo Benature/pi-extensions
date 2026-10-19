@@ -62,7 +62,7 @@ test("growing usage and money keep a stable label lane and value edge with the r
       sidebar.setSession({ ...session, usage: { ...session.usage, input: value, output: value, cost: value } });
       const rows = sidebar.render(width).map(stripVTControlCharacters);
       const stats: string[] = [];
-      for (const label of ["CACHED", "UNCACHED"]) {
+      for (const label of ["Cached", "Uncached"]) {
         const line = rows.find(row => row.startsWith("│ " + label + " "))!;
         assert(line, label); assert.equal(visibleWidth(line), width);
         assert.equal(visibleWidth(line.trimEnd()), width, "right edge must not move");
@@ -84,7 +84,7 @@ test("growing usage and money keep a stable label lane and value edge with the r
   sidebar.dispose();
 });
 
-test("context meter keeps a shaded track and dim separator with the real theme", () => {
+test("context meter keeps a thin track and dim separator with the real theme", () => {
   const sidebar = new Sidebar(() => 10000);
   sidebar.attach({ terminal: { rows: 50, columns: 140 }, requestRender() {} } as unknown as TUI, theme);
   assert.equal(sessionSidebarSlots(50, 0, false).header, 13, "meter merged the old context pair and block bar rows");
@@ -93,20 +93,20 @@ test("context meter keeps a shaded track and dim separator with the real theme",
     const rows = sidebar.render(width);
     const meter = rows.find(row => stripVTControlCharacters(row).includes("Context"))!;
     assert(meter, `meter at ${width}`);
-    assert.match(stripVTControlCharacters(meter), /^│ Context [█░]+ │ 11%$/, `structure at ${width}`);
-    assert(!stripVTControlCharacters(meter).includes("─"), "meter track is never the divider glyph");
+    assert.match(stripVTControlCharacters(meter), /^│ Context [━─]+ │ 11% │$/, `structure at ${width}`);
+    assert.doesNotMatch(stripVTControlCharacters(meter), /[█░]/, "no solid or shaded blocks");
     assert.equal(visibleWidth(meter), width);
-    const track = stripVTControlCharacters(meter).match(/░+/)![0];
+    const track = stripVTControlCharacters(meter).match(/─+/)![0];
     const dimOpen = theme.fg("dim", "").replace(/\u001b\[39m$/, "");
-    assert(meter.includes(`${dimOpen}${track}`), "empty cells use the dim shaded track");
+    assert(meter.includes(`${dimOpen}${track}`), "empty cells use the dim thin track");
   }
   sidebar.setSession({ ...session, percent: 83 });
   const warning = sidebar.render(40);
-  const fill = stripVTControlCharacters(warning.find(row => stripVTControlCharacters(row).includes("Context"))!).match(/█+/)![0];
+  const fill = stripVTControlCharacters(warning.find(row => stripVTControlCharacters(row).includes("Context"))!).match(/━+/)![0];
   assert(warning.some(row => row.includes(theme.fg("warning", fill))), "fill shifts to the warning tone at >= 80%");
   sidebar.setSession({ ...session, percent: null });
   const empty = stripVTControlCharacters(sidebar.render(40).find(row => stripVTControlCharacters(row).includes("Context"))!);
-  assert(empty.includes("░") && !empty.includes("█") && empty.endsWith("—%"), "null percent is an empty track with a dash");
+  assert(empty.includes("─") && !empty.includes("━") && empty.endsWith("—% │"), "null percent is an empty track with a dash");
   sidebar.dispose();
 });
 

@@ -4,9 +4,18 @@
 
 ### Changed
 
-- Header shows the session directory as `/<name>` instead of the absolute path, and the decorative full-width hairline under the header is gone (update notices keep their framing hairlines).
-- Sidebar usage rows reorganized: left lane `CACHED`/`UNCACHED` label-first, right lane value-first (`61.4k IN`, `876 OUT`).
+- Prompt frame uses square corners to match the sidebar border.
+
+- Sidebar has a complete border with joined corners and separators, matching inner gutters, and a thin context track instead of shaded blocks.
+- Completed turns show a UI-only `Worked for 54s • 09:37` receipt with local finish time.
+
+- Header shows the session directory as `~/<name>` instead of the absolute path, and the decorative full-width hairline under the header is gone (update notices keep their framing hairlines).
+- Sidebar usage rows reorganized: left lane `Cached`/`Uncached` label-first, right lane value-first (`61.4k In`, `876 Out`).
+- Sidebar rail has top and bottom horizontal bars.
 - Session and task rows show `PID` uppercase; MCP/Skills fold counts are capitalized (`Enabled`, `Loaded`).
+- Header no longer shows a `New session started` chip; the stock transcript banner stays filtered.
+- Image placeholders `[image-N]` are a single composer object: the caret cannot enter the token, and the whole token highlights.
+- MCP heading shows `· N Error(s)` in red instead of dumping the config error text.
 
 ## 0.1.15
 

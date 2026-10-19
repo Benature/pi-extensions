@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import {
+  CURSOR_MARKER,
   truncateToWidth,
   visibleWidth,
   getKeybindings,
@@ -24,7 +25,7 @@ const ESCAPE_SEQUENCE = /\x1b(?:\[[0-?]*[ -/]*[@-~]|_[^\x07]*(?:\x07|$)|\][^\x07
 const REVERSE_ON = "\x1b[7m";
 const REVERSE_OFF = "\x1b[27m";
 const RESET = "\x1b[0m";
-const FRAME_CHROME = /[│╭╮╰╯├┤─›]/u;
+const FRAME_CHROME = /[│╭╮╰╯┌┐└┘├┤─›]/u;
 
 /** Invert prompt text only. Leading/trailing space and box chrome stay unselected. */
 export function paintSelectedContent(line: string): string {
@@ -59,6 +60,49 @@ export function paintSelectedContent(line: string): string {
   return `${before}${REVERSE_ON}${text}${REVERSE_OFF}${after}`;
 }
 
+// Pi 1.3+ editor caret is an APC fake-cursor pair; older builds used reverse video.
+const FAKE_CURSOR_START = "\x1b_pi:fc\x07";
+const CARET_CELL = /(?:\x1b_pi:c\x07)?\x1b_pi:fc\x07([\s\S]*?)\x1b_pi:\/fc\x07|\x1b\[7m([\s\S]*?)\x1b\[(?:0|27)m/;
+const IMAGE_TOKEN_TAIL = /^image[ -]\d+\]/;
+
+type CaretCell = { start: number; end: number; cell: string; marker: string };
+
+function caretCell(line: string): CaretCell | undefined {
+  const match = CARET_CELL.exec(line);
+  if (!match) return undefined;
+  const cell = match[1] ?? match[2] ?? "";
+  const marker = match[0].startsWith(CURSOR_MARKER) ? CURSOR_MARKER : "";
+  return { start: match.index, end: match.index + match[0].length, cell, marker };
+}
+
+/**
+ * Highlight a whole `[image-N]` token when the caret is on the object
+ * (fake cursor sits on `[`). Caret after `]` is a normal caret.
+ *
+ * Pure string transform over one rendered editor line (ANSI intact); lines
+ * without a caret or without an adjacent image token pass through unchanged.
+ */
+export function paintImageTokenAtCaret(line: string): string {
+  const caret = caretCell(line);
+  if (!caret) return line;
+  // Only the start boundary is "on" the object. Caret after `]` is a normal caret.
+  if (caret.cell !== "[") return line;
+  const tail = IMAGE_TOKEN_TAIL.exec(line.slice(caret.end));
+  if (!tail) return line;
+  return `${line.slice(0, caret.start)}${caret.marker}${REVERSE_ON}[${tail[0]}${REVERSE_OFF}${line.slice(caret.end + tail[0].length)}`;
+}
+
+/** Paint the caret's image token on the one rendered line that holds the caret. */
+export function paintImageTokenAtCaretLines(lines: string[]): string[] {
+  const index = lines.findIndex((line) => line.includes(FAKE_CURSOR_START) || line.includes(REVERSE_ON));
+  if (index === -1) return lines;
+  const painted = paintImageTokenAtCaret(lines[index]!);
+  if (painted === lines[index]) return lines;
+  const out = lines.slice();
+  out[index] = painted;
+  return out;
+}
+
 export const COMPOSER_SHELF_LINES = 4;
 
 let lastComposerFrameLines = COMPOSER_SHELF_LINES;
@@ -81,7 +125,7 @@ export function padComposerFrame(
   const out = lines.slice();
   let bottom = out.length - 1;
   for (let i = out.length - 1; i >= 1; i--) {
-    if (stripVTControlCharacters(out[i] ?? "").includes("╰")) {
+    if (stripVTControlCharacters(out[i] ?? "").match(/[╰└]/u)) {
       bottom = i;
       break;
     }
@@ -109,7 +153,7 @@ export function inscribedTitle(
   kind: "top" | "mid" | "bottom",
   right = "",
 ): string {
-  const ends = { top: ["╭", "╮"], mid: ["├", "┤"], bottom: ["╰", "╯"] }[kind];
+  const ends = { top: ["┌", "┐"], mid: ["├", "┤"], bottom: ["└", "┘"] }[kind];
   const left = title ? `─ ${title} ` : "";
   const tail = right ? ` ${right} ` : "";
   return inscribedBorder(left, tail, width, paint, ends[0]!, ends[1]!);
@@ -189,7 +233,7 @@ export function frameComposerLines(
   if (lines.length < 2) return lines;
   let bottom = -1;
   for (let i = lines.length - 1; i >= 1; i--) {
-    if (stripVTControlCharacters(lines[i] ?? "").includes("╰")) {
+    if (stripVTControlCharacters(lines[i] ?? "").match(/[╰└]/u)) {
       bottom = i;
       break;
     }
@@ -239,7 +283,7 @@ export function composerContextEdge(
   hiddenLineCount = 0,
 ): string {
   const more = hiddenLineCount > 0 ? ` ↑ ${hiddenLineCount} more ` : "";
-  return inscribedBorder(more, resources ? ` ${resources} ` : "", width, paint, "╭", "╮");
+  return inscribedBorder(more, resources ? ` ${resources} ` : "", width, paint, "┌", "┐");
 }
 
 export type ComposerStatusIndicator = {
@@ -271,8 +315,8 @@ export function composerStatusContextEdge(
   rightSuffix = "",
 ): string {
   if (width <= 0) return "";
-  if (width === 1) return paint("╭");
-  if (width === 2) return paint("╭╮");
+  if (width === 1) return paint("┌");
+  if (width === 2) return paint("┌┐");
 
   const innerWidth = width - 2;
   const more = hiddenLineCount > 0 ? paint(` ↑ ${hiddenLineCount} more `) : "";
@@ -289,7 +333,7 @@ export function composerStatusContextEdge(
   if (body && more && visibleWidth(left) + visibleWidth(more) <= leftBudget) left += more;
   const right = truncateToWidth(resources ? ` ${resources} ` : "", leftBudget - visibleWidth(left), "");
   const fill = innerWidth - visibleWidth(left) - visibleWidth(right) - suffixWidth;
-  return `${paint("╭")}${left}${paint("─".repeat(fill))}${right}${suffix}${paint("╮")}`;
+  return `${paint("┌")}${left}${paint("─".repeat(fill))}${right}${suffix}${paint("┐")}`;
 }
 
 type WorkingStatusIndicatorParameter = Parameters<CustomEditor["setWorkingStatusIndicator"]>[0];
@@ -437,11 +481,11 @@ export class ComposerEditor extends CustomEditor {
       const facts = src.theme.fg("muted", ` ${src.context.summary ?? src.context.tokens} `);
       const model = src.footer === "standard" && width >= 66
         ? src.theme.fg("muted", ` ${modelStatusLabel(src.model, src.modelDisplay)}${width >= 80 && src.thinking ? ` · ${src.thinking}` : ""} `) : "";
-      return inscribedBorder(`${more}${facts}${src.workspaceHeader ? "" : left}`, model, width, text => this.borderColor(text), "╰", "╯");
+      return inscribedBorder(`${more}${facts}${src.workspaceHeader ? "" : left}`, model, width, text => this.borderColor(text), "└", "┘");
     }
-    if (src.dashboardVisible) return inscribedBorder(`${more}${left}`, right, width, text => this.borderColor(text), "╰", "╯");
+    if (src.dashboardVisible) return inscribedBorder(`${more}${left}`, right, width, text => this.borderColor(text), "└", "┘");
     const compactRight = src.footer === "minimal" ? (src.context?.tokens ? src.theme.fg("muted", ` ${src.context.tokens} `) : "") : right;
-    return inscribedBorder(`${more}${left}`, compactRight, width, (text) => this.borderColor(text), "╰", "╯");
+    return inscribedBorder(`${more}${left}`, compactRight, width, (text) => this.borderColor(text), "└", "┘");
   }
 
   render(width: number): string[] {
@@ -451,9 +495,12 @@ export class ComposerEditor extends CustomEditor {
     if (padding !== undefined && this.getPaddingX() !== padding) super.setPaddingX(padding);
     const paint = (text: string) => this.borderColor(text);
     const raw = super.render(width);
+    // The caret's image token reads as one object; select-all already inverts
+    // the whole prompt, so the per-token paint is skipped while that is on.
+    const tokenObject = this.selectionActive ? raw : paintImageTokenAtCaretLines(raw);
     const selected = this.selectionActive && !this.isShowingAutocomplete()
-      ? raw.map((line, index) => index === 0 || index === raw.length - 1 ? line : paintSelectedContent(line))
-      : raw;
+      ? tokenObject.map((line, index) => index === 0 || index === tokenObject.length - 1 ? line : paintSelectedContent(line))
+      : tokenObject;
     const lines = padComposerFrame(
       frameComposerLines(selected, {
         width,

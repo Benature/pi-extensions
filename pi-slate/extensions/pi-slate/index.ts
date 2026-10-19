@@ -32,6 +32,7 @@ import { commandResources, parseSidebarFolds, sidebarMessageCounts, sidebarText,
 import { inspectSidebarText } from "./sidebar-inspector.ts";
 import { pickSidebarItem } from "./sidebar-picker.ts";
 import { loadSidebarMcpHost } from "./sidebar-mcp.ts";
+import { TurnCompletion } from "./turn-completion.ts";
 import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
@@ -463,21 +464,11 @@ export default function piSlate(pi: ExtensionAPI): void {
         };
         attachFilter(findChatContainer(layoutRootOf(tui)));
         if (!noticeFilterActive) queueMicrotask(() => attachFilter(findChatContainer(layoutRootOf(tui))));
-        return new SlateHeader(theme, () => currentContext, columnWidth, () => updates.notice, () => {
-          const idle = typeof currentContext?.isIdle !== "function" || currentContext.isIdle();
-          const empty = branchFacts
-            ? branchFacts.counts.messages === 0 && branchFacts.usage.total === 0
-            : (() => {
-              try { return sidebarMessageCounts(currentContext?.sessionManager.getBranch() ?? []).messages === 0; }
-              catch { return false; }
-            })();
-          return {
-            version: VERSION,
-            model: currentContext ? modelStatusLabel(currentContext.model, config.modelDisplay) : "",
-            thinking: currentContext?.thinkingLevel ?? "",
-            ready: noticeFilterActive && empty && idle,
-          };
-        });
+        return new SlateHeader(theme, () => currentContext, columnWidth, () => updates.notice, () => ({
+          version: VERSION,
+          model: currentContext ? modelStatusLabel(currentContext.model, config.modelDisplay) : "",
+          thinking: currentContext?.thinkingLevel ?? "",
+        }));
       });
     }
     if (owns("footer")) ctx.ui.setFooter(() => new SlateFooter());
@@ -586,7 +577,9 @@ export default function piSlate(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => { mcpFiles.setHost(await mcpHost); install(ctx); });
   pi.on("agent_start", (_event, ctx) => {
     currentContext = ctx;
-    if (owns("sidebar") && ctx.mode === "tui") { turnStartedAt = Date.now(); syncSidebar(ctx); }
+    if (ctx.mode === "tui" && (owns("sidebar") || editorActive() || owns("transcript"))) {
+      turnStartedAt = Date.now(); syncSidebar(ctx);
+    }
     if (!editorActive()) return;
     thinkingFold.stop();
     if (waveHost(ctx)) {
@@ -601,7 +594,17 @@ export default function piSlate(pi: ExtensionAPI): void {
     currentContext = ctx;
     thinkingFold.stop();
     stopWave();
-    if (turnStartedAt !== undefined) { lastTurnMs = Date.now() - turnStartedAt; turnStartedAt = undefined; }
+    if (turnStartedAt !== undefined) {
+      const finishedAt = Date.now();
+      lastTurnMs = Math.max(0, finishedAt - turnStartedAt);
+      turnStartedAt = undefined;
+      if (ctx.mode === "tui") {
+        const chat = findChatContainer(layoutRootOf(activeTui));
+        chat?.addChild(new TurnCompletion(lastTurnMs, finishedAt, () => currentContext?.ui.theme ?? ctx.ui.theme));
+        syncVisibleMessages();
+        requestRender();
+      }
+    }
     if (owns("sidebar")) { background.clearShells(); sidebar.setTasks(background.snapshot()); }
     syncSidebar(ctx);
   });

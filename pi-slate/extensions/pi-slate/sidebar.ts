@@ -10,7 +10,7 @@ import { sessionSidebarSlots, sidebarCost, sidebarDuration, sidebarListOffset, s
 
 export const DOUBLE_CLICK_MS = 400;
 type ListName = "mcp" | "skills" | "prompts" | "tasks";
-type Row = { text: string; action?: () => void; list?: ListName; item?: number };
+type Row = { divider?: boolean; text: string; action?: () => void; list?: ListName; item?: number };
 type Hit = { y: number; x0: number; x1: number; action: () => void };
 export type SidebarActions = {
   copy(text: string): void;
@@ -206,15 +206,18 @@ export class Sidebar implements Component {
     const key = `${width}:${height}:${this.revision}:${Math.floor(this.now() / 1000)}`;
     if (this.cached?.key === key) return this.cached.lines;
     this.hits = []; this.listRows = [];
+    const chrome = height >= 12 ? 1 : 0;
     const slots = sessionSidebarSlots(height, this.tasks.length, Boolean(this.imageView()));
-    const inner = Math.max(0, width - 2);
+    if (chrome) slots.middle = Math.max(0, slots.middle - 2);
+    const inner = Math.max(0, width - 4);
     const lines: string[] = [];
     const add = (row: Row): void => {
       const y = lines.length;
-      lines.push(this.decorateLine(row.text, width));
-      if (row.action && inner > 0) this.hits.push({ y, x0: 2, x1: width, action: row.action });
+      lines.push(row.divider ? this.dividerLine(width, "├") : this.decorateLine(row.text, width));
+      if (row.action && inner > 0) this.hits.push({ y, x0: 2, x1: width - 2, action: row.action });
       if (row.list) this.listRows.push({ y, list: row.list });
     };
+    if (chrome) lines.push(this.dividerLine(width, "┌"));
     for (const row of this.headerRows(inner).slice(0, slots.header)) add(row);
     const middle = this.middle();
     this.middleRows = middle.length; this.middleHeight = slots.middle; this.middleStart = lines.length;
@@ -224,7 +227,8 @@ export class Sidebar implements Component {
     this.imageStart = lines.length; this.imageHeight = slots.image;
     lines.push(...this.imageLines(width, slots.image, lines.length));
     if (slots.footer) add({ text: this.paint("dim", "/slate session · details"), action: () => this.actions?.inspect?.("Session", this.sessionDetails()) });
-    while (lines.length < height) lines.push(this.decorateLine("", width));
+    while (lines.length < height - chrome) lines.push(this.decorateLine("", width));
+    if (chrome) lines.push(this.dividerLine(width, "└"));
     this.cached = { key, lines: lines.slice(0, height) };
     return this.cached.lines;
   }
@@ -244,8 +248,8 @@ export class Sidebar implements Component {
       const filledCells = percent === null ? 0 : Math.round(Math.max(0, Math.min(100, percent)) * barWidth / 100);
       const label = truncateToWidth("Context ", Math.max(0, width - barWidth - visibleWidth(suffix)), "…");
       return this.paint("muted", label)
-        + (filledCells ? this.paint(tone, "█".repeat(filledCells)) : "")
-        + this.paint("dim", "░".repeat(barWidth - filledCells) + suffix);
+        + (filledCells ? this.paint(tone, "━".repeat(filledCells)) : "")
+        + this.paint("dim", "─".repeat(barWidth - filledCells) + suffix);
     })();
     const branchUsage = () => this.actions?.inspect?.("Branch usage", this.sessionDetails());
     const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
@@ -260,26 +264,28 @@ export class Sidebar implements Component {
       { text: meter },
       { text: this.paint("dim", occupancy), action: branchUsage },
       { text: "" },
-      { text: this.pair(stat("CACHED", formatCompactTokenCount(s.usage.cacheRead)), statRight("IN", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
-      { text: this.pair(stat("UNCACHED", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("OUT", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
+      { text: this.pair(stat("Cached", formatCompactTokenCount(s.usage.cacheRead)), statRight("In", formatCompactTokenCount(s.usage.input)), width), action: branchUsage },
+      { text: this.pair(stat("Uncached", formatCompactTokenCount(sidebarUncached(s.usage))), statRight("Out", formatCompactTokenCount(s.usage.output)), width), action: branchUsage },
       { text: "" },
-      { text: this.paint("dim", "─".repeat(width)) },
+      { text: "", divider: true },
     ];
   }
   private middle(): Row[] {
     const enabled = this.resources.mcp.filter(x => x.enabled === true).length;
     const unknown = this.resources.mcp.some(x => x.enabled === null);
+    const rejected = this.resources.mcp.filter(x => x.enabled === null).length;
+    const errors = this.resources.mcpError
+      ? (this.resources.mcpError === "MCP configuration has rejected entries" && rejected > 0 ? rejected : 1)
+      : 0;
     const loaded = this.resources.skills.filter(x => x.loaded).length;
-    const resourceHeading = (label: string, count: string): string =>
-      this.heading(label) + this.paint("muted", ` · ${count}`);
+    const resourceHeading = (label: string, count: string, failed = 0): string =>
+      this.heading(label) + this.paint("muted", ` · ${count}`)
+      + (failed ? this.paint("error", ` · ${failed} ${failed === 1 ? "Error" : "Errors"}`) : "");
     const rows: Row[] = [{ text: "" }, {
-      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, this.resources.mcpError ? "config error" : `${unknown ? "—" : enabled} Enabled`),
+      text: resourceHeading(`${this.folds.mcp ? "⌄" : "›"} MCP`, errors || !unknown ? `${enabled} Enabled` : "—", errors),
       action: () => this.toggleSection("mcp"),
     }];
-    if (this.folds.mcp) {
-      if (this.resources.mcpError) rows.push({ text: this.paint("warning", this.resources.mcpError) });
-      rows.push(...this.resourceRows("mcp"));
-    }
+    if (this.folds.mcp) rows.push(...this.resourceRows("mcp"));
     rows.push({ text: "" }, { text: resourceHeading(`${this.folds.skills ? "⌄" : "›"} Skills`, `${loaded} Loaded`), action: () => this.toggleSection("skills") });
     if (this.folds.skills) rows.push(...this.resourceRows("skills"));
     rows.push({ text: "" }, { text: resourceHeading(`${this.folds.prompts ? "⌄" : "›"} Prompts`, `${this.resources.prompts.length}`), action: () => this.toggleSection("prompts") });
@@ -337,7 +343,7 @@ export class Sidebar implements Component {
   private imageLines(width: number, height: number, start: number): string[] {
     const view = this.imageView();
     if (height <= 0 || !view) return [];
-    const inner = Math.max(0, width - 2);
+    const inner = Math.max(0, width - 4);
     const lines = [this.decorateLine(this.heading("Preview"), width)];
     if (height === 1) return lines;
     const controls: Array<{ label: string; action: () => void }> = [
@@ -474,14 +480,25 @@ export class Sidebar implements Component {
 
 
 
+  private dividerLine(width: number, junction: string): string {
+    if (width <= 0) return "";
+    const paint = this.theme ? chromePaint(this.theme) : (text: string) => text;
+    if (width === 1) return paint(junction);
+    const right = junction === "┌" ? "┐" : junction === "└" ? "┘" : "┤";
+    return paint(junction + "─".repeat(Math.max(0, width - 2)) + right);
+  }
+
   private decorateLine(line: string, width: number): string {
     if (width <= 0) return "";
     const border = this.theme ? chromePaint(this.theme)("│") : "│";
     if (width === 1) return border;
-    if (line.includes("\x1b_G") || line.includes("\x1b]1337;File=")) return `${border} ${line}`;
-    const body = truncateToWidth(line, Math.max(0, width - 2), "…");
-    // No panel background: the sidebar blends into the terminal chrome.
-    return `${border} ${body}${" ".repeat(Math.max(0, width - 2 - visibleWidth(body)))}`;
+    const inner = Math.max(0, width - 4);
+    const image = line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
+    const body = image ? line : truncateToWidth(line, inner, "…");
+    // Reserve both rails and matching inner gutters, including tiny viewports.
+    return border + (width >= 3 ? " " : "") + body
+      + " ".repeat(Math.max(0, inner - visibleWidth(body)))
+      + (width >= 4 ? " " : "") + border;
   }
 }
 

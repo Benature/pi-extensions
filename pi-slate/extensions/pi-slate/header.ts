@@ -54,9 +54,9 @@ function logoRow(mark: string, text: string, width: number): string {
 
 export type HeaderIdentity = { version: string; model?: string; thinking?: string };
 
-/** Official mark + product stack. Ready is a session chip, never greeting copy. No hairline without a notice. */
+/** Official mark + product stack. No hairline without a notice. */
 export function renderSlateHeader(input: {
-  width: number; path: string; identity?: HeaderIdentity; notice?: string; ready?: boolean;
+  width: number; path: string; identity?: HeaderIdentity; notice?: string;
   logo?: boolean; theme: Theme;
 }): string[] {
   const width = Math.max(0, input.width);
@@ -65,8 +65,8 @@ export function renderSlateHeader(input: {
   const model = sidebarText(input.identity?.model);
   const thinking = sidebarText(input.identity?.thinking);
   const rawPath = sidebarText(input.path);
-  const dir = rawPath ? basename(rawPath) : "";
-  const path = dir && dir !== "/" ? `/${dir}` : rawPath;
+  const dir = rawPath.startsWith("/") ? basename(rawPath) : "";
+  const path = dir ? `~/${dir}` : rawPath;
   const showLogo = input.logo ?? supportsPiLogo();
   const modelLine = [model, thinking].filter(Boolean).join(" · ");
   const rows: string[] = [];
@@ -85,7 +85,6 @@ export function renderSlateHeader(input: {
   }
   if (input.notice) rows.push(...renderUpdateHairlines(input.notice, width,
     text => input.theme.fg("border", text), text => input.theme.fg("accent", text)));
-  if (input.ready) rows.push(truncateToWidth(input.theme.fg("accent", "✓ New session started"), width, "…"));
   return rows;
 }
 
@@ -94,10 +93,10 @@ export class SlateHeader implements Component {
   private readonly getContext: () => ExtensionContext | undefined;
   private readonly columnWidth: (width: number) => number;
   private readonly getNotice: () => UpdateNotice;
-  private readonly getIdentity: () => HeaderIdentity & { ready: boolean };
+  private readonly getIdentity: () => HeaderIdentity;
   constructor(theme: Theme, getContext: () => ExtensionContext | undefined,
     columnWidth: (width: number) => number, getNotice: () => UpdateNotice,
-    getIdentity: () => HeaderIdentity & { ready: boolean }) {
+    getIdentity: () => HeaderIdentity) {
     this.theme = theme; this.getContext = getContext; this.columnWidth = columnWidth;
     this.getNotice = getNotice; this.getIdentity = getIdentity;
   }
@@ -109,7 +108,7 @@ export class SlateHeader implements Component {
     const identity = this.getIdentity();
     return renderSlateHeader({
       width: this.columnWidth(width), path: ctx.cwd, identity,
-      ready: identity.ready, theme: ctx.ui.theme ?? this.theme,
+      theme: ctx.ui.theme ?? this.theme,
       ...(notice ? { notice } : {}),
     });
   }
