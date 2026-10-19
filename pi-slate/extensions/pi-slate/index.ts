@@ -362,9 +362,11 @@ export default function piSlate(pi: ExtensionAPI): void {
     if (loaded.error) ctx.ui.notify(loaded.error, "warning");
     if (ctx.mode !== "tui") return;
     if (owns("tool-cards")) {
-      // Pi uses first registration per tool name. Report, never repair, a lost slot.
+      // Only check tools Slate registers. Claude mode styles the native read
+      // renderer without owning its registration, so native read is not a loss.
       try {
-        const lost = pi.getAllTools().filter((tool) => ["edit", "write", "read"].includes(tool.name)
+        const registeredCards = claudeTools ? ["edit", "write"] : ["edit", "write", "read"];
+        const lost = pi.getAllTools().filter((tool) => registeredCards.includes(tool.name)
           && resolve(tool.sourceInfo.path) !== fileURLToPath(import.meta.url));
         if (lost.length) ctx.ui.notify(`Slate tool-cards unavailable for: ${lost.map((tool) => tool.name).join(", ")} (first registration wins)`, "warning");
       } catch { /* Older hosts cannot expose tool ownership. */ }

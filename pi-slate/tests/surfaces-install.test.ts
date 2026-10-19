@@ -56,7 +56,11 @@ async function fixture(t: TestContext, text: string | undefined, mode = "tui", c
     registerTool(tool: ToolDefinition) { tools.push(tool); },
     registerToolRenderer() { calls.push("tool-renderer"); },
     getCommands: () => extraCommands,
-    getAllTools: () => tools.map((tool) => ({ ...tool, sourceInfo: { path: conflict ? "/foreign/cards.ts" : new URL("../extensions/pi-slate/index.ts", import.meta.url).pathname } })),
+    getAllTools: () => [
+      ...tools.map((tool) => ({ ...tool, sourceInfo: { path: conflict ? "/foreign/cards.ts" : new URL("../extensions/pi-slate/index.ts", import.meta.url).pathname } })),
+      // Claude mode deliberately keeps the host's read registration.
+      ...tools.some((tool) => tool.name === "read") ? [] : [{ name: "read", sourceInfo: { path: "/host/read.ts" } }],
+    ],
     exec: async () => { calls.push("branch-git"); return { code: 0, stdout: "test-branch\n", stderr: "", killed: false }; },
     events: {
       on(name: string, handler?: (value: unknown) => void) {
@@ -179,10 +183,18 @@ test("Claude tool style is opt-in, surface-scoped, and does not install legacy r
   const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }));
   assert.deepEqual(f.tools.map((tool) => tool.name).sort(), ["edit", "write"]);
   assert.ok(f.calls.includes("tool-renderer"));
+  assert.ok(!f.notices.some((notice) => notice.includes("tool-cards unavailable")), "native read registration is not a conflict");
   assert.ok(f.calls.includes("widget"), "grouping acquires only a zero-row TUI handle, not the composer");
   assert.ok(!f.calls.includes("editor"));
   await f.commands.get("slate")!.handler("focused off", f.ctx);
   assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, "claudecode");
+});
+
+test("Claude mode still warns about lost edit/write registrations, not native read", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }), "tui", true, true);
+  const notice = f.notices.find((value) => value.includes("tool-cards unavailable"));
+  assert.match(notice ?? "", /edit, write/);
+  assert.doesNotMatch(notice ?? "", /read/);
 });
 
 test("unselected cards ignore Claude tool style entirely", async (t) => {

@@ -8,6 +8,10 @@
 - Renderer and grouping regression tests for expansion, padding, terminal safety, errors, native thinking visibility, lifecycle cleanup and message-window coexistence. Styling uses Pi's renderer API without tool re-registration or global prototype patches; output summaries are cached and grouping adds no timers.
 - Review hardening: activated native renderers receive completion after collapse so their redraw clocks stop; grep context is counted as lines, search limit/truncation notices remain explicit without inflating result counts, and response-length warnings are never folded away.
 
+### Fixed
+
+- Claude Code tool style no longer reports a false first-registration conflict for the native `read` tool. Ownership checks cover only the edit/write tools Slate registers in this mode; genuine registration conflicts still warn.
+
 ### Changed
 
 - Prompt frame uses square corners to match the sidebar border.
