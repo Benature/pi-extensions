@@ -283,15 +283,20 @@ test("real host below-editor widget renderer adds no rows for the TUI handle", (
 
 const unstyled = (text: string) => text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
 
-test("Tokyo Night is an explicit default choice and preserves unrelated native settings", async t => {
+test("system default and explicit Tokyo Night preserve unrelated native settings", async t => {
   const f = await fixture(t, JSON.stringify({ surfaces: ["sidebar"] }));
   const settingsPath = join(dirname(f.path), "settings.json");
   await writeFile(settingsPath, JSON.stringify({ theme: "existing-theme", quietStartup: true, packages: ["keep-this-package"] }));
   const themes: string[] = [];
   t.mock.method(f.ctx.ui, "setTheme", (name: string) => { themes.push(name); return { success: true }; });
   await f.commands.get("slate")!.handler("theme default", f.ctx);
-  assert.deepEqual(themes, ["tokyo-night"]);
-  const saved = JSON.parse(await readFile(settingsPath, "utf8"));
+  assert.deepEqual(themes, ["system"]);
+  let saved = JSON.parse(await readFile(settingsPath, "utf8"));
+  assert.equal(saved.theme, "system"); assert.equal(saved.quietStartup, true);
+  assert.deepEqual(saved.packages, ["keep-this-package"]);
+  await f.commands.get("slate")!.handler("theme tokyo-night", f.ctx);
+  assert.deepEqual(themes, ["system", "tokyo-night"]);
+  saved = JSON.parse(await readFile(settingsPath, "utf8"));
   assert.equal(saved.theme, "tokyo-night"); assert.equal(saved.quietStartup, true);
   assert.deepEqual(saved.packages, ["keep-this-package"]);
 });

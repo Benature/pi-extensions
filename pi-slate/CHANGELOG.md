@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- `/slate theme default` now restores Pi's system default instead of re-selecting Tokyo Night. `/slate theme tokyo-night` remains the explicit Tokyo Night command.
 - Claude Code tool style no longer reports a false first-registration conflict for the native `read` tool. Ownership checks cover only the edit/write tools Slate registers in this mode; genuine registration conflicts still warn.
 
 ### Changed

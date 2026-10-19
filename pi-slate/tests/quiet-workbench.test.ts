@@ -3,10 +3,10 @@ import test from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 import { KeybindingsManager } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/keybindings.js";
-import { loadThemeFromPath } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { loadThemeFromPath, SYSTEM_THEME_NAME } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { ComposerEditor, type ComposerSource } from "../extensions/pi-slate/composer.ts";
 import { dashboardColumnWidth, formatCompactTokenCount, parseSlateArgs } from "../extensions/pi-slate/layout.ts";
-import { SLATE_THEME } from "../extensions/pi-slate/install-defaults.ts";
+import { SLATE_NATIVE_THEME, SLATE_THEME } from "../extensions/pi-slate/install-defaults.ts";
 import { sessionSidebarSlots, sidebarCost } from "../extensions/pi-slate/sidebar-layout.ts";
 import { Sidebar } from "../extensions/pi-slate/sidebar.ts";
 import type { SidebarSession } from "../extensions/pi-slate/sidebar-data.ts";
@@ -19,6 +19,7 @@ const session: SidebarSession = { id: "example-session", pid: 8421, cwd: "/tmp/p
 
 test("bundled default Tokyo Night loads with the native validator and restrained backgrounds", () => {
   assert.equal(SLATE_THEME, "tokyo-night"); assert.equal(theme.name, SLATE_THEME);
+  assert.equal(SLATE_NATIVE_THEME, SYSTEM_THEME_NAME);
   assert.match(theme.fg("accent", "x"), /38;2;122;162;247/);
   assert.match(theme.fg("text", "x"), /38;2;192;202;245/);
   assert.equal(theme.getBgAnsi("toolPendingBg"), theme.getBgAnsi("userMessageBg"));
@@ -26,9 +27,9 @@ test("bundled default Tokyo Night loads with the native validator and restrained
   assert.notEqual(theme.getBgAnsi("customMessageBg"), theme.getBgAnsi("userMessageBg"));
 });
 
-test("default command selects Tokyo Night while explicit Catppuccin default remains available", () => {
+test("default restores the system theme while Tokyo Night remains explicit", () => {
   for (const name of ["default", "tokyo-night", "tokyonight"])
-    assert.deepEqual(parseSlateArgs("theme " + name), { ok: true, kind: "named-theme", name: "tokyo-night" });
+    assert.deepEqual(parseSlateArgs("theme " + name), { ok: true, kind: "named-theme", name: name === "default" ? "system" : "tokyo-night" });
   assert.deepEqual(parseSlateArgs("theme mocha default"), { ok: true, kind: "theme", flavor: "mocha", style: "default" });
   assert.deepEqual(parseSlateArgs("style default"), { ok: true, kind: "style", value: "default" });
   assert.deepEqual(parseSlateArgs("theme tokyo-night extra"), { ok: false });

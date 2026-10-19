@@ -86,7 +86,7 @@ import {
   type Flavor,
   type Style,
 } from "./catppuccin.ts";
-import { persistTheme, SLATE_THEME } from "./install-defaults.ts";
+import { persistTheme, SLATE_NATIVE_THEME, SLATE_THEME } from "./install-defaults.ts";
 
 const PROGRESS_LABELS: Record<ProgressStyle, string> = {
   waves: "Waves",
@@ -809,7 +809,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     return STYLES.find((style) => STYLE_LABELS[style] === key);
   };
 
-  const applyNamedTheme = (ctx: ExtensionContext, name: string, message: string): void => {
+  const applyNamedTheme = (ctx: ExtensionContext, name: string, message?: string): void => {
     const result = ctx.ui.setTheme(name);
     if (!result.success) {
       ctx.ui.notify(result.error ?? `Could not load ${name}. Run /reload first.`, "error");
@@ -817,7 +817,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     }
     persistTheme(ctx.cwd, name);
     requestRender(true);
-    ctx.ui.notify(message, "info");
+    ctx.ui.notify(message ?? `Theme set to ${name === SLATE_NATIVE_THEME ? "system default" : name}`, "info");
   };
 
   const applyCatppuccin = (ctx: ExtensionContext, flavor: Flavor, style: Style): void => {
@@ -828,12 +828,14 @@ export default function piSlate(pi: ExtensionAPI): void {
   const pickTheme = async (ctx: ExtensionContext): Promise<void> => {
     const mocha = currentCatppuccin(ctx).style;
     const value = await ctx.ui.select("Theme", [
-      withCurrent("Tokyo Night (default)", ctx.ui.theme.name === SLATE_THEME),
+      withCurrent("System default", ctx.ui.theme.name === SLATE_NATIVE_THEME),
+      withCurrent("Tokyo Night", ctx.ui.theme.name === SLATE_THEME),
       ...STYLES.map((style) => withCurrent(STYLE_LABELS[style], ctx.ui.theme.name?.startsWith("catppuccin-") === true && style === mocha)),
     ]);
     if (!value) return;
     const key = withoutCurrent(value);
-    if (key === "Tokyo Night (default)") { applyNamedTheme(ctx, SLATE_THEME, "Theme set to Tokyo Night"); return; }
+    if (key === "System default") { applyNamedTheme(ctx, SLATE_NATIVE_THEME); return; }
+    if (key === "Tokyo Night") { applyNamedTheme(ctx, SLATE_THEME, "Theme set to Tokyo Night"); return; }
     const style = STYLES.find((item) => STYLE_LABELS[item] === key);
     if (style) applyCatppuccin(ctx, currentCatppuccin(ctx).flavor, style);
   };
@@ -1135,7 +1137,7 @@ export default function piSlate(pi: ExtensionAPI): void {
       }
 
       if (parsed.kind === "named-theme") {
-        applyNamedTheme(ctx, parsed.name, "Theme set to Tokyo Night"); return;
+        applyNamedTheme(ctx, parsed.name); return;
       }
 
       if (parsed.kind === "theme") {

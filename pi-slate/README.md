@@ -66,7 +66,7 @@ Slate renders cleanly into your terminal and stays customizable without adding n
 
 The selected header restores the stock Pi mark plus version, model, and path. Composer keeps project/branch and model. Context, cost, Cached, Uncached, and Rate live on the rail. Native transcript, thinking, keyboard, paste and selection behavior stay intact.
 
-For the full workbench, select `/slate surfaces full`, turn `/slate focused off`, then `/reload`. Select `/slate theme default` for Tokyo Night. Other surface combinations and existing preferences remain supported.
+For the full workbench, select `/slate surfaces full`, turn `/slate focused off`, then `/reload`. Select `/slate theme tokyo-night` for Tokyo Night, or `/slate theme default` for Pi's system default. Other surface combinations and existing preferences remain supported.
 
 - `/slate focused [on|off]` controls the saved focused state; fresh settings still start focused.
 - `/slate pid [on|off]` controls the optional prompt-edge PID label, off by default.
@@ -182,7 +182,7 @@ With `header` selected, Pi and package updates appear as a centered hairline. St
 
 The composer, transcript and session dashboard share the selected theme. **Tokyo Night** is Slate's default theme choice: subdued navy panels, blue accents, pale text and quiet tool backgrounds, using the [Tokyo Night palette](https://github.com/folke/tokyonight.nvim).
 
-Your current theme remains unchanged on install. `/slate theme default` or `/slate theme tokyo-night` selects and saves Tokyo Night explicitly. Black Metal remains available in Pi's theme settings, alongside Catppuccin Mocha styles. `/slate theme mocha default` selects the Catppuccin Default style; `/slate style default` remains its compatible alias.
+Your current theme remains unchanged on install. `/slate theme default` selects Pi's system default; `/slate theme tokyo-night` selects and saves Tokyo Night explicitly. Black Metal remains available in Pi's theme settings, alongside Catppuccin Mocha styles. `/slate theme mocha default` selects the Catppuccin Default style; `/slate style default` remains its compatible alias.
 
 `/slate` → Theme picks one. Or set it directly:
 
@@ -230,7 +230,7 @@ These work when `editor` is selected. No terminal configuration.
 | Message length | `/slate message-length [default\|all\|<count>]` | How many chat messages stay on screen. `default` is 100. |
 | Density | `/slate density [comfortable\|compact]` | Comfortable shows a › prompt in the composer; compact is tighter. |
 | Composer metadata | `/slate footer [standard\|minimal]` | Legacy command alias: standard shows model and thinking on the composer; minimal hides them. Not footer-slot ownership. |
-| Theme | `/slate theme [default\|tokyo-night\|quiet\|mauve\|sapphire\|peach\|teal]` | Default is Tokyo Night. Other styles select Catppuccin; `/slate style` retains Catppuccin aliases. |
+| Theme | `/slate theme [default\|tokyo-night\|quiet\|mauve\|sapphire\|peach\|teal]` | Default restores Pi's system theme. Tokyo Night is explicit; other styles select Catppuccin; `/slate style` retains Catppuccin aliases. |
 | Bugs | `/slate bug [file\|open]` | Copy a bug report, or open the npm package page. |
 
 ## Model Display
