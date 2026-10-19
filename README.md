@@ -23,7 +23,8 @@
 <p align="center"><strong>High-performance, context-efficient tools for the <a href="https://pi.dev">Pi</a> agent harness.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/GaganSD/pi-extensions/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/GaganSD/pi-extensions/ci.yml?branch=main&style=flat-square&label=CI&color=10b981&labelColor=18181b" alt="CI Status" /></a>
+  <a href="https://github.com/GaganSD/pi-extensions/actions/workflows/publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/GaganSD/pi-extensions/publish.yml?branch=main&style=flat-square&label=CI&color=10b981&labelColor=18181b" alt="CI Status" /></a>
+  <a href="https://github.com/GaganSD/pi-extensions/actions/workflows/quickstart.yml"><img src="https://img.shields.io/github/actions/workflow/status/GaganSD/pi-extensions/quickstart.yml?branch=main&style=flat-square&label=Quickstart&color=10b981&labelColor=18181b" alt="Quickstart CI Status" /></a>
   <a href="https://snyk.io"><img src="https://img.shields.io/badge/security-snyk%20monitored-10b981?style=flat-square&labelColor=18181b&logo=snyk&logoColor=white" alt="Security: Snyk" /></a>
   <a href="https://github.com/GaganSD/pi-extensions/actions"><img src="https://img.shields.io/badge/vulnerabilities-0%20reported-10b981?style=flat-square&labelColor=18181b" alt="Vulnerabilities: 0" /></a>
   <br />
