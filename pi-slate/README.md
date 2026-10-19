@@ -72,7 +72,7 @@ For the full workbench, select `/slate surfaces full`, turn `/slate focused off`
 - `/slate pid [on|off]` controls the optional prompt-edge PID label, off by default.
 - `/slate progress [waves|dna-helix|snake|cylon-scanner]` picks the prompt-edge working animation; `waves` is the default.
 - Working/thinking status stays on the prompt edge; the editor keeps its draft and Slate density across host setup.
-- Below **100 columns** or **30 rows**, the rail hides without changing your focus/width preferences. Context and cost return to the composer, with model/thinking when space permits. `/slate session` still reaches details, catalogs, tasks and image controls.
+- Below **100 columns** or **30 rows**, the rail hides without changing your focus/width preferences. The composer keeps directory/branch on the bottom left, cost/resources on the top edge, and `ctx %` before model/thinking on the bottom right. `/slate session` still reaches details, catalogs, tasks and image controls.
 - Runtime and message counts stay in `/slate session` details. Cache, Uncached, and Rate are visible on the rail usage lane.
 - Choosing a sidebar width restores standard mode only when the sidebar surface is selected.
 
@@ -143,7 +143,7 @@ The dashboard replaces the old Summary, Activity Preview, and Context dock. It k
 
 Click a task/resource to inspect it in a separate scrolling dialog. `/slate session` provides keyboard access to details, folds, the command catalog, tasks and image controls. Inserted commands never execute. In short terminals, the image body shrinks before the task shelf; its controls remain accessible through that command.
 
-Focused and compact modes hide the dashboard and retain condensed composer metadata. Legacy screenshots elsewhere in this README predate the Quiet Workbench.
+Focused and compact modes hide the dashboard. The prompt frame keeps directory/branch on the bottom left, cost/resources on the top edge, and context before model metadata on the bottom right. Legacy screenshots elsewhere in this README predate the Quiet Workbench.
 
 ### Cooperative Sub-agent Conversations
 

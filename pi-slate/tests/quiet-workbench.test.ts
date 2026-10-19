@@ -114,7 +114,7 @@ test("context meter keeps a thin track and dim separator with the real theme", (
 test("quiet editor avoids duplicate identity/model and restores compact facts without losing its draft", () => {
   const source: ComposerSource = { project: "project", branch: "feat/workbench", model: { id: "sample-model", provider: "sample" },
     thinking: "medium", footer: "standard", theme, paddingX: 4, workspaceHeader: true, dashboardVisible: true,
-    context: { tokens: "11%/500k tokens", resources: "", summary: "ctx 11% · $1.24" } };
+    context: { tokens: "11%/500k tokens", resources: "$1.24 · 2 skills · 2 MCPs", summary: "ctx 11%" } };
   const editor = new ComposerEditor({ terminal: { rows: 40, columns: 140 }, requestRender() {} } as unknown as TUI,
     { borderColor: text => text } as EditorTheme, new KeybindingsManager(), () => source, { paddingX: 4 });
   editor.setPaddingX(0); // Native host copies its own padding after the factory returns.
@@ -131,9 +131,16 @@ test("quiet editor avoids duplicate identity/model and restores compact facts wi
     const lines = editor.render(width);
     assert(lines.every(line => visibleWidth(line) <= width));
     text = lines.map(stripVTControlCharacters).join("\n");
-    assert.match(text, /ctx 11% · \$1\.24/);
-    assert.doesNotMatch(text, /feat\/workbench/);
+    assert.equal((text.match(/\$1\.24/g) ?? []).length, 1, "cost remains only on the top resource edge");
+    assert.match(text, /ctx 11%/);
+    assert.match(text, /project/);
+    if (width >= 42) assert.match(text, /project \/ feat\/workbench/);
+    if (width >= 66) {
+      const bottom = stripVTControlCharacters(lines.at(-1)!);
+      assert.match(bottom, /ctx 11% · sample-model/);
+      assert.ok(bottom.indexOf("ctx 11%") < bottom.indexOf("sample-model"));
+    }
   }
   assert.equal(editor.getText(), "Preserve this draft");
-  assert.match(editor.render(100).map(stripVTControlCharacters).join("\n"), /sample-model/);
+  assert.match(editor.render(100).map(stripVTControlCharacters).join("\n"), /sample-model · medium/);
 });

@@ -478,10 +478,13 @@ export class ComposerEditor extends CustomEditor {
       width,
     );
     if (src.dashboardVisible === false && src.context) {
-      const facts = src.theme.fg("muted", ` ${src.context.summary ?? src.context.tokens} `);
-      const model = src.footer === "standard" && width >= 66
-        ? src.theme.fg("muted", ` ${modelStatusLabel(src.model, src.modelDisplay)}${width >= 80 && src.thinking ? ` · ${src.thinking}` : ""} `) : "";
-      return inscribedBorder(`${more}${facts}${src.workspaceHeader ? "" : left}`, model, width, text => this.borderColor(text), "└", "┘");
+      const rightParts = [src.context.summary ?? src.context.tokens];
+      if (src.footer === "standard" && width >= 66) {
+        rightParts.push(modelStatusLabel(src.model, src.modelDisplay));
+        if (width >= 80 && src.thinking) rightParts.push(src.thinking);
+      }
+      const right = src.theme.fg("muted", ` ${rightParts.join(src.theme.fg("borderMuted", " · "))} `);
+      return inscribedBorder(`${more}${left}`, right, width, text => this.borderColor(text), "└", "┘");
     }
     if (src.dashboardVisible) return inscribedBorder(`${more}${left}`, right, width, text => this.borderColor(text), "└", "┘");
     const compactRight = src.footer === "minimal" ? (src.context?.tokens ? src.theme.fg("muted", ` ${src.context.tokens} `) : "") : right;

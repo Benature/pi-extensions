@@ -15,6 +15,7 @@
 
 ### Changed
 
+- Focused composer bottom edge now keeps the directory/branch on the left and places `ctx %` before model/thinking on the right. Cost stays only on the top resource edge, removing the duplicate bottom label.
 - Sidebar starts with one `Session <short-id> · PID <pid>` identity row instead of section/name/ID rows. Session names are no longer fetched or displayed; click still copies the full ID, and details show the full identity. The freed rows return to sidebar content.
 - Prompt frame uses square corners to match the sidebar border.
 

@@ -35,7 +35,6 @@ import { inspectSidebarText } from "./sidebar-inspector.ts";
 import { pickSidebarItem } from "./sidebar-picker.ts";
 import { loadSidebarMcpHost } from "./sidebar-mcp.ts";
 import { TurnCompletion } from "./turn-completion.ts";
-import { sidebarCost } from "./sidebar-layout.ts";
 import { resolveContextTokens } from "./context-usage.ts";
 import { estimateAssistantTokens, TokenRateTracker } from "./token-rate.ts";
 import { createWordPicker } from "./working-words.ts";
@@ -256,7 +255,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   let contextEdge = {
     tokens: formatFocusedContextTokens(null, null, null),
     resources: formatFocusedContextResources(null, 0, 0),
-    summary: "ctx — · —",
+    summary: "ctx —",
   };
   let requestRender = (_force = false) => {};
 
@@ -307,7 +306,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     contextEdge = {
       tokens: formatFocusedContextTokens(percent, tokenRate.rate(), contextWindow),
       resources: formatFocusedContextResources(spend, skillCount, mcpCount),
-      summary: `ctx ${estimated && percent !== null ? "~" : ""}${formatPercent(percent)} · ${sidebarCost(spend)}`,
+      summary: `ctx ${estimated && percent !== null ? "~" : ""}${formatPercent(percent)}`,
     };
   };
   const refreshResources = (ctx: ExtensionContext): void => {
