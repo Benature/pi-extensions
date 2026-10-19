@@ -228,7 +228,7 @@ Snyk's free tier covers public repositories without a monthly test limit.
 
 ## Quickstart CI
 
-`quickstart.yml` validates the README's live quickstart after the main CI/release workflow completes successfully, on a daily schedule, and on manual dispatch. It installs the pinned Pi CLI into an isolated temporary agent directory, runs `pi install .` from a fresh checkout without `node_modules`, verifies Pi starts far enough to print help, and downloads every publishable package from npm at the exact version in its manifest. The post-release trigger avoids checking a new version before the publish job has made it downloadable.
+`quickstart.yml` validates the README's live quickstart after the main CI/release workflow completes successfully, on a daily schedule, and on manual dispatch. It installs the pinned Pi CLI into an isolated temporary agent directory, runs `pi install .` from a fresh checkout without `node_modules`, verifies Pi starts far enough to print help, waits through npm's post-publish processing window, and downloads every publishable package from npm at the exact version in its manifest. The post-release trigger plus registry polling avoids checking a new version before the publish job has made it downloadable.
 
 ## Dependency and Actions updates
 
