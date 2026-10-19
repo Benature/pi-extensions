@@ -180,7 +180,7 @@ With `header` selected, Pi and package updates appear as a centered hairline. St
 
 ### Themes
 
-The composer, transcript and session dashboard share the selected theme. **Tokyo Night** is Slate's default theme choice: subdued navy panels, blue accents, pale text and quiet tool backgrounds, using the [Tokyo Night palette](https://github.com/folke/tokyonight.nvim).
+The composer, transcript and session dashboard share the selected theme. **Tokyo Night** is Slate's bundled theme: subdued navy panels, blue accents, pale text and quiet tool backgrounds, using the [Tokyo Night palette](https://github.com/folke/tokyonight.nvim).
 
 Your current theme remains unchanged on install. `/slate theme default` selects Pi's system default; `/slate theme tokyo-night` selects and saves Tokyo Night explicitly. Black Metal remains available in Pi's theme settings, alongside Catppuccin Mocha styles. `/slate theme mocha default` selects the Catppuccin Default style; `/slate style default` remains its compatible alias.
 

@@ -129,10 +129,11 @@ test("focused context sits on the composer top edge", () => {
   assert.match(squeezed, /↑ 3 more/);
 });
 
-test("focused prompt edge hides empty resource counts and shows loaded skills", () => {
+test("focused prompt edge keeps cost, hides empty resource counts, and shows loaded skills", () => {
   const empty = composerContextEdge(formatFocusedContextResources(1.234, 0, 0), 40, (text) => text);
-  assert.equal(empty, "┌" + "─".repeat(38) + "┐");
-  assert.doesNotMatch(empty, /0 skills|0 MCP|\$1\.23/);
+  assert.equal(visibleWidth(empty), 40);
+  assert.match(empty, /\$1\.23/);
+  assert.doesNotMatch(empty, /0 skills|0 MCP/);
 
   const withSkill = composerContextEdge(formatFocusedContextResources(1.234, 1, 0), 80, (text) => text);
   assert.match(withSkill, /\$1\.23 · 1 skill/);

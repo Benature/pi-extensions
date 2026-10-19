@@ -224,7 +224,7 @@ token must report under a specific organization.
 
 Snyk's free tier covers public repositories without a monthly test limit.
 
-`@earendil-works/pi-coding-agent@1.3.0` ships a lock that resolves `undici@8.10.2`, which has high-severity advisories. Every package manifest therefore pins `overrides.undici` to the first Snyk-clean line, `8.12.2`, and every lockfile records that exact version. Remove the override only after the Pi SDK updates its own lock and the Snyk job passes without it.
+`@earendil-works/pi-coding-agent@1.3.0` depends on `undici@8.10.2`, which has high-severity advisories, so every package resolves it transitively. Every package manifest therefore pins `overrides.undici` to the first Snyk-clean line, `8.12.2`, and every lockfile records that exact version. Remove the override only after the Pi SDK updates its dependency and the Snyk job passes without it.
 
 ## Quickstart CI
 

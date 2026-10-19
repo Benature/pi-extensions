@@ -26,13 +26,18 @@ function setup() {
 
 test("groups keep child identity, count failures/thoughts, and show configured hint", () => {
   const { chat, first, second, groups } = setup();
-  const thought = { ...text("hidden thought"), hideThinkingBlock: true, lastMessage: { role: "assistant", content: [{ type: "thinking", thinking: "private" }, { type: "toolCall", name: "bash" }] } };
+  const overrides = new Map<number, boolean>();
+  const thought = { ...text("hidden thought"), hideThinkingBlock: true, thinkingVisibilityOverrides: overrides, lastMessage: { role: "assistant", content: [{ type: "thinking", thinking: "private" }, { type: "toolCall", name: "bash" }] } };
   chat.children.splice(1, 0, thought);
   second.result.isError = true;
   const rows = chat.render(80);
   assert.match(rows.join("\n"), /Done \(2 tool calls · 1 thought · 1 failed\) custom\+o/);
   assert.ok(!rows.join("\n").includes("hidden thought"));
   assert.deepEqual(chat.children, [first, thought, second]);
+  overrides.set(0, false);
+  assert.match(chat.render(80).join("\n"), /hidden thought/, "a revealed per-run thought must break groups");
+  assert.doesNotMatch(chat.render(80).join("\n"), /Done|Running/);
+  overrides.clear();
   first.isPartial = true;
   assert.match(chat.render(80).join("\n"), /Running/);
   thought.hideThinkingBlock = false;

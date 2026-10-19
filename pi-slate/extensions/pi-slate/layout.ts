@@ -162,8 +162,9 @@ export function formatFocusedContextResources(
 ): string {
   const skillCount = Math.max(0, Math.round(skills));
   const serverCount = mcpCount === null ? 0 : Math.max(0, Math.round(mcpCount));
-  if (skillCount === 0 && serverCount === 0) return "";
 
+  // Focused mode owns the only inline cost readout; keep it even when no
+  // skills or MCP servers are loaded.
   const parts = [formatSpend(spend)];
   if (skillCount > 0) parts.push(`${skillCount} ${skillCount === 1 ? "skill" : "skills"}`);
   if (serverCount > 0) parts.push(`${serverCount} ${serverCount === 1 ? "MCP" : "MCPs"}`);
