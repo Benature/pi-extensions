@@ -81,7 +81,7 @@ export function renderSlateHeader(input: {
   const showLogo = input.logo ?? supportsPiLogo();
   const modelLine = [model, thinking].filter(Boolean).join(" · ");
   const rows: string[] = [];
-  if (showLogo && width >= 12 && input.logoStyle === "minimal") {
+  if (showLogo && width >= 12 && input.logoStyle !== "original") {
     const cells = 8;
     const mark = piMinimalLogoLines(input.theme);
     rows.push(
@@ -117,7 +117,7 @@ export class SlateHeader implements Component {
   private readonly getLogoStyle: () => LogoStyle;
   constructor(theme: Theme, getContext: () => ExtensionContext | undefined,
     columnWidth: (width: number) => number, getNotice: () => UpdateNotice,
-    getIdentity: () => HeaderIdentity, getLogoStyle: () => LogoStyle = () => "original") {
+    getIdentity: () => HeaderIdentity, getLogoStyle: () => LogoStyle = () => "minimal") {
     this.theme = theme; this.getContext = getContext; this.columnWidth = columnWidth;
     this.getNotice = getNotice; this.getIdentity = getIdentity;
     this.getLogoStyle = getLogoStyle;

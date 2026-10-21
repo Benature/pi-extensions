@@ -12,7 +12,7 @@ test("header uses the stock Pi mark and the product stack, not a greeting", () =
   const lines = renderSlateHeader({
     width: 72, path: "/Users/operator/GitHub/pi-extensions",
     identity: { version: "1.0.4", model: "grok-4.6 (bedrock)", thinking: "medium" },
-    logo: true, theme,
+    logo: true, logoStyle: "original", theme,
   });
   const plain = lines.map(stripVTControlCharacters);
   assert.equal(plain.length, 3);
@@ -70,6 +70,15 @@ test("minimal logo renders the classic white Pi mark beside the product stack", 
   assert.match(plain[3]!, /^██    ██/);
   assert(lines.every(line => line.includes("\x1b[")), "mark stays painted white");
   assert(plain.every(line => visibleWidth(line) <= 72));
+});
+
+test("minimal is the default logo style", () => {
+  const lines = renderSlateHeader({
+    width: 72, path: "/tmp/project", identity: { version: "1.0.4" }, logo: true, theme,
+  });
+  const plain = lines.map(stripVTControlCharacters);
+  assert.equal(plain.length, 4);
+  assert.match(plain[0]!, /^██████/);
 });
 
 test("logo style parses through /slate logo", () => {

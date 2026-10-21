@@ -158,7 +158,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
-      ...(value.logo === "minimal" ? { logo: "minimal" as const } : {}),
+      ...(value.logo === "minimal" || value.logo === "original" ? { logo: value.logo } : {}),
       ...(value.toolStyle === "claudecode" ? { toolStyle: "claudecode" as const } : {}),
       ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
@@ -538,7 +538,7 @@ export default function piSlate(pi: ExtensionAPI): void {
             model: ctx ? modelStatusLabel(ctx.model, config.modelDisplay) : "",
             thinking: ctx?.thinkingLevel ?? "",
           };
-        }, () => config.logo ?? "original");
+        }, () => config.logo ?? "minimal");
       });
     }
     if (owns("footer")) ctx.ui.setFooter(() => new SlateFooter());
@@ -825,7 +825,7 @@ export default function piSlate(pi: ExtensionAPI): void {
 
   const pickLogo = async (ctx: ExtensionContext): Promise<LogoStyle | undefined> => {
     const value = await ctx.ui.select("Header logo", LOGO_STYLES.map((style) =>
-      withCurrent(style === "minimal" ? "Minimal (classic white Pi)" : "Original", (config.logo ?? "original") === style)));
+      withCurrent(style === "minimal" ? "Minimal (classic white Pi)" : "Original", (config.logo ?? "minimal") === style)));
     const key = value ? withoutCurrent(value) : undefined;
     if (key === "Original") return "original";
     if (key === "Minimal (classic white Pi)") return "minimal";
