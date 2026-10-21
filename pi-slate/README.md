@@ -4,7 +4,7 @@
   A minimal-TUI with rich-graphics support that adds zero-context bloat
 </p>
 
-![Slate workspace (earlier sidebar shown)](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-overview.png)
+![Slate workspace](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-overview.png)
 
 ## Setup
 
@@ -24,7 +24,7 @@ If startup shows `Warning: pi crashed on ...`, that timestamp describes a record
 
 ## Independent Surfaces
 
-Slate can own one surface and leave the rest untouched. The closed set is `header`, `footer`, `editor`, `sidebar`, `tool-cards`, `transcript`; unselected surfaces get no setter, patch, watcher, or cleanup write.
+Slate can own one surface and leave the rest untouched. The closed set is `header`, `footer`, `editor`, `sidebar`, `tool-cards`, `transcript`; unselected surfaces are never patched.
 
 ```text
 /slate surfaces
@@ -34,26 +34,16 @@ Slate can own one surface and leave the rest untouched. The closed set is `heade
 /slate surfaces none
 ```
 
-Surface changes are saved and require `/reload`; they never hot-swap host chrome. Appearance settings remain live. To keep your current header, footer, and editor while using Slate's cards: `/slate surfaces set tool-cards`, then `/reload`.
+Changes are saved and require `/reload`; appearance settings stay live. A fresh install selects `["editor", "sidebar", "tool-cards"]`. Sidebar and transcript require a fullscreen host and warn instead of forcing one.
 
 | Surface | Owns |
 | --- | --- |
-| `header` | Compact workspace identity and update hairline, not title or sidebar bootstrap |
-| `footer` | Zero-row footer (hides Pi's native footer), not composer metadata |
-| `editor` | Composer, keys, paste/images, local working/thinking status; branch facts are independent of footer |
-| `sidebar` | Session dashboard, foldable resources, tasks and images; no second editor |
-| `tool-cards` | Highlighted edit/write cards and grouped reads; native model-facing results |
-| `transcript` | Visible-message window, without deleting stock notices |
-
-A missing `~/.pi/agent/pi-slate.json` starts with `["editor", "sidebar", "tool-cards"]`. `focused: true` keeps the selected sidebar hidden. Existing valid settings without `surfaces` migrate in memory to all six, preserving appearance preferences; the next settings save writes version `1` and the explicit array. `full` saves six names, never a wildcard. Invalid JSON, unknown surfaces, or an unsupported version select nothing, warn, and leave the file untouched until you repair it and reload.
-
-`composerMetadata: "standard" | "minimal"` names the composer setting formerly called `footer`; Slate reads the old key and writes both aliases. `/slate footer` remains the compatible command. It does not select the `footer` surface. Focused and width commands never enable an unselected sidebar.
-
-Theme and fullscreen are preferences, not surfaces. Slate no longer applies either on load or writes `themeApplied` / `fullscreenApplied` markers. `/slate theme` is an explicit user action; use `pi --tui-mode fullscreen` explicitly for the sidebar.
-
-Header/footer/editor are last-writer-wins. Tools are first-registration-wins; Slate reports unavailable cards instead of repairing conflicts. Sidebar and transcript require a compatible fullscreen host: unavailable surfaces warn rather than forcing fullscreen or drawing a fallback overlay. The sidebar mounts once and yields if another writer replaces the root. The namespaced below-editor TUI handle renders zero rows.
-
-The current host cannot inspect header/footer slot ownership. Shutdown disposes Slate's local resources without clearing host chrome; `/reload` resets those slots.
+| `header` | Compact workspace identity and update hairline |
+| `footer` | Zero-row footer (hides Pi's native footer) |
+| `editor` | Composer, keys, paste/images, working/thinking status |
+| `sidebar` | Session dashboard, resources, tasks and images |
+| `tool-cards` | Highlighted edit/write cards and grouped reads |
+| `transcript` | Visible-message window |
 
 ## Features
 
@@ -61,61 +51,48 @@ Slate renders cleanly into your terminal and stays customizable without adding n
 
 ### Quiet Workbench
 
-The selected header restores the stock Pi mark plus version, model, and path. Composer keeps project/branch and model. Context, cost, Cached, Uncached, and Rate live on the rail. Native transcript, thinking, keyboard, paste and selection behavior stay intact.
+The header keeps the stock Pi mark, version, model, and path; the composer keeps project/branch and model. Context, cost, cache, and rate live on the sidebar rail. Native transcript, thinking, keyboard, paste and selection behavior stay intact. For the full workbench: `/slate surfaces full`, `/slate focused off`, then `/reload`.
 
-For the full workbench, select `/slate surfaces full`, turn `/slate focused off`, then `/reload`. Select `/slate theme tokyo-night` for Tokyo Night, or `/slate theme default` for Pi's system default. Other surface combinations and existing preferences remain supported.
-
-- `/slate focused [on|off]` controls the saved focused state; fresh settings still start focused.
-- `/slate pid [on|off]` controls the optional prompt-edge PID label, off by default.
-- `/slate progress [waves|dna-helix|snake|cylon-scanner]` picks the prompt-edge working animation; `waves` is the default.
-- Working/thinking status stays on the prompt edge; the editor keeps its draft and Slate density across host setup.
-- Below **100 columns** or **30 rows**, the rail hides without changing your focus/width preferences. The composer keeps directory/branch on the bottom left, cost/resources on the top edge, and `ctx %` before model/thinking on the bottom right. `/slate session` still reaches details, catalogs, tasks and image controls.
-- Runtime and message counts stay in `/slate session` details. Cache, Uncached, and Rate are visible on the rail usage lane.
-- Choosing a sidebar width restores standard mode only when the sidebar surface is selected.
+- `/slate focused [on|off]` hides or restores the sidebar; fresh settings start focused.
+- `/slate pid [on|off]` toggles a prompt-edge PID label, off by default.
+- `/slate progress [waves|dna-helix|snake|cylon-scanner]` picks the prompt-edge working animation.
+- Below 100 columns or 30 rows, the rail hides and its facts move onto the prompt frame; `/slate session` still shows full details.
 
 ![Slate focused mode with the sidebar hidden](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-focused.png)
 
 ### Thinking Status
 
-With the editor selected in the TUI, an observed thinking block adds elapsed whole seconds and the available estimated token rate to the existing prompt-edge working word: `Pondering · 7s · ↑↓42`. Under one second it omits the duration; without a rate it shows `Pondering · 7s`. The timer stops when thinking ends, a response is aborted, or the session shuts down. Print, RPC, and JSON modes are unchanged.
-
-Native thinking visibility, labels, click-to-expand, and `Ctrl+T` remain untouched, including during streaming and on session restore. Settled per-message `Thought 12s` needs a Pi per-message hidden-label API; the current global setter would incorrectly relabel older thoughts.
+With `editor` selected, an observed thinking block adds elapsed seconds and the estimated token rate to the prompt-edge working word: `Pondering · 7s · ↑↓42`. The timer stops when thinking ends, aborts, or the session shuts down. Native thinking labels and `Ctrl+T` remain untouched.
 
 ### Working Indicator
 
-While the model runs, the composer edge shows a progress animation instead of the italic working word: `waves` (the default rolling blocks), `dna-helix` (a turning double helix), `snake` (an ornate diamondback gliding through the slot), or `cylon-scanner` (an `==` eye sweeping a bracketed track). The wave and helix stay word-sized at seven columns; the snake and cylon-scanner use the border's width, capped at their natural size. `/slate progress` picks the style, saved as `progress` in `pi-slate.json` and applied immediately.
+While the model runs, the composer edge shows a progress animation instead of the italic working word: `waves` (default), `dna-helix`, `snake`, or `cylon-scanner`. `/slate progress` picks the style and applies it immediately.
 
 ### Diff
 
-With `tool-cards` selected (a fresh default), `edit` and `write` results are syntax-highlighted in the transcript.
+With `tool-cards` selected, `edit` and `write` results are syntax-highlighted in the transcript.
 
 - Split edits (before/after) at 100+ columns; unified below that, and for every write.
-- Word-level emphasis on paired lines. 190+ languages via Shiki; unknown types stay plain text.
-- Compact until you expand the tool card. Long lines clip to the pane.
-
-Native schemas, mutation queue, errors, and model-facing text are unchanged. Write snapshots stay in `slateDiff` result details for session restore. RPC, JSON, and print keep native results. `/slate theme` styles the whole UI, including diffs — there is no separate diff theme.
-
-Consecutive `read` cards collapse into one line: `read x.md` stays as-is, then `read 2 files`. `Ctrl+O` lists the paths. A user message, assistant text from a later turn, or any other tool starts a new streak.
+- Word-level emphasis on paired lines. 190+ languages via Shiki; unknown types stay plain.
+- Consecutive `read` cards collapse into one line (`read 2 files`); `Ctrl+O` lists the paths.
 
 ![Split YAML edit with word-level emphasis](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-diff-yaml.png)
 
 ![Split Rust edit with syntax highlighting](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-diff-rust.png)
 
-Previews are bounded: 256 KiB snapshots, 2,000 parsed rows, 16 collapsed / 400 expanded. Binary or oversized previous content shows a notice, not a fake overwrite.
+Model-facing text is unchanged. Previews are bounded (256 KiB snapshots, 2,000 rows); binary or oversized content shows a notice.
 
 ### Claude Code Tool Style (opt-in)
 
 ![Slate Claude Code-style tool transcript with grouped calls, edit counts, and an intentional demo failure](assets/slate-claudecode-tools.png)
 
-Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`. Omit it or use `"default"` for existing Slate cards. This is an independently implemented presentation inspired by [pi-pretty](https://github.com/heyhuynhgiabuu/pi-pretty), not copied code.
+Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`.
 
-- Compact `✓ Name (args)` calls with `└` result summaries, execution duration (including zero and failures), bash timeout, and green/red edit counts. Pending/running/error states remain visible.
-- Consecutive supported calls form `Done (…)` / `Running (…)` trees in compatible fullscreen hosts. Click a tool or use your configured tool-expansion binding; hints come from Pi's keybindings. Expanding any member restores the individual cards.
-- Covers read, bash, grep, find, ls, write, edit, apply_patch, codemode, and recall without registering replacement tools for styling. Slate's existing edit/write tools still provide its expanded diff views; schemas, structured read output, execution and model-facing results remain unchanged.
-- Expanded tools delegate to their existing renderers with isolated component state. Unsupported tools, assistant text, visible thinking and images break groups. The legacy read-only grouper is not installed in this mode.
-- Uses the host's `outputPad`. Summaries are cached by content/details identity; grouping visits current chat children, never replays the session, and adds no polling timer or background process. It patches only the selected chat instance and restores owned methods on shutdown.
+- Compact `✓ Name (args)` calls with `└` result summaries, duration, and green/red edit counts. Pending/running/error states stay visible.
+- Consecutive calls group into `Done (…)` / `Running (…)` trees in compatible fullscreen hosts; expanding any member restores the individual cards.
+- Covers read, bash, grep, find, ls, write, edit, apply_patch, codemode, and recall without registering replacement tools. Slate's expanded diff views still apply; model-facing results are unchanged.
 
-Requires a Pi host with `registerToolRenderer` (tested on 1.3.0). Older hosts keep default cards with a warning; non-fullscreen hosts keep compact individual cards without grouping. Slate retains its existing composer, user-message styling and native thinking labels/`Ctrl+T`: it does not globally relabel historical thoughts with potentially incorrect durations. Switching the saved style requires `/reload`.
+Requires a host with `registerToolRenderer`; older or non-fullscreen hosts keep the default cards. Switching styles requires `/reload`.
 
 ### Rich Media Rendering
 
@@ -127,49 +104,23 @@ Slate uses Kitty Graphics Protocol to display rich media inside your terminal.
 
 ### Session Dashboard
 
-The dashboard replaces the old Summary, Activity Preview, and Context dock. It keeps session facts visible without sending them to a model:
+The sidebar keeps session facts visible without sending them to a model:
 
-- One identity row: `Session <short-id> · PID <pid>`. No session names; click to copy the full session ID. Model/thinking level and context meter remain below.
-- **Occupancy merges tokens, cost and rate** (`188k / 500k · $0.71 · ~420/s`) beneath the context meter, followed by two usage rows: left lane **Cached/Uncached** label-first, right lane value-first (`61.4k In`, `876 Out`). Cached is cache-read; uncached is inbound minus cache read/write. Growing totals are abbreviated, rather than squeezing neighboring numbers. Click a usage row or `/slate session` for full accounting, including cache write and hit share.
-- Runtime wall time, last-turn duration and turns/messages stay in session details.
-- Input includes uncached input plus both cache categories; reasoning is not counted again. Context occupancy is separate from cumulative usage. Unavailable metrics show `—`; estimated context is marked `~`.
-- Independently foldable **MCP servers**, **Skills** and **Prompts**, initially collapsed. Click their headings to expand; preferences persist in `sidebarSections` (`true` means expanded). Fold headings are concise: **MCP · 2 Enabled**, **Skills · 5 Loaded**, using dim counts at the normal terminal font size. Config errors append **· 1 Error** in red on the MCP heading instead of dumping the error text. MCP shows up to five rows; skills and prompts show three. Commands stay behind `/` and `/slate session commands`, not a rail list. Wheel-scroll resource lists or the middle region when necessary.
-- MCP states describe **configuration, not live connectivity**. Global `mcp.json` overrides extension registrations; trusted project `.pi/mcp.json` overrides global entries. Untrusted project files are not read. Use Pi's `enabled: false` flag to disable a server; legacy `disabled` keys are ignored by the native host. Validation follows the running host's native schema and exact-name file precedence; project partial overrides require a matching global server on hosts that support them. Rejected entries cannot replace a valid server. If the host adapter is unavailable, states show `—`. Credentials and transport arguments are never displayed.
-- Skills distinguish **available** from **observed loaded on the active branch**. Successful `SKILL.md` reads and explicit skill invocations are evidence; discovery alone is not. Branch changes may remove that evidence; an observed read does not guarantee the full instructions remain in context after compaction.
-- Nonempty background tasks stay above a separate image shelf; empty task/image shelves disappear. In-flight agent shell/terminal calls are observable; detached jobs appear only when their owning extension reports them. Native `pi-subagents` publishes display-only snapshots. Task details are read-only: no process scanning, guessed PIDs or run-control authority.
+- Session id and PID (click to copy), model/thinking, and a context meter with merged tokens, cost and rate (`188k / 500k · $0.71 · ~420/s`), followed by cached/uncached usage rows. `/slate session` shows full accounting.
+- Foldable **MCP servers**, **Skills** and **Prompts** lists with counts. MCP states describe configuration, not live connectivity; credentials are never displayed.
+- Background tasks and an image shelf appear only when nonempty. Click a task or image to inspect it in a scrolling dialog.
 
-Click a task/resource to inspect it in a separate scrolling dialog. `/slate session` provides keyboard access to details, folds, the command catalog, tasks and image controls. Inserted commands never execute. In short terminals, the image body shrinks before the task shelf; its controls remain accessible through that command.
-
-Focused and compact modes hide the dashboard. The prompt frame keeps directory/branch on the bottom left, cost/resources on the top edge, and context before model metadata on the bottom right. Legacy screenshots elsewhere in this README predate the Quiet Workbench.
+Focused and compact modes hide the dashboard; its facts move onto the prompt frame.
 
 ### Cooperative Sub-agent Conversations
 
-With `editor` selected, Slate can report a genuine lower navigation boundary to
-pi-subagents: normal wrapping, history, autocomplete and selection retain first
-refusal. A selected, owned fullscreen `sidebar` workspace on compatible Pi 1.1+
-hosts can lend its chat slot to a worker conversation without replacing the
-sidebar or original main editor/chat objects. Parent output continues while hidden;
-return restores the same objects. Parent dialogs reclaim the workspace and focus.
+With `editor` and a fullscreen `sidebar` selected, Slate can lend the sidebar's chat slot to a pi-subagents worker conversation and restore the same sidebar, editor, and chat objects on return. Parent output continues while hidden.
 
-This is a versioned UI-only capability handshake, not new model tools or execution
-authority. Unselected surfaces are never enabled. Without an owned compatible slot,
-pi-subagents uses its documented opaque conversation fallback; Slate does not
-force fullscreen or repair another layout owner's root.
+This is a UI-only handshake: no new model tools or execution authority, and unselected surfaces are never enabled. Without a compatible slot, pi-subagents uses its own fallback.
 
 ### Background-task integration
 
-An owning extension can report detached terminals or jobs through Pi's event bus:
-
-```ts
-pi.events.emit("pi:background-tasks", {
-  version: 1, source: "my-extension", sessionId: ctx.sessionManager.getSessionId(),
-  tasks: [{ id: "job-1", label: "dev server", kind: "terminal", state: "running", startedAt: Date.now() }],
-});
-```
-
-Each snapshot replaces only that source's rows for the exact owning session. Send `tasks: []` to clear them. `kind` is `shell`, `terminal`, or `subagent`; state is `starting`, `running`, `waiting`, `cancelling`, `failed`, or `cleanup_unknown`. Optional `pid` and `detail` are display facts, never control permission. Completed/cancelled jobs should be omitted. Payloads are validated and bounded to 64 tasks per source and 16 sources; invalid snapshots leave the previous valid one intact.
-
-Respond to `pi:background-tasks:request` (`{ version: 1, sessionId }`) with your current snapshot, but only for the matching owner. Slate requests one on attach and branch navigation. Sources must clear/dispose with their session; this is not a persistent task runner.
+Other extensions can publish detached terminals or jobs to the dashboard's task shelf through the `pi:background-tasks` event on Pi's event bus. Snapshots are display-only and cleared with their session.
 
 ### Update Notices
 
