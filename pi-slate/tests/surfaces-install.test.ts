@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { stripVTControlCharacters } from "node:util";
-import { SessionManager, type ExtensionAPI, type ExtensionContext, type ExtensionEvent, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { ExtensionRunner, SessionManager, type ExtensionAPI, type ExtensionContext, type ExtensionEvent, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Container, Editor, ScrollView, Text, TuiAltScreen, type Component, type EditorTheme, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import piSlate from "../extensions/pi-slate/index.ts";
 import { Sidebar, type SidebarActions } from "../extensions/pi-slate/sidebar.ts";
@@ -544,6 +544,35 @@ test("retained surfaces and timer callbacks tolerate invalidation before shutdow
   assert.equal(await readFile(f.path, "utf8"), saved);
 });
 
+test("painted receipts survive real host context invalidation and a fresh session", async t => {
+  const f = await fixture(t, JSON.stringify({ surfaces: ["editor", "header", "sidebar"], focused: false }));
+  const runtime = { getThinkingLevel: () => "off", invalidate() {} } as ConstructorParameters<typeof ExtensionRunner>[1];
+  const runner = new ExtensionRunner([], runtime, f.ctx.cwd, f.manager, undefined as never);
+  runner.setUIContext(f.ctx.ui, "tui");
+  const outgoing = runner.createContext();
+  await f.emit("session_start", {}, outgoing);
+  await f.emit("agent_start", {}, outgoing);
+  await f.emit("agent_end", {}, outgoing);
+  const receipt = f.chat.children.at(-1)!;
+  assert.match(receipt.render(100).join("\n"), /Worked for/);
+  const entries = f.manager.getBranch();
+
+  await f.emit("session_shutdown", { reason: "new" }, outgoing);
+  runner.invalidate();
+  assert.throws(() => outgoing.ui, /This extension ctx is stale/);
+  // Pi may repaint the outgoing chat while the replacement runtime is loading.
+  assert.doesNotThrow(() => f.chat.render(100));
+  assert.match(receipt.render(100).join("\n"), /Worked for/);
+
+  const incoming = { ...f.ctx, sessionManager: SessionManager.inMemory(f.ctx.cwd) };
+  await f.emit("session_start", { reason: "new" }, incoming);
+  await f.emit("agent_start", {}, incoming);
+  await f.emit("agent_end", {}, incoming);
+  assert.doesNotThrow(() => f.chat.render(100));
+  assert.deepEqual(f.manager.getBranch(), entries, "receipts are UI objects, not persisted callbacks");
+  assert.deepEqual(incoming.sessionManager.getBranch(), [], "a new session has no inherited receipt entries");
+});
+
 test("receipt keeps its theme when its first paint occurs after shutdown", async t => {
   const f = await fixture(t, JSON.stringify({ surfaces: ["editor"] }));
   const paint = t.mock.method(theme, "fg", (_color: string, text: string) => text);
@@ -556,6 +585,46 @@ test("receipt keeps its theme when its first paint occurs after shutdown", async
   assert.match(receipt.render(100).join("\n"), /Worked for/);
   assert.equal(paint.mock.callCount(), before + 1);
 });
+
+for (const state of ["live", "invalidated", "replaced"] as const) {
+  for (const code of [0, 1]) {
+    test(`pending bug-page feedback only reaches its live owner: ${state}, code=${code}`, async t => {
+      const f = await fixture(t, JSON.stringify({ surfaces: [] }));
+      let finish!: (result: { code: number; stdout: string; stderr: string; killed: boolean }) => void;
+      t.mock.method(f.pi, "exec", () => new Promise(resolve => { finish = resolve; }));
+      const pending = f.commands.get("slate")!.handler("bug open", f.ctx);
+      if (state === "invalidated") f.invalidate();
+      if (state === "replaced") { await f.emit("session_shutdown", { reason: "reload" }); await f.emit("session_start"); }
+      const before = f.notices.length;
+      finish({ code, stdout: "", stderr: "", killed: false });
+      await pending;
+      assert.equal(f.notices.length - before, state === "live" ? 1 : 0);
+    });
+  }
+}
+
+for (const step of ["select", "input", "editor"] as const) {
+  test(`bug-report ${step} completion is ignored after shutdown`, async t => {
+    const f = await fixture(t, JSON.stringify({ surfaces: [] }));
+    let finish!: (value: string | undefined) => void;
+    const wait = () => new Promise<string | undefined>(resolve => { finish = resolve; });
+    let started!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    f.ctx.ui.input = async () => "title";
+    f.ctx.ui.editor = async () => { assert.fail("stale bug workflow must not open or finish an editor"); };
+    const delayed = () => { const pending = wait(); started(); return pending; };
+    if (step === "select") f.ctx.ui.select = delayed;
+    else if (step === "input") f.ctx.ui.input = delayed;
+    else f.ctx.ui.editor = delayed;
+    const pending = f.commands.get("slate")!.handler(step === "select" ? "bug" : "bug file", f.ctx);
+    await ready;
+    await f.emit("session_shutdown", { reason: "new" });
+    f.invalidate();
+    finish(step === "select" ? "Copy a bug report" : "details");
+    await pending;
+    assert.deepEqual(f.notices, []);
+  });
+}
 
 for (const state of ["live", "invalidated", "replaced"] as const) {
   test(`pending file-open failure only notifies its live owner: ${state}`, async t => {

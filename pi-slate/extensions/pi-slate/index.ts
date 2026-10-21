@@ -983,9 +983,9 @@ export default function piSlate(pi: ExtensionAPI): void {
     return result.code === 0;
   };
 
-  const fileBug = async (ctx: ExtensionContext): Promise<void> => {
+  const fileBug = async (ctx: ExtensionContext, active: () => boolean): Promise<void> => {
     const title = (await ctx.ui.input("Issue title", "Short summary"))?.trim();
-    if (!title) return;
+    if (!active() || !title) return;
     const body = await ctx.ui.editor(
       "Issue details",
       issueTemplate({
@@ -994,29 +994,35 @@ export default function piSlate(pi: ExtensionAPI): void {
         platform: `${process.platform} ${process.arch}`,
       }),
     );
-    if (body === undefined) return;
+    if (!active() || body === undefined) return;
     try {
       await copyToClipboard(formatBugReport(title, body));
-      ctx.ui.notify("Bug report copied to clipboard", "info");
+      if (active()) ctx.ui.notify("Bug report copied to clipboard", "info");
     } catch {
-      ctx.ui.notify("Could not copy bug report", "error");
+      if (active()) ctx.ui.notify("Could not copy bug report", "error");
     }
   };
 
   const handleBug = async (ctx: ExtensionContext, action?: "file" | "open"): Promise<void> => {
+    const owner = sessionEpoch;
+    const active = (): boolean => {
+      if (owner !== sessionEpoch) return false;
+      try { void ctx.mode; return true; } catch { return false; }
+    };
     let next = action;
     if (!next) {
       const choice = await ctx.ui.select("Slate bug", ["Copy a bug report", "Open package page"]);
+      if (!active()) return;
       if (choice === "Copy a bug report") next = "file";
       else if (choice === "Open package page") next = "open";
       else return;
     }
     if (next === "open") {
       const opened = await openUrl(SLATE_ISSUES_URL);
-      ctx.ui.notify(opened ? "Opened pi-slate on npm" : `Open ${SLATE_ISSUES_URL}`, opened ? "info" : "error");
+      if (active()) ctx.ui.notify(opened ? "Opened pi-slate on npm" : `Open ${SLATE_ISSUES_URL}`, opened ? "info" : "error");
       return;
     }
-    await fileBug(ctx);
+    await fileBug(ctx, active);
   };
 
   const applyFocused = (ctx: ExtensionContext, value?: boolean): void => {

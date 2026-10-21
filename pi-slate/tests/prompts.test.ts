@@ -43,8 +43,10 @@ async function fixture(t: test.TestContext, files: Record<string, string>, kb = 
   const pasted: string[] = [];
   const notices: string[] = [];
   let opened = 0;
+  let shutdown = () => {};
   let interact: (picker: Picker, done: (value: string | undefined) => void) => void = () => {};
   installPromptPicker({
+    on: (event: string, handler: () => void) => { assert.equal(event, "session_shutdown"); shutdown = handler; },
     getCommands: () => commands,
     registerCommand: (_name: string, command: { handler: typeof handler }) => { handler = command.handler; },
     registerShortcut: (key: KeyId, entry: { handler: typeof shortcutHandler }) => { shortcut = key; shortcutHandler = entry.handler; },
@@ -66,8 +68,9 @@ async function fixture(t: test.TestContext, files: Record<string, string>, kb = 
     ctx, pasted, notices,
     get opened() { return opened; },
     get shortcut() { return shortcut; },
-    open: () => handler("", ctx),
-    shortcutOpen: () => shortcutHandler(ctx),
+    open: (context = ctx) => handler("", context),
+    shortcutOpen: (context = ctx) => shortcutHandler(context),
+    shutdown: () => shutdown(),
     interact: (next: typeof interact) => { interact = next; },
     commands: (next: typeof commands) => { commands = next; },
     path: (name: string) => join(dir, `${name}.md`),
@@ -217,6 +220,47 @@ test("picker can reopen after a failed custom UI interaction", async (t) => {
   await f.open();
   assert.equal(f.opened, 2);
 });
+
+for (const guarded of [false, true]) {
+  for (const missing of [false, true]) {
+    test(`shutdown cancels pending prompt reads: guarded=${guarded}, missing=${missing}`, async t => {
+      const f = await fixture(t, { example: "Body" });
+      f.interact((_picker, done) => done(undefined));
+      if (missing) await rm(f.path("example"));
+      let stale = false;
+      const ctx = guarded ? new Proxy(f.ctx, { get(target, key, receiver) {
+        if (stale) throw new Error("This extension ctx is stale");
+        return Reflect.get(target, key, receiver);
+      } }) : f.ctx;
+      const pending = guarded ? f.open(ctx) : f.shortcutOpen(ctx);
+      f.shutdown(); stale = true;
+      await pending;
+      assert.equal(f.opened, 0);
+      assert.deepEqual(f.notices, []);
+      assert.deepEqual(f.pasted, []);
+    });
+  }
+
+  test(`shutdown prevents a pending prompt choice from reaching the next editor: guarded=${guarded}`, async t => {
+    const f = await fixture(t, { example: "Body" });
+    let stale = false, choose!: (value: string | undefined) => void, opened!: () => void;
+    const ready = new Promise<void>(resolve => { opened = resolve; });
+    const ctx = guarded ? new Proxy(f.ctx, { get(target, key, receiver) {
+      if (stale) throw new Error("This extension ctx is stale");
+      return Reflect.get(target, key, receiver);
+    } }) : f.ctx;
+    f.interact((_picker, done) => { choose = done; opened(); });
+    const pending = guarded ? f.open(ctx) : f.shortcutOpen(ctx);
+    await ready;
+    f.shutdown(); stale = true;
+    choose("Body");
+    await pending;
+    assert.deepEqual(f.pasted, []);
+    f.interact(picker => picker.handleInput("\r"));
+    await f.open();
+    assert.deepEqual(f.pasted, ["Body"], "replacement picker can open normally");
+  });
+}
 
 test("picker shortcut does not collide with any default Pi binding", async (t) => {
   const f = await fixture(t, {});

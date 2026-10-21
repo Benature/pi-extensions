@@ -16,6 +16,12 @@ pi install npm:pi-slate
 
 Explore extension settings using `/slate` after installation. Releases: [CHANGELOG](CHANGELOG.md).
 
+### Updating an already-running session
+
+After updating Slate, run `/reload` in each open Pi process, or quit and restart Pi. Updating package files or pulling a local checkout does not replace extension callbacks already in memory. `/new` is not a substitute: the outgoing session must shut down before Pi loads the replacement runtime.
+
+If startup shows `Warning: pi crashed on ...`, that timestamp describes a recorded crash, not a new startup failure. Pi normally announces each record once and keeps its details for `/bug`. If the crash came from a process running before an update, restart with the updated code and use `/resume` to reopen the conversation; deleting the saved session or crash log is unnecessary.
+
 ## Independent Surfaces
 
 Slate can own one surface and leave the rest untouched. The closed set is `header`, `footer`, `editor`, `sidebar`, `tool-cards`, `transcript`; unselected surfaces get no setter, patch, watcher, or cleanup write.
