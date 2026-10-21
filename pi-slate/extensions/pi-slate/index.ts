@@ -43,6 +43,8 @@ import { advanceWave, isProgressStyle, isWaveActive, PROGRESS_STYLES, setProgres
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
+  LOGO_STYLES,
+  type LogoStyle,
   formatFocusedContextResources,
   formatFocusedContextTokens,
   formatPercent,
@@ -102,6 +104,7 @@ type SlateConfig = SurfaceConfig & {
   messageLength?: number | "all";
   modelDisplay?: ModelDisplay;
   showPid?: boolean;
+  logo?: LogoStyle;
   progress?: ProgressStyle;
   toolStyle?: "default" | "claudecode";
   sidebarSections: SidebarFolds;
@@ -155,6 +158,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
+      ...(value.logo === "minimal" ? { logo: "minimal" as const } : {}),
       ...(value.toolStyle === "claudecode" ? { toolStyle: "claudecode" as const } : {}),
       ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
@@ -534,7 +538,7 @@ export default function piSlate(pi: ExtensionAPI): void {
             model: ctx ? modelStatusLabel(ctx.model, config.modelDisplay) : "",
             thinking: ctx?.thinkingLevel ?? "",
           };
-        });
+        }, () => config.logo ?? "original");
       });
     }
     if (owns("footer")) ctx.ui.setFooter(() => new SlateFooter());
@@ -819,6 +823,15 @@ export default function piSlate(pi: ExtensionAPI): void {
     return PROGRESS_STYLES.find((s) => PROGRESS_LABELS[s] === key);
   };
 
+  const pickLogo = async (ctx: ExtensionContext): Promise<LogoStyle | undefined> => {
+    const value = await ctx.ui.select("Header logo", LOGO_STYLES.map((style) =>
+      withCurrent(style === "minimal" ? "Minimal (classic white Pi)" : "Original", (config.logo ?? "original") === style)));
+    const key = value ? withoutCurrent(value) : undefined;
+    if (key === "Original") return "original";
+    if (key === "Minimal (classic white Pi)") return "minimal";
+    return undefined;
+  };
+
   const pickDensity = async (ctx: ExtensionContext): Promise<SlateConfig["density"] | undefined> => {
     const value = await ctx.ui.select("Density", [
       withCurrent("Comfortable", config.density === "comfortable"),
@@ -1087,7 +1100,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   };
 
   pi.registerCommand("slate", {
-    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, progress indicator, message length, theme, or file a bug",
+    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, header logo, progress indicator, message length, theme, or file a bug",
     getArgumentCompletions: slateArgumentCompletions,
     handler: async (args, ctx) => {
       const parsed = parseSlateArgs(args);
@@ -1098,7 +1111,7 @@ export default function piSlate(pi: ExtensionAPI): void {
 
       let kind = parsed.kind;
       if (kind === "menu") {
-        const setting = await ctx.ui.select("Slate", ["Session dashboard", "Surfaces", "Density", "Composer metadata", "Sidebar width", "Focused", "PID display", "Progress indicator", "Message length", "Theme", "File a bug"]);
+        const setting = await ctx.ui.select("Slate", ["Session dashboard", "Surfaces", "Density", "Composer metadata", "Sidebar width", "Focused", "PID display", "Header logo", "Progress indicator", "Message length", "Theme", "File a bug"]);
         if (setting === "Session dashboard") { await sessionMenu(ctx); return; }
         if (setting === "Surfaces") {
           const names = await ctx.ui.input("Surfaces (names separated by spaces, full, or none; reload required)", formatSurfaces(config.surfaces));
@@ -1113,6 +1126,7 @@ export default function piSlate(pi: ExtensionAPI): void {
         else if (setting === "Sidebar width") kind = "width-menu";
         else if (setting === "Focused") kind = "focused";
         else if (setting === "PID display") kind = "pid";
+        else if (setting === "Header logo") kind = "logo";
         else if (setting === "Progress indicator") kind = "progress";
         else if (setting === "Message length") kind = "message-length-menu";
         else if (setting === "Theme") kind = "theme-menu";
@@ -1160,6 +1174,13 @@ export default function piSlate(pi: ExtensionAPI): void {
       if (kind === "pid") {
         const on = parsed.kind === "pid" && parsed.value !== undefined ? parsed.value : !config.showPid;
         apply({ ...config, showPid: on }, on ? "PID display on" : "PID display off", ctx);
+        return;
+      }
+
+      if (kind === "logo") {
+        const logo = (parsed.kind === "logo" ? parsed.value : undefined) ?? await pickLogo(ctx);
+        if (!logo) return;
+        apply({ ...config, logo }, logo === "minimal" ? "Header logo set to minimal (classic white Pi)" : "Header logo set to original", ctx);
         return;
       }
 
