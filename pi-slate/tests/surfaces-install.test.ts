@@ -152,12 +152,12 @@ for (const surfaces of [[], ["editor"], [...FRESH_SURFACES], [...SURFACES], ["he
   test(`selected set controls all installers: ${surfaces.join("+") || "none"}`, async (t) => {
     const f = await fixture(t, JSON.stringify({ version: 1, surfaces, focused: true }));
     for (const slot of ["header", "footer", "editor"] as const) assert.equal(f.calls.includes(slot), has(surfaces, slot), slot);
-    assert.equal(f.calls.includes("widget"), has(surfaces, "sidebar") || has(surfaces, "transcript"));
+    assert.equal(f.calls.includes("widget"), has(surfaces, "sidebar") || has(surfaces, "transcript") || has(surfaces, "tool-cards"));
     assert.equal(f.calls.includes("files-start"), false, "retired file dashboard has no git-status watcher");
     assert.equal(f.calls.includes("async-subscribe"), has(surfaces, "sidebar"));
     assert.equal(f.calls.includes("navigation-subscribe"), has(surfaces, "editor"));
     assert.equal(f.calls.includes("branch-git"), has(surfaces, "editor"));
-    assert.deepEqual(f.tools.map((tool) => tool.name).sort(), has(surfaces, "tool-cards") ? ["edit", "read", "write"] : []);
+    assert.deepEqual(f.tools.map((tool) => tool.name).sort(), has(surfaces, "tool-cards") ? ["edit", "write"] : []);
     assert.equal(f.commands.has("exit"), true);
     assert.equal(f.commands.has("prompts"), has(surfaces, "editor"));
     assert.equal(f.chat.children.length, has(surfaces, "transcript") ? 100 : 105);
@@ -205,26 +205,34 @@ test("focused composer keeps cost only on top and places context before model", 
   assert.ok(bottom.indexOf("ctx 10%") < bottom.indexOf("no model"));
 });
 
-test("Claude tool style is opt-in, surface-scoped, and does not install legacy read grouping", async (t) => {
-  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }));
+test("Claude tool style is the default for tool-cards and skips legacy read grouping", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"] }));
   assert.deepEqual(f.tools.map((tool) => tool.name).sort(), ["edit", "write"]);
   assert.ok(f.calls.includes("tool-renderer"));
   assert.ok(!f.notices.some((notice) => notice.includes("tool-cards unavailable")), "native read registration is not a conflict");
   assert.ok(f.calls.includes("widget"), "grouping acquires only a zero-row TUI handle, not the composer");
   assert.ok(!f.calls.includes("editor"));
   await f.commands.get("slate")!.handler("focused off", f.ctx);
-  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, "claudecode");
+  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, undefined);
+});
+
+test('toolStyle "default" restores Slate cards and legacy read grouping', async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "default" }));
+  assert.deepEqual(f.tools.map((tool) => tool.name).sort(), ["edit", "read", "write"]);
+  assert.ok(!f.calls.includes("tool-renderer"));
+  await f.commands.get("slate")!.handler("focused off", f.ctx);
+  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, "default");
 });
 
 test("Claude mode still warns about lost edit/write registrations, not native read", async (t) => {
-  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }), "tui", true, true);
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"] }), "tui", true, true);
   const notice = f.notices.find((value) => value.includes("tool-cards unavailable"));
   assert.match(notice ?? "", /edit, write/);
   assert.doesNotMatch(notice ?? "", /read/);
 });
 
 test("unselected cards ignore Claude tool style entirely", async (t) => {
-  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: [], toolStyle: "claudecode" }));
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: [] }));
   assert.deepEqual(f.tools, []);
   assert.ok(!f.calls.includes("tool-renderer"));
   assert.ok(!f.calls.includes("widget"));
@@ -273,7 +281,7 @@ for (const mode of ["print", "rpc", "json"]) {
     await f.emit("agent_start");
     await f.emit("message_update", { message: { role: "assistant", content: [] } });
     assert.equal(await f.emit("input", { text: f.imagePath }), undefined);
-    assert.equal(f.calls.length, 0);
+    assert.deepEqual(f.calls, ["tool-renderer"], "only the inert renderer hook is registered outside the TUI");
     assert.equal(f.chat.children.length, 105);
   });
 }

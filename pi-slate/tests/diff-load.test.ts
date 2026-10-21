@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,13 +13,16 @@ test("Slate loads through Pi's real extension loader and renders completed tools
   const cwd = await mkdtemp(join(tmpdir(), "pi-slate-load-"));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-  process.env.PI_CODING_AGENT_DIR = join(cwd, "agent");
+  const agentDir = join(cwd, "agent");
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   t.after(() => {
     if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
   });
+  await mkdir(agentDir, { recursive: true });
+  await writeFile(join(agentDir, "pi-slate.json"), JSON.stringify({ version: 1, surfaces: ["editor", "sidebar", "tool-cards"], toolStyle: "default" }));
   const entry = join(dirname(fileURLToPath(import.meta.url)), "../extensions/pi-slate/index.ts");
-  const loaded = await discoverAndLoadExtensions([entry], cwd, join(cwd, "agent"));
+  const loaded = await discoverAndLoadExtensions([entry], cwd, agentDir);
   assert.deepEqual(loaded.errors, []);
   assert.equal(loaded.extensions.length, 1);
   const extension = loaded.extensions[0];

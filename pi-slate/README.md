@@ -82,17 +82,17 @@ With `tool-cards` selected, `edit` and `write` results are syntax-highlighted in
 
 Model-facing text is unchanged. Previews are bounded (256 KiB snapshots, 2,000 rows); binary or oversized content shows a notice.
 
-### Claude Code Tool Style (opt-in)
+### Claude Code Tool Style
 
 ![Slate Claude Code-style tool transcript with grouped calls, edit counts, and an intentional demo failure](assets/slate-claudecode-tools.png)
 
-Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`.
+The default tool presentation with `tool-cards` selected. Set `"toolStyle": "default"` in `~/.pi/agent/pi-slate.json` and `/reload` to restore Slate's original cards.
 
 - Compact `✓ Name (args)` calls with `└` result summaries, duration, and green/red edit counts. Pending/running/error states stay visible.
 - Consecutive calls group into `Done (…)` / `Running (…)` trees in compatible fullscreen hosts; expanding any member restores the individual cards.
 - Covers read, bash, grep, find, ls, write, edit, apply_patch, codemode, and recall without registering replacement tools. Slate's expanded diff views still apply; model-facing results are unchanged.
 
-Requires a host with `registerToolRenderer`; older or non-fullscreen hosts keep the default cards. Switching styles requires `/reload`.
+Requires a host with `registerToolRenderer`; older or non-fullscreen hosts keep the original cards.
 
 ### Rich Media Rendering
 

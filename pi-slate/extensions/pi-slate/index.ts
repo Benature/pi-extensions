@@ -159,7 +159,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
       ...(value.logo === "minimal" || value.logo === "original" ? { logo: value.logo } : {}),
-      ...(value.toolStyle === "claudecode" ? { toolStyle: "claudecode" as const } : {}),
+      ...(value.toolStyle === "default" ? { toolStyle: "default" as const } : {}),
       ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
@@ -208,7 +208,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   // Runtime ownership is fixed until /reload, even when a command saves a new set.
   const selected = [...config.surfaces];
   const owns = (surface: typeof selected[number]): boolean => has(selected, surface);
-  const requestedClaudeTools = owns("tool-cards") && config.toolStyle === "claudecode";
+  const requestedClaudeTools = owns("tool-cards") && config.toolStyle !== "default";
   const claudeTools = requestedClaudeTools && typeof pi.registerToolRenderer === "function";
   if (owns("tool-cards")) {
     installDiff(pi);
