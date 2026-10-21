@@ -71,7 +71,7 @@ With `tool-cards` selected, `edit` and `write` results are syntax-highlighted in
 
 ### Claude Code Tool Style (opt-in)
 
-![Slate Claude Code-style tool transcript with grouped calls, edit counts, and an intentional demo failure](assets/slate-claudecode-tools.png)
+![Slate Claude Code-style tool transcript with grouped calls, edit counts, and an intentional demo failure](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-claudecode-tools.png)
 
 Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`.
 
@@ -99,36 +99,29 @@ The sidebar keeps session facts visible without sending them to a model:
 
 Focused and compact modes hide the dashboard; its facts move onto the prompt frame.
 
-### Cooperative Sub-agent Conversations
+### Background Tasks & Subagents
 
-With `editor` and a fullscreen `sidebar` selected, Slate can lend the sidebar's chat slot to a pi-subagents worker conversation and restore the same sidebar, editor, and chat objects on return. Parent output continues while hidden.
-
-This is a UI-only handshake: no new model tools or execution authority, and unselected surfaces are never enabled. Without a compatible slot, pi-subagents uses its own fallback.
-
-### Background-task integration
-
-Other extensions can publish detached terminals or jobs to the dashboard's task shelf through the `pi:background-tasks` event on Pi's event bus. Snapshots are display-only and cleared with their session.
+Other extensions can publish detached terminals or jobs to the sidebar's task shelf through the `pi:background-tasks` event on Pi's event bus; snapshots are display-only and cleared with their session. With `editor` and a fullscreen `sidebar` selected, Slate can also lend the sidebar's chat slot to a pi-subagents worker conversation — a UI-only handshake with no new model tools — and restores the same surfaces on return. Without a compatible slot, pi-subagents uses its own fallback.
 
 ### Themes
 
-The composer, transcript and session dashboard share the selected theme. **Tokyo Night** is Slate's bundled theme: subdued navy panels, blue accents, pale text and quiet tool backgrounds, using the [Tokyo Night palette](https://github.com/folke/tokyonight.nvim).
+Slate supports the following themes and can be changed with `/slate theme <name>`:
 
-Your current theme remains unchanged on install. `/slate theme default` selects Pi's system default; `/slate theme tokyo-night` selects and saves Tokyo Night explicitly. Black Metal remains available in Pi's theme settings, alongside Catppuccin Mocha styles. `/slate theme mocha default` selects the Catppuccin Default style; `/slate style default` remains its compatible alias.
-
-`/slate` → Theme picks one. Or set it directly:
-
-```text
-/slate theme mauve
-/slate style quiet
-```
+- `tokyo-night` ⬛🟦🟪🟩
+- `quiet` ⬛⬜🟥🟨
+- `mauve` ⬛🟪🟥🟨
+- `sapphire` ⬛🟦🟥🟨
+- `peach` ⬛🟧🟥🟨
+- `teal` ⬛🟩🟥🟨
+- `default` restores Pi's system theme. Black Metal remains available in Pi's theme settings.
 
 Selection is saved and also appears in `/settings`.
 
 ### Prompt Templates
 
-When `editor` is selected, `/prompts` or `Ctrl+Alt+P` opens a searchable picker of Pi's loaded prompt templates. Search by filename, name, description, or body; use ↑↓ to choose and Enter to insert at the composer cursor. Esc or Ctrl+C closes without changing your draft. Configured Pi selection keys are respected.
+With `editor` selected, `/prompts` (or `Ctrl+Alt+P`) opens a searchable picker of Pi's prompt templates; Enter inserts at the composer cursor.
 
-The picker rereads templates when opened, reports unreadable files, and uses the filename when `name:` is missing or empty. Add new templates through Pi's prompt directories or settings, then run `/reload`. Inserting a template does not send a message or expand argument placeholders; edit those before submitting. If your terminal does not send the shortcut, use `/prompts`.
+![Slate prompt template picker](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-prompts.png)
 
 ### Composer Keys
 
