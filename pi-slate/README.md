@@ -8,19 +8,10 @@
 
 ## Setup
 
-**Option 1: Pi-agent Prompt**
-
-```text
-- Install pi-slate using: `pi install npm:pi-slate`.
-- Keep my current theme and other UI extensions. Select only the Slate surfaces I want.
-- Ask me to /reload after changing surfaces. Use fullscreen explicitly if I want the sidebar.
-```
-
-**Option 2: Bash**
+**Bash**
 
 ```bash
 pi install npm:pi-slate
-pi --tui-mode fullscreen
 ```
 
 Explore extension settings using `/slate` after installation. Releases: [CHANGELOG](CHANGELOG.md).
