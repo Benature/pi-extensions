@@ -63,6 +63,17 @@ test("expanded members, images, unknown tools, text and narrow terminals break f
   groups.dispose();
 });
 
+test("groups retain their summary and guides without a theme", () => {
+  const chat = new Container();
+  chat.addChild(mockTool()); chat.addChild(mockTool());
+  const groups = new ToolGroups(chat, () => undefined, () => "expand");
+  const rows = chat.render(80);
+  assert.match(rows.join("\n"), /✓ Done \(2 tool calls\) expand/);
+  assert.ok(rows.some(row => row.startsWith("├─ ")));
+  assert.ok(rows.some(row => row.startsWith("└─ ")));
+  groups.dispose();
+});
+
 test("native response-length warnings remain a grouping boundary", () => {
   initTheme("dark", false);
   const { chat, groups } = setup();

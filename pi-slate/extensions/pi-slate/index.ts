@@ -240,12 +240,15 @@ export default function piSlate(pi: ExtensionAPI): void {
   const liveContext = (): ExtensionContext | undefined => {
     const ctx = currentContext;
     if (!ctx) return undefined;
-    try { void ctx.mode; } catch { return undefined; }
+    try { void ctx.mode; } catch {
+      currentContext = undefined;
+      return undefined;
+    }
     return ctx;
   };
   const liveTheme = (): Theme | undefined => {
     const ctx = liveContext();
-    if (ctx) { try { cachedTheme = ctx.ui.theme ?? cachedTheme; } catch { /* Keep the last live theme. */ } }
+    if (ctx) cachedTheme = ctx.ui.theme;
     return cachedTheme;
   };
   let activeEditor: ComposerEditor | undefined;
@@ -364,6 +367,12 @@ export default function piSlate(pi: ExtensionAPI): void {
     }
     const mountedEpoch = sessionEpoch;
     currentContext = ctx;
+    if (ctx.mode === "tui") cachedTheme = ctx.ui.theme;
+    const mountedContext = (): ExtensionContext | undefined =>
+      mountedEpoch === sessionEpoch ? liveContext() : undefined;
+    const notify = (message: string, type: "info" | "warning" | "error"): void => {
+      mountedContext()?.ui.notify(message, type);
+    };
     conversations?.dispose();
     conversations = ctx.mode === "tui" && owns("editor") ? installConversationBridge(pi, {
       context: liveContext,
@@ -418,10 +427,11 @@ export default function piSlate(pi: ExtensionAPI): void {
       pi.events.emit?.(BACKGROUND_TASKS_REQUEST, { version: 1, sessionId: ctx.sessionManager.getSessionId?.() ?? "" });
       sidebar.setActions({
         persistFold: (section, expanded) => {
-          if (loaded.error) { ctx.ui.notify(loaded.error, "warning"); return undefined; }
+          if (!mountedContext()) return undefined;
+          if (loaded.error) { notify(loaded.error, "warning"); return undefined; }
           try {
             const latest = loadConfig(configPath);
-            if (latest.error) { ctx.ui.notify(latest.error, "warning"); return undefined; }
+            if (latest.error) { notify(latest.error, "warning"); return undefined; }
             const previous = latest.raw.sidebarSections;
             const sections = previous && typeof previous === "object" && !Array.isArray(previous) ? previous : {};
             const raw = { ...latest.raw, sidebarSections: { ...sections, [section]: expanded } };
@@ -429,36 +439,42 @@ export default function piSlate(pi: ExtensionAPI): void {
             const folds = parseSidebarFolds(raw.sidebarSections);
             config = { ...config, sidebarSections: folds }; return folds;
           }
-          catch { ctx.ui.notify("Could not save sidebar sections", "error"); return undefined; }
+          catch { notify("Could not save sidebar sections", "error"); return undefined; }
         },
-        inspect: (title, text) => inspect(ctx, title, text),
+        inspect: (title, text) => {
+          const target = mountedContext();
+          if (target) inspect(target, title, text);
+        },
         commands: () => {
-          if (mountedEpoch !== sessionEpoch) return;
-          const target = liveContext();
+          const target = mountedContext();
           if (!target) return;
-          void sessionMenu(target, "commands").catch(() => { try { target.ui.notify("Command catalog unavailable", "warning"); } catch { /* Session UI may be gone. */ } });
+          void sessionMenu(target, "commands").catch(() => notify("Command catalog unavailable", "warning"));
         },
         persistWidth: (percent) => {
+          if (!mountedContext()) return;
           try {
             const next = withSidebarPercent(config, percent);
             saveConfig(next);
             config = next;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            ctx.ui.notify(`Could not save sidebar width: ${message}`, "error");
+            notify(`Could not save sidebar width: ${message}`, "error");
           }
         },
         copy: (text) => {
-          void copyWithFeedback(activeTui, ctx.ui.notify, text);
+          const target = mountedContext();
+          if (target) void copyWithFeedback(activeTui, notify, text);
         },
         openFile: (filePath) => {
-          const target = resolve(ctx.cwd, filePath);
+          const context = mountedContext();
+          if (!context) return;
+          const target = resolve(context.cwd, filePath);
           const { command, args } = openExternalArgs(target);
           void Promise.resolve(pi.exec(command, args, { timeout: 5000 })).then(
             (result) => {
-              if (result.code !== 0) ctx.ui.notify("Could not open file", "error");
+              if (result.code !== 0) notify("Could not open file", "error");
             },
-            () => ctx.ui.notify("Could not open file", "error"),
+            () => notify("Could not open file", "error"),
           );
         },
       });
@@ -488,8 +504,9 @@ export default function piSlate(pi: ExtensionAPI): void {
           }
         }
         if (owns("transcript")) queueMicrotask(() => {
+          if (!mountedContext()) return;
           syncVisibleMessages();
-          if (!messageWindow) ctx.ui.notify("Slate transcript unavailable: a compatible message-window host is required", "warning");
+          if (!messageWindow) notify("Slate transcript unavailable: a compatible message-window host is required", "warning");
         });
         return { render: () => [], invalidate() {} };
       }, { placement: "belowEditor" });
@@ -507,7 +524,9 @@ export default function piSlate(pi: ExtensionAPI): void {
           noticeFilterActive = true;
         };
         attachFilter(findChatContainer(layoutRootOf(tui)));
-        if (!noticeFilterActive) queueMicrotask(() => attachFilter(findChatContainer(layoutRootOf(tui))));
+        if (!noticeFilterActive) queueMicrotask(() => {
+          if (mountedContext()) attachFilter(findChatContainer(layoutRootOf(tui)));
+        });
         return new SlateHeader(theme, liveContext, columnWidth, () => updates.notice, () => {
           const ctx = liveContext();
           return {
@@ -563,7 +582,7 @@ export default function piSlate(pi: ExtensionAPI): void {
         // image-token delete sees the keypress.
         images?.attachEditor(activeEditor);
         selection.attach(activeEditor, {
-          copy: (text) => copyWithFeedback(tui, ctx.ui.notify, text),
+          copy: (text) => mountedContext() ? copyWithFeedback(tui, notify, text) : Promise.resolve(),
           requestRender: () => tui.requestRender(),
         });
         activeTui = tui;
@@ -1052,11 +1071,17 @@ export default function piSlate(pi: ExtensionAPI): void {
       if (!active() || sidebar.imagePath() !== path) return;
       if (choice === "Pin" || choice === "Unpin") sidebar.setImagePinned(pinned);
       else if (choice === "Clear selection") sidebar.clearImage();
-      else if (choice === "Copy path") void copyWithFeedback(activeTui, ctx.ui.notify, path);
+      else if (choice === "Copy path") void copyWithFeedback(activeTui, (message, kind) => {
+        if (active()) ctx.ui.notify(message, kind);
+      }, path);
       else if (choice === "Open") {
         const { command, args } = openExternalArgs(path);
-        try { if ((await pi.exec(command, args, { timeout: 5000 })).code !== 0) ctx.ui.notify("Could not open image", "error"); }
-        catch { ctx.ui.notify("Could not open image", "error"); }
+        try {
+          const result = await pi.exec(command, args, { timeout: 5000 });
+          if (result.code !== 0 && active()) ctx.ui.notify("Could not open image", "error");
+        } catch {
+          if (active()) ctx.ui.notify("Could not open image", "error");
+        }
       }
     }
   };

@@ -7,7 +7,7 @@ import { stripVTControlCharacters } from "node:util";
 import { SessionManager, type ExtensionAPI, type ExtensionContext, type ExtensionEvent, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Container, Editor, ScrollView, Text, TuiAltScreen, type Component, type EditorTheme, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import piSlate from "../extensions/pi-slate/index.ts";
-import { Sidebar } from "../extensions/pi-slate/sidebar.ts";
+import { Sidebar, type SidebarActions } from "../extensions/pi-slate/sidebar.ts";
 import { GitStatusPoller } from "../extensions/pi-slate/git-status.ts";
 import { FRESH_SURFACES, has, SURFACES, type Surface } from "../extensions/pi-slate/surfaces.ts";
 import { InteractiveMode } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js";
@@ -126,20 +126,26 @@ async function fixture(t: TestContext, text: string | undefined, mode = "tui", c
     },
   };
   const manager = SessionManager.inMemory(cwd);
-  const ctx = { cwd, mode, ui, sessionManager: manager, getContextUsage: () => undefined, isIdle: () => true, isProjectTrusted: () => false } as unknown as ExtensionContext;
+  let stale = false;
+  const ctx = new Proxy({ cwd, mode, ui, sessionManager: manager, getContextUsage: () => undefined, isIdle: () => true, isProjectTrusted: () => false } as unknown as ExtensionContext, {
+    get(target, key, receiver) {
+      if (stale) throw new Error("This extension ctx is stale after session replacement or reload.");
+      return Reflect.get(target, key, receiver);
+    },
+  });
   piSlate(pi);
   const emit = async (type: string, extra: Record<string, unknown> = {}, context = ctx) => {
     let result: unknown;
     for (const handler of handlers.get(type) ?? []) result = await handler({ type, ...extra } as ExtensionEvent, context);
     return result;
   };
-  t.after(() => emit("session_shutdown"));
+  t.after(() => { stale = false; return emit("session_shutdown"); });
   await emit("session_start");
   await Promise.resolve();
   assert.equal(Editor.prototype.insertTextAtCursor, originalInsert);
   assert.equal(Reflect.get(Editor.prototype, "handlePaste"), originalPaste);
   assert.equal(foreign.insertTextAtCursor, foreignInsert);
-  return { calls, notices, commands, tools, emit, ctx, path, imagePath, chat, root, tui, composer, foreign, choices, inspected, extraCommands, bus, manager, draft: () => draft, eventBus: pi.events, header: () => header, setForeignEditor: () => { editorFactory = () => foreign; } };
+  return { pi, invalidate: () => { stale = true; }, calls, notices, commands, tools, emit, ctx, path, imagePath, chat, root, tui, composer, foreign, choices, inspected, extraCommands, bus, manager, draft: () => draft, eventBus: pi.events, header: () => header, setForeignEditor: () => { editorFactory = () => foreign; } };
 }
 
 for (const surfaces of [[], ["editor"], [...FRESH_SURFACES], [...SURFACES], ["header"], ["tool-cards"], ["sidebar"], ["transcript"], ["footer"]] as Surface[][]) {
@@ -507,3 +513,62 @@ test("completed turn appends one UI receipt without adding session messages", as
   await f.emit("agent_end");
   assert.deepEqual(receipts(), ["Worked for 54s • 09:37", "Worked for 1m 5s • 09:38"]);
 });
+
+test("retained surfaces and timer callbacks tolerate invalidation before shutdown", async t => {
+  t.mock.timers.enable({ apis: ["Date", "setInterval"], now: 1000 });
+  const f = await fixture(t, JSON.stringify({ surfaces: ["header", "editor", "sidebar", "transcript"], focused: false }));
+  await f.emit("agent_start");
+  t.mock.timers.tick(1000);
+  await f.emit("agent_end");
+  await f.emit("agent_start");
+  const actions = Reflect.get(railOf(f), "actions") as SidebarActions;
+  const saved = await readFile(f.path, "utf8"), notices = f.notices.length;
+  f.invalidate();
+  assert.throws(() => f.ctx.mode, /stale/);
+  assert.doesNotThrow(() => {
+    f.header()!.render(100);
+    f.composer!.render(100);
+    f.chat.render(100);
+    railOf(f).render(40);
+    actions.inspect!("Session", "details");
+    actions.commands!();
+    actions.copy("text");
+    actions.openFile("file.ts");
+    actions.persistFold!("mcp", true);
+    actions.persistWidth!(30);
+    t.mock.timers.tick(10000);
+  });
+  await f.emit("resources_discover");
+  await Promise.resolve();
+  assert.equal(f.notices.length, notices);
+  assert.equal(await readFile(f.path, "utf8"), saved);
+});
+
+test("receipt keeps its theme when its first paint occurs after shutdown", async t => {
+  const f = await fixture(t, JSON.stringify({ surfaces: ["editor"] }));
+  const paint = t.mock.method(theme, "fg", (_color: string, text: string) => text);
+  await f.emit("agent_start");
+  await f.emit("agent_end");
+  const receipt = f.chat.children.at(-1)!;
+  await f.emit("session_shutdown");
+  f.invalidate();
+  const before = paint.mock.callCount();
+  assert.match(receipt.render(100).join("\n"), /Worked for/);
+  assert.equal(paint.mock.callCount(), before + 1);
+});
+
+for (const state of ["live", "invalidated", "replaced"] as const) {
+  test(`pending file-open failure only notifies its live owner: ${state}`, async t => {
+    const f = await fixture(t, JSON.stringify({ surfaces: ["sidebar"], focused: false }));
+    let reject!: (error: Error) => void;
+    t.mock.method(f.pi, "exec", () => new Promise((_resolve, fail) => { reject = fail; }));
+    const actions = Reflect.get(railOf(f), "actions") as SidebarActions;
+    actions.openFile("file.ts");
+    if (state === "invalidated") f.invalidate();
+    if (state === "replaced") await f.emit("session_start");
+    const notices = f.notices.length;
+    reject(new Error("open failed"));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(f.notices.slice(notices), state === "live" ? ["Could not open file"] : []);
+  });
+}

@@ -12,9 +12,7 @@ test("turn completion renders the elapsed label with a live theme", () => {
   assert.match(rows[1]!, /Worked for 1m 5s/);
 });
 
-test("turn completion renders without color once the session ctx is stale", () => {
-  // After ctx.newSession()/reload() every ctx accessor throws, so the provider yields
-  // undefined; render runs inside the host paint loop and must never throw.
+test("turn completion renders without color when no theme is available", () => {
   const completion = new TurnCompletion(1000, Date.now(), () => undefined);
   assert.doesNotThrow(() => completion.render(80));
   assert.match(completion.render(80)[1]!, /Worked for 1s/);
