@@ -16,25 +16,18 @@ pi install npm:pi-slate
 
 Explore extension settings using `/slate` after installation. Releases: [CHANGELOG](CHANGELOG.md).
 
-### Updating an already-running session
+## Requirements
 
-After updating Slate, run `/reload` in each open Pi process, or quit and restart Pi. Updating package files or pulling a local checkout does not replace extension callbacks already in memory. `/new` is not a substitute: the outgoing session must shut down before Pi loads the replacement runtime.
+- Pi Coding Agent and a modern terminal that can render Kitty or iTerm2 image protocol, such as Ghostty or Warp.
+- Keep other UI extensions enabled and select only the surfaces you want Slate to own. Same-slot writers follow host precedence; no automatic conflict repair.
+- Copy a bug report with `/slate bug`.
 
-If startup shows `Warning: pi crashed on ...`, that timestamp describes a recorded crash, not a new startup failure. Pi normally announces each record once and keeps its details for `/bug`. If the crash came from a process running before an update, restart with the updated code and use `/resume` to reopen the conversation; deleting the saved session or crash log is unnecessary.
 
 ## Independent Surfaces
 
-Slate can own one surface and leave the rest untouched. The closed set is `header`, `footer`, `editor`, `sidebar`, `tool-cards`, `transcript`; unselected surfaces are never patched.
+Slate can own one surface and leave the rest untouched. The closed set is `header`, `footer`, `editor`, `sidebar`, `tool-cards`, `transcript`.
 
-```text
-/slate surfaces
-/slate surfaces set editor
-/slate surfaces set header tool-cards
-/slate surfaces full
-/slate surfaces none
-```
-
-Changes are saved and require `/reload`; appearance settings stay live. A fresh install selects `["editor", "sidebar", "tool-cards"]`. Sidebar and transcript require a fullscreen host and warn instead of forcing one.
+Changes are saved and require `/reload`; appearance settings stay live. A fresh install selects `["editor", "sidebar", "tool-cards"]`.
 
 | Surface | Owns |
 | --- | --- |
@@ -51,7 +44,7 @@ Slate renders cleanly into your terminal and stays customizable without adding n
 
 ### Quiet Workbench
 
-The header keeps the stock Pi mark, version, model, and path; the composer keeps project/branch and model. Context, cost, cache, and rate live on the sidebar rail. Native transcript, thinking, keyboard, paste and selection behavior stay intact. For the full workbench: `/slate surfaces full`, `/slate focused off`, then `/reload`.
+The header keeps the stock Pi settings and data then builds on it. For the full workbench: `/slate surfaces full`, `/slate focused off`, then `/reload`. 
 
 - `/slate focused [on|off]` hides or restores the sidebar; fresh settings start focused.
 - `/slate pid [on|off]` toggles a prompt-edge PID label, off by default.
@@ -72,27 +65,21 @@ While the model runs, the composer edge shows a progress animation instead of th
 
 With `tool-cards` selected, `edit` and `write` results are syntax-highlighted in the transcript.
 
-- Split edits (before/after) at 100+ columns; unified below that, and for every write.
-- Word-level emphasis on paired lines. 190+ languages via Shiki; unknown types stay plain.
-- Consecutive `read` cards collapse into one line (`read 2 files`); `Ctrl+O` lists the paths.
-
 ![Split YAML edit with word-level emphasis](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-diff-yaml.png)
 
 ![Split Rust edit with syntax highlighting](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-diff-rust.png)
 
-Model-facing text is unchanged. Previews are bounded (256 KiB snapshots, 2,000 rows); binary or oversized content shows a notice.
-
-### Claude Code Tool Style
+### Claude Code Tool Style (opt-in)
 
 ![Slate Claude Code-style tool transcript with grouped calls, edit counts, and an intentional demo failure](assets/slate-claudecode-tools.png)
 
-The default tool presentation with `tool-cards` selected. Set `"toolStyle": "default"` in `~/.pi/agent/pi-slate.json` and `/reload` to restore Slate's original cards.
+Set `"toolStyle": "claudecode"` in `~/.pi/agent/pi-slate.json`, keep `tool-cards` selected, then `/reload`.
 
 - Compact `✓ Name (args)` calls with `└` result summaries, duration, and green/red edit counts. Pending/running/error states stay visible.
 - Consecutive calls group into `Done (…)` / `Running (…)` trees in compatible fullscreen hosts; expanding any member restores the individual cards.
 - Covers read, bash, grep, find, ls, write, edit, apply_patch, codemode, and recall without registering replacement tools. Slate's expanded diff views still apply; model-facing results are unchanged.
 
-Requires a host with `registerToolRenderer`; older or non-fullscreen hosts keep the original cards.
+Requires a host with `registerToolRenderer`; older or non-fullscreen hosts keep the default cards. Switching styles requires `/reload`.
 
 ### Rich Media Rendering
 
@@ -121,10 +108,6 @@ This is a UI-only handshake: no new model tools or execution authority, and unse
 ### Background-task integration
 
 Other extensions can publish detached terminals or jobs to the dashboard's task shelf through the `pi:background-tasks` event on Pi's event bus. Snapshots are display-only and cleared with their session.
-
-### Update Notices
-
-With `header` selected, Pi and package updates appear as a centered hairline. Stock Pi/package update cards remain in the transcript; no Slate surface deletes them.
 
 ### Themes
 
@@ -161,8 +144,6 @@ These work when `editor` is selected. No terminal configuration.
 | Clear the prompt | `Esc` `Esc` |
 | Expand or collapse a paste | Click the `[paste #N]` token |
 
-`Ctrl+A` selects the whole prompt instead of jumping to the line start; `Home` still does that. `Ctrl+C` copies the full prompt, including hidden lines and collapsed `[paste #N]` bodies, and leaves the text in place. `Ctrl+X` is left to Pi (`app.message.copy`). To remove a large prompt, copy first if you need it, then `Ctrl+A` Backspace or `Esc` `Esc`. Drag-selecting uses Pi's native screen selection; `Ctrl+C` copies the prompt without frame characters. Wheel over the composer scrolls overflow; wheel outside it still scrolls the transcript. Large pastes stay collapsed as `[paste #N]` until you click that token. Image tokens stay as `[image-N]`. Submit text is unchanged.
-
 ## Commands
 
 `/slate` with no args opens the settings picker. `/prompts` is registered only with `editor` selected. `/exit` always quits Pi, same as `/quit`.
@@ -198,16 +179,6 @@ These work when `editor` is selected. No terminal configuration.
 - `stripPrefixes`: literal prefixes removed from displayed model ids, applied repeatedly. `us.moonshotai.kimi-k3` becomes `kimi-k3`.
 - `providerAliases`: renames a provider for display. Aliased providers collapse to the same label.
 - `providerSuffix`: renders `kimi-k3 (bedrock)` instead of `bedrock/kimi-k3` in both the header and the footer.
-
-## Minimal By Design
-
-Slate adds no new model-facing tools, prompts, or model calls. Highlighted `edit` and `write` results keep the native response text. It's entirely deterministic and made to be customizable and improve your Pi experience while your Pi remains yours.
-
-## Requirements
-
-- Pi Coding Agent and a modern terminal that can render Kitty or iTerm2 image protocol, such as Ghostty or Warp.
-- Keep other UI extensions enabled and select only the surfaces you want Slate to own. Same-slot writers follow host precedence; no automatic conflict repair.
-- Copy a bug report with `/slate bug`.
 
 ## License
 
