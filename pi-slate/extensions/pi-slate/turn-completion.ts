@@ -6,9 +6,10 @@ import { sidebarDuration } from "./sidebar-layout.ts";
 export class TurnCompletion implements Component {
   private readonly label: string;
 
-  private readonly theme: () => Theme;
+  // Undefined when the session ctx is stale after replacement; render without color.
+  private readonly theme: () => Theme | undefined;
 
-  constructor(elapsedMs: number, finishedAt: number, theme: () => Theme) {
+  constructor(elapsedMs: number, finishedAt: number, theme: () => Theme | undefined) {
     this.theme = theme;
     const date = new Date(finishedAt);
     const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
@@ -19,6 +20,7 @@ export class TurnCompletion implements Component {
 
   render(width: number): string[] {
     if (width <= 0) return [];
-    return ["", truncateToWidth(this.theme().fg("dim", this.label), width, "…"), ""];
+    const theme = this.theme();
+    return ["", truncateToWidth(theme ? theme.fg("dim", this.label) : this.label, width, "…"), ""];
   }
 }
