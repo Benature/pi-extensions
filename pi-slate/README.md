@@ -59,7 +59,9 @@ With `editor` selected, an observed thinking block adds elapsed seconds and the 
 
 ### Working Indicator
 
-While the model runs, the composer edge shows a progress animation instead of the italic working word: `waves` (default), `dna-helix`, `snake`, or `cylon-scanner`. `/slate progress` picks the style and applies it immediately.
+While the model runs, the composer edge shows a progress animation — `/slate progress` picks `waves` (default), `dna-helix`, `snake`, or `cylon-scanner`.
+
+![Slate working indicator animation](https://raw.githubusercontent.com/GaganSD/pi-extensions/9e0255670ec529304b4869f0cbc6f1ebb38e6171/pi-slate/assets/slate-working.gif)
 
 ### Diff
 
@@ -91,13 +93,9 @@ Slate uses Kitty Graphics Protocol to display rich media inside your terminal.
 
 ### Session Dashboard
 
-The sidebar keeps session facts visible without sending them to a model:
+The sidebar keeps session facts visible without sending them to a model: session id and PID (click to copy), model, context meter with cost and rate, foldable MCP/Skills/Prompts lists, plus background tasks and an image shelf when nonempty. `/slate session` shows full accounting; focused and compact modes move the facts onto the prompt frame.
 
-- Session id and PID (click to copy), model/thinking, and a context meter with merged tokens, cost and rate (`188k / 500k · $0.71 · ~420/s`), followed by cached/uncached usage rows. `/slate session` shows full accounting.
-- Foldable **MCP servers**, **Skills** and **Prompts** lists with counts. MCP states describe configuration, not live connectivity; credentials are never displayed.
-- Background tasks and an image shelf appear only when nonempty. Click a task or image to inspect it in a scrolling dialog.
-
-Focused and compact modes hide the dashboard; its facts move onto the prompt frame.
+![Slate session dashboard](https://raw.githubusercontent.com/GaganSD/pi-extensions/9e0255670ec529304b4869f0cbc6f1ebb38e6171/pi-slate/assets/slate-session.png)
 
 ### Background Tasks & Subagents
 
@@ -107,13 +105,17 @@ Other extensions can publish detached terminals or jobs to the sidebar's task sh
 
 Slate supports the following themes and can be changed with `/slate theme <name>`:
 
-- `tokyo-night` ⬛🟦🟪🟩
-- `quiet` ⬛⬜🟥🟨
-- `mauve` ⬛🟪🟥🟨
-- `sapphire` ⬛🟦🟥🟨
-- `peach` ⬛🟧🟥🟨
-- `teal` ⬛🟩🟥🟨
-- `default` restores Pi's system theme. Black Metal remains available in Pi's theme settings.
+| Themes | Accent |
+| --- | --- |
+| `tokyo-night` | 🟦 |
+| `quiet` | ⬜ |
+| `mauve` | 🟪 |
+| `sapphire` | 🟦 |
+| `peach` | 🟧 |
+| `teal` | 🟩 |
+| `default` | Pi's system theme |
+
+Black Metal remains available in Pi's theme settings.
 
 Selection is saved and also appears in `/settings`.
 
@@ -121,7 +123,7 @@ Selection is saved and also appears in `/settings`.
 
 With `editor` selected, `/prompts` (or `Ctrl+Alt+P`) opens a searchable picker of Pi's prompt templates; Enter inserts at the composer cursor.
 
-![Slate prompt template picker](https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/slate-prompts.png)
+![Slate prompt template picker](https://raw.githubusercontent.com/GaganSD/pi-extensions/9e0255670ec529304b4869f0cbc6f1ebb38e6171/pi-slate/assets/slate-prompts.png)
 
 ### Composer Keys
 
