@@ -65,9 +65,9 @@ test("minimal logo renders the classic white Pi mark beside the product stack", 
   const plain = lines.map(stripVTControlCharacters);
   assert.equal(plain.length, 4);
   assert.match(plain[0]!, /^██████\s+Pi Agent v1\.0\.4/);
-  assert.match(plain[1]!, /^██  ██\s+grok-4\.6 \(bedrock\) · medium/);
-  assert.match(plain[2]!, /^████  ██ ~\/pi-extensions/);
-  assert.match(plain[3]!, /^██    ██/);
+  assert.match(plain[1]!, /^██ {2}██\s+grok-4\.6 \(bedrock\) · medium/);
+  assert.match(plain[2]!, /^████ {2}██ ~\/pi-extensions/);
+  assert.match(plain[3]!, /^██ {4}██/);
   assert(lines.every(line => line.includes("\x1b[")), "mark stays painted white");
   assert(plain.every(line => visibleWidth(line) <= 72));
 });
