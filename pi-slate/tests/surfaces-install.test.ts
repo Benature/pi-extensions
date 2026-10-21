@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { stripVTControlCharacters } from "node:util";
-import { SessionManager, type ExtensionAPI, type ExtensionContext, type ExtensionEvent, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { ExtensionRunner, SessionManager, type ExtensionAPI, type ExtensionContext, type ExtensionEvent, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Container, Editor, ScrollView, Text, TuiAltScreen, type Component, type EditorTheme, type Terminal, type TUI } from "@earendil-works/pi-tui";
 import piSlate from "../extensions/pi-slate/index.ts";
 import { Sidebar, type SidebarActions } from "../extensions/pi-slate/sidebar.ts";
@@ -152,12 +152,12 @@ for (const surfaces of [[], ["editor"], [...FRESH_SURFACES], [...SURFACES], ["he
   test(`selected set controls all installers: ${surfaces.join("+") || "none"}`, async (t) => {
     const f = await fixture(t, JSON.stringify({ version: 1, surfaces, focused: true }));
     for (const slot of ["header", "footer", "editor"] as const) assert.equal(f.calls.includes(slot), has(surfaces, slot), slot);
-    assert.equal(f.calls.includes("widget"), has(surfaces, "sidebar") || has(surfaces, "transcript"));
+    assert.equal(f.calls.includes("widget"), has(surfaces, "sidebar") || has(surfaces, "transcript") || has(surfaces, "tool-cards"));
     assert.equal(f.calls.includes("files-start"), false, "retired file dashboard has no git-status watcher");
     assert.equal(f.calls.includes("async-subscribe"), has(surfaces, "sidebar"));
     assert.equal(f.calls.includes("navigation-subscribe"), has(surfaces, "editor"));
     assert.equal(f.calls.includes("branch-git"), has(surfaces, "editor"));
-    assert.deepEqual(f.tools.map((tool) => tool.name).sort(), has(surfaces, "tool-cards") ? ["edit", "read", "write"] : []);
+    assert.deepEqual(f.tools.map((tool) => tool.name).sort(), has(surfaces, "tool-cards") ? ["edit", "write"] : []);
     assert.equal(f.commands.has("exit"), true);
     assert.equal(f.commands.has("prompts"), has(surfaces, "editor"));
     assert.equal(f.chat.children.length, has(surfaces, "transcript") ? 100 : 105);
@@ -205,26 +205,34 @@ test("focused composer keeps cost only on top and places context before model", 
   assert.ok(bottom.indexOf("ctx 10%") < bottom.indexOf("no model"));
 });
 
-test("Claude tool style is opt-in, surface-scoped, and does not install legacy read grouping", async (t) => {
-  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }));
+test("Claude tool style is the default for tool-cards and skips legacy read grouping", async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"] }));
   assert.deepEqual(f.tools.map((tool) => tool.name).sort(), ["edit", "write"]);
   assert.ok(f.calls.includes("tool-renderer"));
   assert.ok(!f.notices.some((notice) => notice.includes("tool-cards unavailable")), "native read registration is not a conflict");
   assert.ok(f.calls.includes("widget"), "grouping acquires only a zero-row TUI handle, not the composer");
   assert.ok(!f.calls.includes("editor"));
   await f.commands.get("slate")!.handler("focused off", f.ctx);
-  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, "claudecode");
+  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, undefined);
+});
+
+test('toolStyle "default" restores Slate cards and legacy read grouping', async (t) => {
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "default" }));
+  assert.deepEqual(f.tools.map((tool) => tool.name).sort(), ["edit", "read", "write"]);
+  assert.ok(!f.calls.includes("tool-renderer"));
+  await f.commands.get("slate")!.handler("focused off", f.ctx);
+  assert.equal(JSON.parse(await readFile(f.path, "utf8")).toolStyle, "default");
 });
 
 test("Claude mode still warns about lost edit/write registrations, not native read", async (t) => {
-  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }), "tui", true, true);
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: ["tool-cards"] }), "tui", true, true);
   const notice = f.notices.find((value) => value.includes("tool-cards unavailable"));
   assert.match(notice ?? "", /edit, write/);
   assert.doesNotMatch(notice ?? "", /read/);
 });
 
 test("unselected cards ignore Claude tool style entirely", async (t) => {
-  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: [], toolStyle: "claudecode" }));
+  const f = await fixture(t, JSON.stringify({ version: 1, surfaces: [] }));
   assert.deepEqual(f.tools, []);
   assert.ok(!f.calls.includes("tool-renderer"));
   assert.ok(!f.calls.includes("widget"));
@@ -273,7 +281,7 @@ for (const mode of ["print", "rpc", "json"]) {
     await f.emit("agent_start");
     await f.emit("message_update", { message: { role: "assistant", content: [] } });
     assert.equal(await f.emit("input", { text: f.imagePath }), undefined);
-    assert.equal(f.calls.length, 0);
+    assert.deepEqual(f.calls, ["tool-renderer"], "only the inert renderer hook is registered outside the TUI");
     assert.equal(f.chat.children.length, 105);
   });
 }
@@ -544,6 +552,35 @@ test("retained surfaces and timer callbacks tolerate invalidation before shutdow
   assert.equal(await readFile(f.path, "utf8"), saved);
 });
 
+test("painted receipts survive real host context invalidation and a fresh session", async t => {
+  const f = await fixture(t, JSON.stringify({ surfaces: ["editor", "header", "sidebar"], focused: false }));
+  const runtime = { getThinkingLevel: () => "off", invalidate() {} } as ConstructorParameters<typeof ExtensionRunner>[1];
+  const runner = new ExtensionRunner([], runtime, f.ctx.cwd, f.manager, undefined as never);
+  runner.setUIContext(f.ctx.ui, "tui");
+  const outgoing = runner.createContext();
+  await f.emit("session_start", {}, outgoing);
+  await f.emit("agent_start", {}, outgoing);
+  await f.emit("agent_end", {}, outgoing);
+  const receipt = f.chat.children.at(-1)!;
+  assert.match(receipt.render(100).join("\n"), /Worked for/);
+  const entries = f.manager.getBranch();
+
+  await f.emit("session_shutdown", { reason: "new" }, outgoing);
+  runner.invalidate();
+  assert.throws(() => outgoing.ui, /This extension ctx is stale/);
+  // Pi may repaint the outgoing chat while the replacement runtime is loading.
+  assert.doesNotThrow(() => f.chat.render(100));
+  assert.match(receipt.render(100).join("\n"), /Worked for/);
+
+  const incoming = { ...f.ctx, sessionManager: SessionManager.inMemory(f.ctx.cwd) };
+  await f.emit("session_start", { reason: "new" }, incoming);
+  await f.emit("agent_start", {}, incoming);
+  await f.emit("agent_end", {}, incoming);
+  assert.doesNotThrow(() => f.chat.render(100));
+  assert.deepEqual(f.manager.getBranch(), entries, "receipts are UI objects, not persisted callbacks");
+  assert.deepEqual(incoming.sessionManager.getBranch(), [], "a new session has no inherited receipt entries");
+});
+
 test("receipt keeps its theme when its first paint occurs after shutdown", async t => {
   const f = await fixture(t, JSON.stringify({ surfaces: ["editor"] }));
   const paint = t.mock.method(theme, "fg", (_color: string, text: string) => text);
@@ -556,6 +593,46 @@ test("receipt keeps its theme when its first paint occurs after shutdown", async
   assert.match(receipt.render(100).join("\n"), /Worked for/);
   assert.equal(paint.mock.callCount(), before + 1);
 });
+
+for (const state of ["live", "invalidated", "replaced"] as const) {
+  for (const code of [0, 1]) {
+    test(`pending bug-page feedback only reaches its live owner: ${state}, code=${code}`, async t => {
+      const f = await fixture(t, JSON.stringify({ surfaces: [] }));
+      let finish!: (result: { code: number; stdout: string; stderr: string; killed: boolean }) => void;
+      t.mock.method(f.pi, "exec", () => new Promise(resolve => { finish = resolve; }));
+      const pending = f.commands.get("slate")!.handler("bug open", f.ctx);
+      if (state === "invalidated") f.invalidate();
+      if (state === "replaced") { await f.emit("session_shutdown", { reason: "reload" }); await f.emit("session_start"); }
+      const before = f.notices.length;
+      finish({ code, stdout: "", stderr: "", killed: false });
+      await pending;
+      assert.equal(f.notices.length - before, state === "live" ? 1 : 0);
+    });
+  }
+}
+
+for (const step of ["select", "input", "editor"] as const) {
+  test(`bug-report ${step} completion is ignored after shutdown`, async t => {
+    const f = await fixture(t, JSON.stringify({ surfaces: [] }));
+    let finish!: (value: string | undefined) => void;
+    const wait = () => new Promise<string | undefined>(resolve => { finish = resolve; });
+    let started!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    f.ctx.ui.input = async () => "title";
+    f.ctx.ui.editor = async () => { assert.fail("stale bug workflow must not open or finish an editor"); };
+    const delayed = () => { const pending = wait(); started(); return pending; };
+    if (step === "select") f.ctx.ui.select = delayed;
+    else if (step === "input") f.ctx.ui.input = delayed;
+    else f.ctx.ui.editor = delayed;
+    const pending = f.commands.get("slate")!.handler(step === "select" ? "bug" : "bug file", f.ctx);
+    await ready;
+    await f.emit("session_shutdown", { reason: "new" });
+    f.invalidate();
+    finish(step === "select" ? "Copy a bug report" : "details");
+    await pending;
+    assert.deepEqual(f.notices, []);
+  });
+}
 
 for (const state of ["live", "invalidated", "replaced"] as const) {
   test(`pending file-open failure only notifies its live owner: ${state}`, async t => {

@@ -50,7 +50,7 @@ const loadPrompt =
     return parsePrompt(id, source);
   };
 
-const loadPrompts = async (pi: ExtensionAPI, ctx: ExtensionContext): Promise<Prompt[]> => {
+const loadPrompts = async (pi: ExtensionAPI, ctx: ExtensionContext, active: () => boolean): Promise<Prompt[]> => {
   const paths = pi
     .getCommands()
     .filter((command) => command.source === ("prompt" as const))
@@ -58,6 +58,7 @@ const loadPrompts = async (pi: ExtensionAPI, ctx: ExtensionContext): Promise<Pro
 
   const settled = await Promise.allSettled(paths.map((path) => loadPrompt(readFile)(path)));
 
+  if (!active()) return [];
   const skipped = settled.filter((result) => result.status === "rejected").length;
   if (skipped > 0) ctx.ui.notify(`Skipped ${skipped} unreadable prompt template${skipped === 1 ? "" : "s"}.`, "warning");
   return settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
@@ -111,7 +112,7 @@ const buildContainer = (theme: Theme) => (search: Input, list: SelectList) => {
 
 const openPromptsOverlay =
   (prompts: Prompt[]) =>
-  async (ctx: ExtensionContext): Promise<void> => {
+  async (ctx: ExtensionContext, active: () => boolean): Promise<void> => {
     const selected = await ctx.ui.custom<string | undefined>(
       (tui, theme, keybindings, done) => {
         const search = new Input();
@@ -166,25 +167,33 @@ const openPromptsOverlay =
       { overlay: true, overlayOptions: { width: 60 } },
     );
 
-    if (selected !== undefined) {
+    if (active() && selected !== undefined) {
       ctx.ui.pasteToEditor(selected);
     }
   };
 
 export const installPromptPicker = (pi: ExtensionAPI): void => {
   let open = false;
+  let generation = 0;
+  pi.on("session_shutdown", () => { generation += 1; open = false; });
   const handler = async (ctx: ExtensionContext): Promise<void> => {
     if (ctx.mode !== "tui" || open) return;
+    const owner = generation;
+    const active = (): boolean => {
+      if (owner !== generation) return false;
+      try { return ctx.mode === "tui"; } catch { return false; }
+    };
     open = true;
     try {
-      const prompts = await loadPrompts(pi, ctx);
+      const prompts = await loadPrompts(pi, ctx, active);
+      if (!active()) return;
       if (prompts.length === 0) {
         ctx.ui.notify("No readable prompt templates. Add templates and run /reload.", "info");
         return;
       }
-      await openPromptsOverlay(prompts)(ctx);
+      await openPromptsOverlay(prompts)(ctx, active);
     } finally {
-      open = false;
+      if (owner === generation) open = false;
     }
   };
 

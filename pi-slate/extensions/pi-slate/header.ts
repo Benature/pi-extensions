@@ -4,6 +4,7 @@ import {
   backgroundAnsi, foregroundAnsi, rgbColor, truncateToWidth, visibleWidth, type Component, type TerminalColorMode,
 } from "@earendil-works/pi-tui";
 import { hairlineTextWidth, wrapHairlineText, symmetricHairline } from "./hairline.ts";
+import { paintLogo, PI_LOGO, type LogoStyle } from "./layout.ts";
 import { sidebarText } from "./sidebar-data.ts";
 import { formatUpdateNotice, type UpdateNotice } from "./updates.ts";
 
@@ -31,6 +32,12 @@ export function piLogoLines(theme: Theme): [string, string] {
   ];
 }
 
+/** Classic Pi mark: 8 cells × 4 rows of full blocks, painted white in every theme. */
+export function piMinimalLogoLines(theme: Theme): string[] {
+  const truecolor = colorMode(theme) === "truecolor";
+  return PI_LOGO.map((line) => paintLogo(line, truecolor));
+}
+
 export function piWordmark(theme: Theme): string {
   const mode = colorMode(theme);
   return `${foregroundAnsi(CORAL, mode)}P${RESET}${foregroundAnsi(YELLOW, mode)}i${RESET}`;
@@ -47,9 +54,13 @@ function padLine(text: string, width: number): string {
   return `${text}${" ".repeat(gap)}`;
 }
 
-function logoRow(mark: string, text: string, width: number): string {
-  const rest = truncateToWidth(text, Math.max(0, width - LOGO_CELLS - 1), "…");
+function logoRow(mark: string, text: string, width: number, cells: number): string {
+  const rest = truncateToWidth(text, Math.max(0, width - cells - 1), "…");
   return padLine(`${mark} ${rest}`, width);
+}
+
+function indentedLine(text: string, width: number, cells: number): string {
+  return padLine(`${" ".repeat(cells + 1)}${truncateToWidth(text, Math.max(0, width - cells - 1), "…")}`, width);
 }
 
 export type HeaderIdentity = { version: string; model?: string; thinking?: string };
@@ -57,7 +68,7 @@ export type HeaderIdentity = { version: string; model?: string; thinking?: strin
 /** Official mark + product stack. No hairline without a notice. */
 export function renderSlateHeader(input: {
   width: number; path: string; identity?: HeaderIdentity; notice?: string;
-  logo?: boolean; theme: Theme;
+  logo?: boolean; logoStyle?: LogoStyle; theme: Theme;
 }): string[] {
   const width = Math.max(0, input.width);
   if (!width) return [];
@@ -70,12 +81,21 @@ export function renderSlateHeader(input: {
   const showLogo = input.logo ?? supportsPiLogo();
   const modelLine = [model, thinking].filter(Boolean).join(" · ");
   const rows: string[] = [];
-  if (showLogo && width >= 12) {
+  if (showLogo && width >= 12 && input.logoStyle !== "original") {
+    const cells = 8;
+    const mark = piMinimalLogoLines(input.theme);
+    rows.push(
+      logoRow(mark[0]!, input.theme.fg("text", `Pi Agent v${version}`), width, cells),
+      logoRow(mark[1]!, modelLine ? input.theme.fg("muted", modelLine) : "", width, cells),
+      logoRow(mark[2]!, input.theme.fg("dim", path), width, cells),
+      logoRow(mark[3]!, "", width, cells),
+    );
+  } else if (showLogo && width >= 12) {
     const [top, bottom] = piLogoLines(input.theme);
     rows.push(
-      logoRow(top, input.theme.fg("text", `Pi Agent v${version}`), width),
-      logoRow(bottom, modelLine ? input.theme.fg("muted", modelLine) : "", width),
-      padLine(`${" ".repeat(LOGO_CELLS + 1)}${truncateToWidth(input.theme.fg("dim", path), Math.max(0, width - LOGO_CELLS - 1), "…")}`, width),
+      logoRow(top, input.theme.fg("text", `Pi Agent v${version}`), width, LOGO_CELLS),
+      logoRow(bottom, modelLine ? input.theme.fg("muted", modelLine) : "", width, LOGO_CELLS),
+      indentedLine(input.theme.fg("dim", path), width, LOGO_CELLS),
     );
   } else {
     const mark = piWordmark(input.theme);
@@ -94,11 +114,13 @@ export class SlateHeader implements Component {
   private readonly columnWidth: (width: number) => number;
   private readonly getNotice: () => UpdateNotice;
   private readonly getIdentity: () => HeaderIdentity;
+  private readonly getLogoStyle: () => LogoStyle;
   constructor(theme: Theme, getContext: () => ExtensionContext | undefined,
     columnWidth: (width: number) => number, getNotice: () => UpdateNotice,
-    getIdentity: () => HeaderIdentity) {
+    getIdentity: () => HeaderIdentity, getLogoStyle: () => LogoStyle = () => "minimal") {
     this.theme = theme; this.getContext = getContext; this.columnWidth = columnWidth;
     this.getNotice = getNotice; this.getIdentity = getIdentity;
+    this.getLogoStyle = getLogoStyle;
   }
   invalidate(): void {}
   render(width: number): string[] {
@@ -108,7 +130,7 @@ export class SlateHeader implements Component {
     const identity = this.getIdentity();
     return renderSlateHeader({
       width: this.columnWidth(width), path: ctx.cwd, identity,
-      theme: ctx.ui.theme ?? this.theme,
+      theme: ctx.ui.theme ?? this.theme, logoStyle: this.getLogoStyle(),
       ...(notice ? { notice } : {}),
     });
   }

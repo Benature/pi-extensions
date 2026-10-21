@@ -10,12 +10,12 @@ import { ToolExecutionComponent } from "../node_modules/@earendil-works/pi-codin
 import { theme } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { ToolGroups } from "../extensions/pi-slate/tool-groups.ts";
 
-test("opt-in loads locally and host preserves expansion, padding, mouse and restored results", async (t) => {
+test("default style loads locally and host preserves expansion, padding, mouse and restored results", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "slate-tool-host-"));
   const previous = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = dir;
   t.after(async () => { if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous; await rm(dir, { recursive: true, force: true }); });
-  await writeFile(join(dir, "pi-slate.json"), JSON.stringify({ version: 1, surfaces: ["tool-cards"], toolStyle: "claudecode" }));
+  await writeFile(join(dir, "pi-slate.json"), JSON.stringify({ version: 1, surfaces: ["tool-cards"] }));
   const entry = new URL("../extensions/pi-slate/index.ts", import.meta.url).pathname;
   const loaded = await discoverAndLoadExtensions([entry], dir, dir);
   assert.deepEqual(loaded.errors, []);

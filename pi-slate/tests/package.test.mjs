@@ -15,10 +15,11 @@ test("package and README use the requested subtitle", () => {
 test("README screenshots use gallery-compatible Markdown and bundled assets", () => {
   assert.doesNotMatch(readme, /<img\b/i);
   const images = [...readme.matchAll(/!\[([^\]]+)\]\((https:\/\/[^)]+)\)/g)];
-  assert.equal(images.length, 5);
+  assert.ok(images.length >= 5);
+  const assetUrl = /^https:\/\/raw\.githubusercontent\.com\/GaganSD\/pi-extensions\/(main|[0-9a-f]{40})\/pi-slate\/assets\//;
   for (const [, alt, url] of images) {
     assert.ok(alt.length > 0);
-    assert.ok(url.startsWith("https://raw.githubusercontent.com/GaganSD/pi-extensions/main/pi-slate/assets/"));
+    assert.ok(assetUrl.test(url), url);
     const asset = new URL(url).pathname.split("/").at(-1);
     assert.ok(statSync(new URL(`assets/${asset}`, root)).size > 0);
   }

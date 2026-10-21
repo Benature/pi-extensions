@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- The Claude Code-style tool transcript is now the default for the `tool-cards` surface. Set `"toolStyle": "default"` in `pi-slate.json` and `/reload` to restore Slate's original cards.
+
 ### Fixed
 
 - Stopped Slate from crashing Pi after `/new`, fork, session switch, or `/reload`: render loops, timers, and deferred callbacks now treat a stale session context as absent and fall back to the last live theme instead of throwing mid-paint.
+- Cancel pending prompt-picker UI and bug-report feedback when their owning session shuts down, including shortcut contexts without stale-accessor guards.
 
 ## 0.1.16
 

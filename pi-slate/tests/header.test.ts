@@ -3,7 +3,8 @@ import test from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { piLogoLines, piWordmark, renderSlateHeader, supportsPiLogo } from "../extensions/pi-slate/header.ts";
+import { piLogoLines, piMinimalLogoLines, piWordmark, renderSlateHeader, supportsPiLogo } from "../extensions/pi-slate/header.ts";
+import { parseSlateArgs } from "../extensions/pi-slate/layout.ts";
 
 const theme = { fg: (_name: string, text: string) => text, bold: (text: string) => text } as unknown as Theme;
 
@@ -11,7 +12,7 @@ test("header uses the stock Pi mark and the product stack, not a greeting", () =
   const lines = renderSlateHeader({
     width: 72, path: "/Users/operator/GitHub/pi-extensions",
     identity: { version: "1.0.4", model: "grok-4.6 (bedrock)", thinking: "medium" },
-    logo: true, theme,
+    logo: true, logoStyle: "original", theme,
   });
   const plain = lines.map(stripVTControlCharacters);
   assert.equal(plain.length, 3);
@@ -53,6 +54,45 @@ test("identity truncates safely and strips untrusted terminal controls", () => {
     });
     assert(lines.every(line => visibleWidth(line) <= width && !line.includes("\n") && !line.includes("\x1b[2J")));
   }
+});
+
+test("minimal logo renders the classic white Pi mark beside the product stack", () => {
+  const lines = renderSlateHeader({
+    width: 72, path: "/Users/operator/GitHub/pi-extensions",
+    identity: { version: "1.0.4", model: "grok-4.6 (bedrock)", thinking: "medium" },
+    logo: true, logoStyle: "minimal", theme,
+  });
+  const plain = lines.map(stripVTControlCharacters);
+  assert.equal(plain.length, 4);
+  assert.match(plain[0]!, /^██████\s+Pi Agent v1\.0\.4/);
+  assert.match(plain[1]!, /^██ {2}██\s+grok-4\.6 \(bedrock\) · medium/);
+  assert.match(plain[2]!, /^████ {2}██ ~\/pi-extensions/);
+  assert.match(plain[3]!, /^██ {4}██/);
+  assert(lines.every(line => line.includes("\x1b[")), "mark stays painted white");
+  assert(plain.every(line => visibleWidth(line) <= 72));
+});
+
+test("minimal is the default logo style", () => {
+  const lines = renderSlateHeader({
+    width: 72, path: "/tmp/project", identity: { version: "1.0.4" }, logo: true, theme,
+  });
+  const plain = lines.map(stripVTControlCharacters);
+  assert.equal(plain.length, 4);
+  assert.match(plain[0]!, /^██████/);
+});
+
+test("logo style parses through /slate logo", () => {
+  assert.deepEqual(parseSlateArgs("logo"), { ok: true, kind: "logo" });
+  assert.deepEqual(parseSlateArgs("logo minimal"), { ok: true, kind: "logo", value: "minimal" });
+  assert.deepEqual(parseSlateArgs("logo original"), { ok: true, kind: "logo", value: "original" });
+  assert.deepEqual(parseSlateArgs("logo retro"), { ok: false });
+  assert.deepEqual(parseSlateArgs("logo minimal extra"), { ok: false });
+});
+
+test("minimal logo helpers match the classic bitmap", () => {
+  const lines = piMinimalLogoLines(theme);
+  assert.equal(lines.length, 4);
+  assert(lines.every(line => visibleWidth(line) === 8));
 });
 
 test("logo helpers keep the official bitmap and skip Apple Terminal", () => {

@@ -43,6 +43,8 @@ import { advanceWave, isProgressStyle, isWaveActive, PROGRESS_STYLES, setProgres
 import { formatLiveThinking, ThinkingFoldTracker } from "./thinking-fold.ts";
 import {
   countSkillCommands,
+  LOGO_STYLES,
+  type LogoStyle,
   formatFocusedContextResources,
   formatFocusedContextTokens,
   formatPercent,
@@ -102,6 +104,7 @@ type SlateConfig = SurfaceConfig & {
   messageLength?: number | "all";
   modelDisplay?: ModelDisplay;
   showPid?: boolean;
+  logo?: LogoStyle;
   progress?: ProgressStyle;
   toolStyle?: "default" | "claudecode";
   sidebarSections: SidebarFolds;
@@ -155,7 +158,8 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
-      ...(value.toolStyle === "claudecode" ? { toolStyle: "claudecode" as const } : {}),
+      ...(value.logo === "minimal" || value.logo === "original" ? { logo: value.logo } : {}),
+      ...(value.toolStyle === "default" ? { toolStyle: "default" as const } : {}),
       ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
       sidebarSections: parseSidebarFolds(value.sidebarSections),
     },
@@ -204,7 +208,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   // Runtime ownership is fixed until /reload, even when a command saves a new set.
   const selected = [...config.surfaces];
   const owns = (surface: typeof selected[number]): boolean => has(selected, surface);
-  const requestedClaudeTools = owns("tool-cards") && config.toolStyle === "claudecode";
+  const requestedClaudeTools = owns("tool-cards") && config.toolStyle !== "default";
   const claudeTools = requestedClaudeTools && typeof pi.registerToolRenderer === "function";
   if (owns("tool-cards")) {
     installDiff(pi);
@@ -534,7 +538,7 @@ export default function piSlate(pi: ExtensionAPI): void {
             model: ctx ? modelStatusLabel(ctx.model, config.modelDisplay) : "",
             thinking: ctx?.thinkingLevel ?? "",
           };
-        });
+        }, () => config.logo ?? "minimal");
       });
     }
     if (owns("footer")) ctx.ui.setFooter(() => new SlateFooter());
@@ -819,6 +823,15 @@ export default function piSlate(pi: ExtensionAPI): void {
     return PROGRESS_STYLES.find((s) => PROGRESS_LABELS[s] === key);
   };
 
+  const pickLogo = async (ctx: ExtensionContext): Promise<LogoStyle | undefined> => {
+    const value = await ctx.ui.select("Header logo", LOGO_STYLES.map((style) =>
+      withCurrent(style === "minimal" ? "Minimal (classic white Pi)" : "Original", (config.logo ?? "minimal") === style)));
+    const key = value ? withoutCurrent(value) : undefined;
+    if (key === "Original") return "original";
+    if (key === "Minimal (classic white Pi)") return "minimal";
+    return undefined;
+  };
+
   const pickDensity = async (ctx: ExtensionContext): Promise<SlateConfig["density"] | undefined> => {
     const value = await ctx.ui.select("Density", [
       withCurrent("Comfortable", config.density === "comfortable"),
@@ -970,9 +983,9 @@ export default function piSlate(pi: ExtensionAPI): void {
     return result.code === 0;
   };
 
-  const fileBug = async (ctx: ExtensionContext): Promise<void> => {
+  const fileBug = async (ctx: ExtensionContext, active: () => boolean): Promise<void> => {
     const title = (await ctx.ui.input("Issue title", "Short summary"))?.trim();
-    if (!title) return;
+    if (!active() || !title) return;
     const body = await ctx.ui.editor(
       "Issue details",
       issueTemplate({
@@ -981,29 +994,35 @@ export default function piSlate(pi: ExtensionAPI): void {
         platform: `${process.platform} ${process.arch}`,
       }),
     );
-    if (body === undefined) return;
+    if (!active() || body === undefined) return;
     try {
       await copyToClipboard(formatBugReport(title, body));
-      ctx.ui.notify("Bug report copied to clipboard", "info");
+      if (active()) ctx.ui.notify("Bug report copied to clipboard", "info");
     } catch {
-      ctx.ui.notify("Could not copy bug report", "error");
+      if (active()) ctx.ui.notify("Could not copy bug report", "error");
     }
   };
 
   const handleBug = async (ctx: ExtensionContext, action?: "file" | "open"): Promise<void> => {
+    const owner = sessionEpoch;
+    const active = (): boolean => {
+      if (owner !== sessionEpoch) return false;
+      try { void ctx.mode; return true; } catch { return false; }
+    };
     let next = action;
     if (!next) {
       const choice = await ctx.ui.select("Slate bug", ["Copy a bug report", "Open package page"]);
+      if (!active()) return;
       if (choice === "Copy a bug report") next = "file";
       else if (choice === "Open package page") next = "open";
       else return;
     }
     if (next === "open") {
       const opened = await openUrl(SLATE_ISSUES_URL);
-      ctx.ui.notify(opened ? "Opened pi-slate on npm" : `Open ${SLATE_ISSUES_URL}`, opened ? "info" : "error");
+      if (active()) ctx.ui.notify(opened ? "Opened pi-slate on npm" : `Open ${SLATE_ISSUES_URL}`, opened ? "info" : "error");
       return;
     }
-    await fileBug(ctx);
+    await fileBug(ctx, active);
   };
 
   const applyFocused = (ctx: ExtensionContext, value?: boolean): void => {
@@ -1087,7 +1106,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   };
 
   pi.registerCommand("slate", {
-    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, progress indicator, message length, theme, or file a bug",
+    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, header logo, progress indicator, message length, theme, or file a bug",
     getArgumentCompletions: slateArgumentCompletions,
     handler: async (args, ctx) => {
       const parsed = parseSlateArgs(args);
@@ -1098,7 +1117,7 @@ export default function piSlate(pi: ExtensionAPI): void {
 
       let kind = parsed.kind;
       if (kind === "menu") {
-        const setting = await ctx.ui.select("Slate", ["Session dashboard", "Surfaces", "Density", "Composer metadata", "Sidebar width", "Focused", "PID display", "Progress indicator", "Message length", "Theme", "File a bug"]);
+        const setting = await ctx.ui.select("Slate", ["Session dashboard", "Surfaces", "Density", "Composer metadata", "Sidebar width", "Focused", "PID display", "Header logo", "Progress indicator", "Message length", "Theme", "File a bug"]);
         if (setting === "Session dashboard") { await sessionMenu(ctx); return; }
         if (setting === "Surfaces") {
           const names = await ctx.ui.input("Surfaces (names separated by spaces, full, or none; reload required)", formatSurfaces(config.surfaces));
@@ -1113,6 +1132,7 @@ export default function piSlate(pi: ExtensionAPI): void {
         else if (setting === "Sidebar width") kind = "width-menu";
         else if (setting === "Focused") kind = "focused";
         else if (setting === "PID display") kind = "pid";
+        else if (setting === "Header logo") kind = "logo";
         else if (setting === "Progress indicator") kind = "progress";
         else if (setting === "Message length") kind = "message-length-menu";
         else if (setting === "Theme") kind = "theme-menu";
@@ -1160,6 +1180,13 @@ export default function piSlate(pi: ExtensionAPI): void {
       if (kind === "pid") {
         const on = parsed.kind === "pid" && parsed.value !== undefined ? parsed.value : !config.showPid;
         apply({ ...config, showPid: on }, on ? "PID display on" : "PID display off", ctx);
+        return;
+      }
+
+      if (kind === "logo") {
+        const logo = (parsed.kind === "logo" ? parsed.value : undefined) ?? await pickLogo(ctx);
+        if (!logo) return;
+        apply({ ...config, logo }, logo === "minimal" ? "Header logo set to minimal (classic white Pi)" : "Header logo set to original", ctx);
         return;
       }
 
