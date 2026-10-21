@@ -41,7 +41,7 @@ export class ToolGroups {
   private readonly mouseWrapper: Container["handleMouse"];
   private owners: Array<RowOwner | undefined> = [];
   readonly container: Container;
-  constructor(container: Container, theme: () => Theme, hint = () => keyHint("app.tools.expand", "to expand")) {
+  constructor(container: Container, theme: () => Theme | undefined, hint = () => keyHint("app.tools.expand", "to expand")) {
     this.container = container;
     this.originalRender = container.render;
     this.originalMouse = container.handleMouse;
@@ -77,7 +77,10 @@ export class ToolGroups {
         if (thoughtCount) parts.push(`${thoughtCount} thought${thoughtCount === 1 ? "" : "s"}`);
         if (failed) parts.push(`${failed} failed`);
         const mark = running ? "◌" : failed ? "✗" : "✓";
-        lines.push("", truncateToWidth(`${paint.fg(failed ? "error" : running ? "accent" : "success", mark)} ${paint.bold(running ? "Running" : "Done")} ${paint.fg("muted", `(${parts.join(" · ")})`)} ${hint()}`, width));
+        const summary = paint
+          ? `${paint.fg(failed ? "error" : running ? "accent" : "success", mark)} ${paint.bold(running ? "Running" : "Done")} ${paint.fg("muted", `(${parts.join(" · ")})`)} ${hint()}`
+          : `${mark} ${running ? "Running" : "Done"} (${parts.join(" · ")}) ${hint()}`;
+        lines.push("", truncateToWidth(summary, width));
         owners.push(undefined, undefined);
         for (let index = 0; index < tools.length; index++) {
           const member = tools[index]!;
@@ -90,7 +93,7 @@ export class ToolGroups {
             if (!row.trim()) continue;
             const guide = first ? last ? "└─ " : "├─ " : last ? "   " : "│  ";
             first = false;
-            lines.push(truncateToWidth(paint.fg("dim", guide) + row, width));
+            lines.push(truncateToWidth((paint ? paint.fg("dim", guide) : guide) + row, width));
             owners.push({ component: member, y, height: rows.length, inset: 3 });
           }
         }

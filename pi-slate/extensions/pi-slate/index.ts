@@ -9,6 +9,7 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   type KeybindingsManager,
+  type Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
@@ -232,21 +233,39 @@ export default function piSlate(pi: ExtensionAPI): void {
   let sidebarYielded = false;
   let sessionEpoch = 0;
   let currentContext: ExtensionContext | undefined;
+  let cachedTheme: Theme | undefined;
+  // Every ctx accessor throws once the host replaces or reloads the session. Render
+  // loops, timers, and microtasks outlive that handoff, so probe before use and treat
+  // a stale ctx as absent rather than crashing the host on a captured reference.
+  const liveContext = (): ExtensionContext | undefined => {
+    const ctx = currentContext;
+    if (!ctx) return undefined;
+    try { void ctx.mode; } catch { return undefined; }
+    return ctx;
+  };
+  const liveTheme = (): Theme | undefined => {
+    const ctx = liveContext();
+    if (ctx) { try { cachedTheme = ctx.ui.theme ?? cachedTheme; } catch { /* Keep the last live theme. */ } }
+    return cachedTheme;
+  };
   let activeEditor: ComposerEditor | undefined;
   let gitBranch: string | null = null;
   let activeTui: TUI | undefined;
   let editorFactory: Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0];
-  const editorActive = (): boolean => owns("editor") && currentContext?.mode === "tui"
-    && (typeof currentContext.ui.getEditorComponent !== "function" || currentContext.ui.getEditorComponent() === editorFactory);
+  const editorActive = (): boolean => {
+    const ctx = liveContext();
+    return owns("editor") && ctx !== undefined && ctx.mode === "tui"
+      && (typeof ctx.ui.getEditorComponent !== "function" || ctx.ui.getEditorComponent() === editorFactory);
+  };
   let conversations: ReturnType<typeof installConversationBridge> | undefined;
   let messageWindow: MessageWindow | undefined;
   let toolGroups: ToolGroups | undefined;
   const syncToolGroups = (): void => {
-    if (!claudeTools || currentContext?.mode !== "tui") return;
+    if (!claudeTools || liveContext()?.mode !== "tui") return;
     const chat = findChatContainer(layoutRootOf(activeTui));
     if (!chat || toolGroups?.container === chat) return;
     toolGroups?.dispose();
-    toolGroups = new ToolGroups(chat, () => currentContext!.ui.theme);
+    toolGroups = new ToolGroups(chat, liveTheme);
   };
   const tokenRate = new TokenRateTracker();
   const thinkingFold = new ThinkingFoldTracker({ onChange: () => syncThinkingStatus() });
@@ -261,7 +280,7 @@ export default function piSlate(pi: ExtensionAPI): void {
 
   const syncVisibleMessages = (): void => {
     syncToolGroups();
-    if (!owns("transcript") || currentContext?.mode !== "tui") return;
+    if (!owns("transcript") || liveContext()?.mode !== "tui") return;
     messageWindow = syncMessageWindow(messageWindow, activeTui, resolveMessageLength(config.messageLength));
   };
 
@@ -331,7 +350,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   };
   if (owns("sidebar")) {
     pi.on("resources_discover", () => {
-      if (currentContext?.mode === "tui") queueMicrotask(() => { if (currentContext?.mode === "tui") refreshResources(currentContext); });
+      if (liveContext()?.mode === "tui") queueMicrotask(() => { const ctx = liveContext(); if (ctx && ctx.mode === "tui") refreshResources(ctx); });
     });
   }
 
@@ -347,7 +366,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     currentContext = ctx;
     conversations?.dispose();
     conversations = ctx.mode === "tui" && owns("editor") ? installConversationBridge(pi, {
-      context: () => currentContext,
+      context: liveContext,
       editor: () => editorActive() ? activeEditor : undefined,
       tui: () => activeTui,
       canMount: () => owns("sidebar") && sidebar.splitActive && typeof (activeTui as TUI & { getFocusedComponent?: unknown })?.getFocusedComponent === "function",
@@ -377,7 +396,8 @@ export default function piSlate(pi: ExtensionAPI): void {
       skills.restore(ctx.sessionManager.getBranch(), ctx.cwd);
       refreshResources(ctx);
       tokenRate.setOnChange(() => {
-        if (currentContext) syncSidebar(currentContext);
+        const ctx = liveContext();
+        if (ctx) syncSidebar(ctx);
         if (thinkingFold.elapsedMs() !== null) syncThinkingStatus();
       });
       syncSidebar(ctx);
@@ -387,7 +407,7 @@ export default function piSlate(pi: ExtensionAPI): void {
       stopDashboard();
       background.reset(ctx.sessionManager.getSessionId?.() ?? "");
       sidebar.reset();
-      sidebar.setThemeProvider(() => currentContext?.ui.theme);
+      sidebar.setThemeProvider(liveTheme);
       sidebar.setFolds(config.sidebarSections);
       sidebar.setResources(resources);
       sidebar.setPreferredWidth(config.sidebarPercent);
@@ -414,7 +434,9 @@ export default function piSlate(pi: ExtensionAPI): void {
         inspect: (title, text) => inspect(ctx, title, text),
         commands: () => {
           if (mountedEpoch !== sessionEpoch) return;
-          void sessionMenu(currentContext ?? ctx, "commands").catch(() => { ctx.ui.notify("Command catalog unavailable", "warning"); });
+          const target = liveContext();
+          if (!target) return;
+          void sessionMenu(target, "commands").catch(() => { try { target.ui.notify("Command catalog unavailable", "warning"); } catch { /* Session UI may be gone. */ } });
         },
         persistWidth: (percent) => {
           try {
@@ -454,9 +476,10 @@ export default function piSlate(pi: ExtensionAPI): void {
           if (sidebar.splitActive && !dashboardClock) {
             let ticks = 0;
             dashboardClock = setInterval(() => {
-              if (currentContext?.mode !== "tui" || !sidebar.splitActive) return;
+              const ctx = liveContext();
+              if (!ctx || ctx.mode !== "tui" || !sidebar.splitActive) return;
               sidebar.tick();
-              if (++ticks % 5 === 0) { refreshResources(currentContext); syncSidebar(currentContext); }
+              if (++ticks % 5 === 0) { refreshResources(ctx); syncSidebar(ctx); }
             }, 1000);
             dashboardClock.unref?.();
           }
@@ -485,11 +508,14 @@ export default function piSlate(pi: ExtensionAPI): void {
         };
         attachFilter(findChatContainer(layoutRootOf(tui)));
         if (!noticeFilterActive) queueMicrotask(() => attachFilter(findChatContainer(layoutRootOf(tui))));
-        return new SlateHeader(theme, () => currentContext, columnWidth, () => updates.notice, () => ({
-          version: VERSION,
-          model: currentContext ? modelStatusLabel(currentContext.model, config.modelDisplay) : "",
-          thinking: currentContext?.thinkingLevel ?? "",
-        }));
+        return new SlateHeader(theme, liveContext, columnWidth, () => updates.notice, () => {
+          const ctx = liveContext();
+          return {
+            version: VERSION,
+            model: ctx ? modelStatusLabel(ctx.model, config.modelDisplay) : "",
+            thinking: ctx?.thinkingLevel ?? "",
+          };
+        });
       });
     }
     if (owns("footer")) ctx.ui.setFooter(() => new SlateFooter());
@@ -521,7 +547,8 @@ export default function piSlate(pi: ExtensionAPI): void {
           minimalEditorTheme,
           keybindings,
           () => {
-            if (currentContext) cachedMetadata = metadata(currentContext);
+            const ctx = liveContext();
+            if (ctx) cachedMetadata = metadata(ctx);
             return cachedMetadata;
           },
           {
@@ -573,7 +600,7 @@ export default function piSlate(pi: ExtensionAPI): void {
       requestRender();
     } catch { setWaveActive(false); return; }
     const timer = setInterval(() => {
-      const current = currentContext;
+      const current = liveContext();
       if (!waveHost(current)) { stopWave(); return; }
       try { advanceWave(); requestRender(); } catch { stopWave(); }
     }, 120);
@@ -581,7 +608,7 @@ export default function piSlate(pi: ExtensionAPI): void {
     waveTimer = timer;
   };
   const syncThinkingStatus = (): void => {
-    const ctx = currentContext;
+    const ctx = liveContext();
     if (!editorActive() || !ctx || !workingWord || typeof ctx.ui.setWorkingMessage !== "function") return;
     const elapsed = thinkingFold.elapsedMs();
     const rate = tokenRate.rate();
@@ -621,7 +648,7 @@ export default function piSlate(pi: ExtensionAPI): void {
       turnStartedAt = undefined;
       if (ctx.mode === "tui") {
         const chat = findChatContainer(layoutRootOf(activeTui));
-        chat?.addChild(new TurnCompletion(lastTurnMs, finishedAt, () => currentContext?.ui.theme ?? ctx.ui.theme));
+        chat?.addChild(new TurnCompletion(lastTurnMs, finishedAt, liveTheme));
         syncVisibleMessages();
         requestRender();
       }
@@ -970,7 +997,10 @@ export default function piSlate(pi: ExtensionAPI): void {
       ctx.ui.notify("Select the Slate sidebar surface and /reload to use the session dashboard", "info"); return;
     }
     const owner = ctx.sessionManager.getSessionId(), epoch = sessionEpoch;
-    const active = (): boolean => epoch === sessionEpoch && currentContext?.mode === "tui" && currentContext.sessionManager.getSessionId() === owner;
+    const active = (): boolean => {
+      const ctx = liveContext();
+      return epoch === sessionEpoch && ctx !== undefined && ctx.mode === "tui" && ctx.sessionManager.getSessionId() === owner;
+    };
     refreshResources(ctx); syncSidebar(ctx);
     if (!section) {
       const choice = await pickSidebarItem(ctx, "Session dashboard", ["Session details", "MCP servers", "Skills", "Prompts", "Commands", "Background tasks", "Image"]);
