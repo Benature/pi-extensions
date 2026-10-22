@@ -138,6 +138,9 @@ test("Always Allow cancellation, no suitable pattern, and stale confirmation nev
     proposal: { ...receipt(), output: { permission_pattern: { type: "choice", choice: "none", confidence: 0.999, probabilities: { none: 0.999, candidate_0: 0.001 } } } } });
   await assert.rejects(unsuitable.call(), /no sufficiently confident suitable/);
   assert.equal(unsuitable.settings.current.allowlist.length, 0);
+  const proposalEntries = await unsuitable.logs.read(unsuitable.settings.current);
+  assert.equal(proposalEntries.at(-1)?.source, "approval-always-refused");
+  assert.ok((proposalEntries.find((entry) => entry.source === "approval-always-proposal")?.decisionModel as ReviewReceipt | undefined)?.output);
   let invalidate = () => {};
   using stale = await harness({ result: receipt("unsafe"), answers: ["Always Allow", "Save and allow"],
     onSelect: (title) => { if (title.startsWith("Save reusable")) invalidate(); } });

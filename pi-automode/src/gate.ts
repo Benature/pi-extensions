@@ -503,7 +503,7 @@ export class Gate {
 
 		// Frozen cwd scope: the session cwd captured at entry must stay inside
 		// the verified workspace. A rebound session root outside it is a NEW
-		// scope — block BEFORE evidence/shadow upload rather than acting under
+		// scope — block BEFORE evidence/model upload rather than acting under
 		// the old workspace consent; a fresh verified scope is required, never
 		// an automatic rebind. (An action PATH outside the workspace with a
 		// valid session cwd is a separate, still-reviewable local Ask case —
@@ -665,7 +665,12 @@ export class Gate {
 				throw new AutomodeBlockError(`approval_required: ${outcome.reason}`);
 			}
 			case "always-allow":
-				return this.#saveReusablePermission(outcome.token, call, rec, scope, effectiveAction, settings);
+				try {
+					return await this.#saveReusablePermission(outcome.token, call, rec, scope, effectiveAction, settings);
+				} catch (error) {
+					await log("block", "approval-always-refused", error instanceof Error ? error.message : String(error));
+					throw error;
+				}
 			case "allow-once":
 				break;
 		}
@@ -689,6 +694,8 @@ export class Gate {
 		const candidates = patternCandidates(evidence);
 		const proposal = await this.#review(evidence, settingsAtDecision, call, scope, "pattern");
 		this.#assertPendingLive(scope, "pattern proposal");
+		await this.#logBestEffort(call, rec, "ask", "approval-always-proposal", "reusable permission proposal received", undefined, proposal);
+		this.#assertPendingLive(scope, "pattern proposal logging");
 		const validated = validateAnswers(patternQuestions(candidates), proposal?.output);
 		const answer = validated.ok ? validated.answers.permission_pattern : undefined;
 		const candidate = candidates.find((entry) => entry.id === answer?.choice);
@@ -1000,12 +1007,8 @@ export class Gate {
 	}
 }
 
-/**
- * Write the reviewed bytes back into the host's mutable tool-call input at
- * the final boundary. The object identity is preserved; validation carried
- * unknown keys through, so the key set is unchanged and only values are
- * replaced with the reviewed copies.
- */
+/** Independently validate eligibility, identity, consent, answer shape,
+ * probability and confidence before treating a model receipt as permission. */
 function authorizesReview(receipt: ReviewReceipt | undefined, evidence: ActionEvidence, settings: AutomodeSettings): boolean {
 	if (receipt?.status !== "completed" || !settings.decisionModel || !buildReviewInput(evidence).ok) return false;
 	const identity = receipt.decisionModel;
@@ -1020,6 +1023,7 @@ function authorizesReview(receipt: ReviewReceipt | undefined, evidence: ActionEv
 		&& answer.confidence >= settings.reviewConfidenceThreshold;
 }
 
+/** Write reviewed bytes back at the final boundary, preserving host object identity. */
 function applyReviewedArgs(input: Record<string, unknown>, reviewed: Record<string, unknown>): void {
 	for (const key of Object.keys(input)) {
 		if (!Object.hasOwn(reviewed, key)) delete input[key];
