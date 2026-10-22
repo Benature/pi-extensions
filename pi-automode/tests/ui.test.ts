@@ -334,11 +334,12 @@ test("picker header discloses the bounded metadata and never asks for consent", 
 	]);
 	await createCommandHandler(h.deps)("", ctx);
 	const title = ctx.calls[1]?.title ?? "";
-	assert.equal(title.split("\n")[0], "Decision Models — shadow review");
+	assert.equal(title.split("\n")[0], "Decision Models — active safety review");
 	assert.equal(title.split("\n").length, 4, "compact disclosure plus each model's destination");
-	assert.match(title, /bounded metadata/);
-	assert.match(title, /never argument values or file bodies/);
-	assert.match(title, /never approve actions/);
+	assert.match(title, /tool\/path metadata/);
+	assert.match(title, /exact bounded bash commands/);
+	assert.match(title, /Safe judgments above the configured thresholds/);
+	assert.match(title, /Hard blocks remain final/);
 });
 
 test("picker shows unavailable decision models with login required and pins the current selection first", async () => {
@@ -439,11 +440,12 @@ test("picking a decision model saves it with consent and all four bindings, no c
 	const updated = h.settings.current;
 	assert.deepEqual(updated.decisionModel, { provider: "typesafe", model: "jev-1.13.2" });
 	assert.equal(updated.disclosureConsent, "approved", "selecting the model is the consent");
+	assert.equal(updated.disclosureVersion, 1);
 	assert.equal(updated.disclosureProvider, "typesafe");
 	assert.equal(updated.disclosureModel, "jev-1.13.2");
 	assert.equal(updated.disclosureEndpoint, "https://api.typesafe.ai/v1");
 	assert.equal(updated.disclosureWorkspace, "/work");
-	assert.equal(ctx.notifications.at(-1)?.message, "Shadow review: typesafe/jev-1.13.2.");
+	assert.equal(ctx.notifications.at(-1)?.message, "Active safety review: typesafe/jev-1.13.2.");
 	assert.ok(ctx.calls.every((call) => !/consent/i.test(call.title)), "no separate consent dialog");
 });
 

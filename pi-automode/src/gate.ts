@@ -2,6 +2,11 @@ import path from "node:path";
 
 import type { Action, ActionEvidence, AutomodeSettings, Decision, DecisionLog } from "./types.js";
 import type { ReviewReceipt } from "./reviewer.js";
+import { patternCandidates, patternQuestions } from "./decision-model/patterns.js";
+import { matchCommandRule } from "./core/rules.js";
+import { buildQuestions } from "./decision-model/questions.js";
+import { buildReviewInput } from "./decision-model/envelope.js";
+import { validateAnswers } from "./decision-model/validate.js";
 import { isWithinOrEqual, realpathNearest } from "./core/paths.js";
 import { renderInspectDetail, type ApprovalContext, type ApprovalManager, type ApprovalOutcome, type ApprovalToken } from "./approval.js";
 import type { EpochController } from "./runtime/epoch.js";
@@ -9,7 +14,7 @@ import { AsyncMutex } from "./runtime/mutex.js";
 import { freezeCopy, validateToolArgs, isSupportedTool } from "./runtime/freeze.js";
 import { effectiveToolArgs } from "./runtime/pi-paths.js";
 import { ambientShellCustomizations, type HostShellOptions } from "./runtime/host.js";
-import { checkDisclosureConsent } from "./core/disclosure.js";
+import { checkDisclosureConsent, DISCLOSURE_VERSION } from "./core/disclosure.js";
 import type { EvidenceContext } from "./evidence.js";
 import { escapeOneLine } from "./runtime/escape.js";
 
@@ -35,7 +40,7 @@ import { escapeOneLine } from "./runtime/escape.js";
  * - Async boundaries: lifecycle epoch, settings epoch and a linked
  *   epoch+turn+deadline signal are captured at executeGuarded ENTRY, before
  *   the mutex. The approval deadline covers the entry/mutex queue, evidence,
- *   shadow review and the approval dialog — and is cancelled before execution
+ *   model review and the approval dialog — and is cancelled before execution
  *   starts, so an approved long-running bash is never killed by the TTL.
  *   After every long await (and particularly the FINAL allow-log await) the
  *   state/epoch/settings-epoch/signal are re-checked, disk settings are
@@ -46,9 +51,8 @@ import { escapeOneLine } from "./runtime/escape.js";
  *   old queued call: invalidation aborts its entry signal.
  * - Ask: one-shot local TUI approval bound to the exact evidence fingerprint;
  *   consumed atomically once. Decline replays never re-ask automatically.
- * - Shadow reviewer receipts are recorded in the decision log and never
- *   relax policy; unexpected reviewer failures surface as visible error
- *   receipts/warnings, never as silence and never as an allow.
+ * - Validated, consented safe judgments can settle eligible Asks above the
+ *   configured thresholds. Unexpected failures remain local. Blocks are final.
  * - A decision-log failure on an allow path blocks execution: logging errors
  *   must not silently become permission.
  */
@@ -72,6 +76,7 @@ export interface GateSettingsStore {
 	readonly epoch: number;
 	readonly error: string | null;
 	reload(): Promise<boolean>;
+	update?(next: AutomodeSettings): Promise<void>;
 }
 
 export interface GateLogStore {
@@ -79,6 +84,7 @@ export interface GateLogStore {
 }
 
 export interface GateReviewer {
+	propose?(evidence: ActionEvidence, settings: AutomodeSettings, registry: unknown, signal?: AbortSignal): Promise<ReviewReceipt>;
 	review(
 		evidence: ActionEvidence,
 		settings: AutomodeSettings,
@@ -590,10 +596,17 @@ export class Gate {
 			return this.#finalizeExecution(call, rec, scope, effectiveAction, decision, current, undefined, undefined);
 		}
 
-		// Ask path. Shadow reviewer runs only with a bound, valid disclosure
-		// consent; its receipt is recorded and NEVER relaxes the outcome.
-		const receipt = await this.#shadowReview(evidence, current, call, scope);
-		this.#assertPendingLive(scope, "shadow review");
+		// A previous explicit decline takes priority over automatic model permission.
+		if (this.#deps.approval.isSuppressed(evidence.fingerprint)) {
+			const reason = "identical action was declined; retry stays blocked without a new dialog";
+			await this.#logBestEffort(call, rec, "block", "decline-replay", reason);
+			throw new AutomodeBlockError(reason);
+		}
+		const receipt = await this.#review(evidence, current, call, scope);
+		this.#assertPendingLive(scope, "safety review");
+		if (authorizesReview(receipt, evidence, current)) {
+			return this.#finalizeExecution(call, rec, scope, effectiveAction, decision, current, receipt, undefined, true);
+		}
 
 		// Record the ask itself before any operator interaction; the resolution
 		// is logged separately so the log shows what asked AND what happened.
@@ -612,6 +625,8 @@ export class Gate {
 			detail: renderInspectDetail(evidence, decision),
 			evidence,
 			decision,
+			allowAlways: Boolean(current.disclosureVersion === DISCLOSURE_VERSION && current.disclosureConsent === "approved"
+				&& this.#deps.reviewer?.propose && this.#deps.settings.update && current.decisionModel && patternCandidates(evidence).length > 0),
 			signal: scope.signal,
 			...(call.turnSignal ? { turnSignal: call.turnSignal } : {}),
 		});
@@ -649,6 +664,8 @@ export class Gate {
 				await log("block", "approval-required", `${outcome.reason}; not executed`);
 				throw new AutomodeBlockError(`approval_required: ${outcome.reason}`);
 			}
+			case "always-allow":
+				return this.#saveReusablePermission(outcome.token, call, rec, scope, effectiveAction, settings);
 			case "allow-once":
 				break;
 		}
@@ -658,6 +675,68 @@ export class Gate {
 			throw new AutomodeBlockError("approval token mismatch");
 		}
 		return this.#finalizeExecution(call, rec, scope, effectiveAction, decision, settings, receipt, outcome.token);
+	}
+
+	async #saveReusablePermission<T>(
+		token: ApprovalToken, call: GateCall<T>, rec: CallRecord, scope: PendingScope,
+		action: Action, settingsAtDecision: AutomodeSettings,
+	): Promise<T> {
+		this.#assertPendingLive(scope, "reusable permission entry");
+		const evidence = rec.evidence!;
+		if (token.fingerprint !== evidence.fingerprint || token.epoch !== scope.epochSnap || token.settingsEpoch !== scope.settingsEpoch) {
+			throw new AutomodeBlockError("stale reusable permission token");
+		}
+		const candidates = patternCandidates(evidence);
+		const proposal = await this.#review(evidence, settingsAtDecision, call, scope, "pattern");
+		this.#assertPendingLive(scope, "pattern proposal");
+		const validated = validateAnswers(patternQuestions(candidates), proposal?.output);
+		const answer = validated.ok ? validated.answers.permission_pattern : undefined;
+		const candidate = candidates.find((entry) => entry.id === answer?.choice);
+		const identity = proposal?.decisionModel;
+		if (proposal?.status !== "completed" || !candidate || !answer || !identity
+			|| identity.provider !== settingsAtDecision.decisionModel?.provider || identity.model !== settingsAtDecision.decisionModel.model
+			|| identity.endpoint !== settingsAtDecision.disclosureEndpoint
+			|| (answer.probabilities[answer.choice] ?? 0) < settingsAtDecision.reviewSafeThreshold
+			|| answer.confidence < settingsAtDecision.reviewConfidenceThreshold) {
+			throw new AutomodeBlockError("no sufficiently confident suitable generalized pattern; nothing saved or executed");
+		}
+		const subject = call.tool === "bash" ? rec.effectiveArgs.command : evidence.canonicalPath;
+		if (typeof subject !== "string" || !matchCommandRule(candidate.rules, subject, call.tool)
+			|| !buildReviewInput(evidence, { purpose: "pattern" }).ok) {
+			throw new AutomodeBlockError("proposed permission does not cover the reviewed action; nothing saved");
+		}
+		if (call.ctx.mode !== "tui" || !call.ctx.hasUI) throw new AutomodeBlockError("reusable permission requires local TUI confirmation");
+		const text = candidate.rules.map((rule) => `${rule.tool ?? "bash"}/${rule.mode ?? "glob"}: ${escapeOneLine(rule.text, 5000)}`).join("\n");
+		const confirmed = await call.ctx.ui.select(`Save reusable allowlist permission?\n\n${text}\n\nThis scope applies to future matching calls. Protected targets and hard blocks remain final.`,
+			["Cancel", "Save and allow"], { signal: scope.signal });
+		this.#assertPendingLive(scope, "pattern confirmation");
+		if (confirmed !== "Save and allow") throw new AutomodeBlockError("reusable permission cancelled; nothing saved or executed");
+		const store = this.#deps.settings;
+		await store.reload();
+		this.#assertPendingLive(scope, "pattern settings check");
+		const fresh = await this.#deps.buildEvidence(action, this.#deps.dirs);
+		this.#assertPendingLive(scope, "pattern evidence check");
+		if (fresh.fingerprint !== evidence.fingerprint || this.#deps.evaluatePolicy(fresh, store.current).outcome === "block") {
+			throw new AutomodeBlockError("action changed before permission save; nothing saved");
+		}
+		// An authority-changing save needs a durable audit record too.
+		await this.#appendLog(call, rec, "ask", "approval-always-rule", `operator confirmed reusable scope: ${text}`, store.current, undefined, proposal);
+		this.#assertPendingLive(scope, "pattern audit");
+		if (!store.update) throw new AutomodeBlockError("settings persistence unavailable; nothing saved");
+		const previousEpoch = store.epoch;
+		const rules = candidate.rules.filter((rule) => !store.current.allowlist.some((existing) => JSON.stringify(existing) === JSON.stringify(rule)));
+		await store.update({ ...store.current, allowlist: [...store.current.allowlist, ...rules] });
+		// Only this explicitly confirmed mutation may rebase this call. Other
+		// queued calls retain their old settings epoch and fail closed.
+		if (scope.signal.aborted || !this.#deps.epochs.check(scope.epochSnap) || store.epoch !== previousEpoch + 1) {
+			throw new AutomodeBlockError("session or policy changed during permission save; action not executed");
+		}
+		scope.settingsEpoch = store.epoch;
+		this.#assertPendingLive(scope, "saved permission");
+		const decision = this.#deps.evaluatePolicy(fresh, store.current);
+		if (decision.outcome !== "allow") throw new AutomodeBlockError("saved scope does not authorize this action; not executed");
+		const reboundToken = { ...token, settingsEpoch: store.epoch };
+		return this.#finalizeExecution(call, rec, scope, action, decision, store.current, proposal, reboundToken, false, "approval-always");
 	}
 
 	/**
@@ -680,6 +759,8 @@ export class Gate {
 		settingsAtDecision: AutomodeSettings,
 		receipt: ReviewReceipt | undefined,
 		token: ApprovalToken | undefined,
+		modelApproved = false,
+		approvalSource = "approval-once",
 	): Promise<T> {
 		const { settings } = this.#deps;
 		const log = (kind: DecisionLog["outcome"], source: string, reason: string) =>
@@ -706,8 +787,8 @@ export class Gate {
 				call,
 				rec,
 				"allow",
-				token ? "approval-once" : decision.source,
-				token ? "operator approved once" : decision.reason,
+				token ? approvalSource : modelApproved ? receipt!.source : decision.source,
+				token ? (approvalSource === "approval-always" ? "operator confirmed reusable permission" : "operator approved once") : modelApproved ? "validated safe judgment meets probability and confidence thresholds" : decision.reason,
 				settingsAtDecision,
 				decision.matchedRule,
 				receipt,
@@ -775,6 +856,10 @@ export class Gate {
 			return blocked("invalidated", "policy outcome changed while the action was pending; not executed");
 		}
 
+		if (modelApproved && !authorizesReview(receipt, finalEvidence, settings.current)) {
+			return blocked("invalidated", "model permission is no longer valid; not executed");
+		}
+
 		// Consume the one-shot approval atomically, exactly once, bound to this
 		// request's fingerprint and live epochs.
 		if (token !== undefined && !this.#deps.approval.consume(token)) {
@@ -793,16 +878,17 @@ export class Gate {
 	}
 
 	/**
-	 * Shadow-only native review. Every outcome is a visible receipt recorded
+	 * Consented native review. Every outcome is a visible receipt recorded
 	 * in the decision log: expected skips say why they stayed local, and an
 	 * unexpected reviewer failure becomes an error receipt plus a warning —
-	 * never silence, and never an allow.
+	 * never silence or an implicit allow.
 	 */
-	async #shadowReview(
+	async #review(
 		evidence: ActionEvidence,
 		settings: AutomodeSettings,
 		call: GateCall<unknown>,
 		scope: PendingScope,
+		purpose: "safety" | "pattern" = "safety",
 	): Promise<ReviewReceipt | undefined> {
 		const reviewer = this.#deps.reviewer;
 		const decisionModel = settings.decisionModel;
@@ -826,10 +912,12 @@ export class Gate {
 		// would never run. Only the scope/lifecycle signal is passed.
 		const started = Date.now();
 		try {
-			// Shadow only: the receipt is logged as evidence, never consulted.
-			return await reviewer.review(evidence, settings, registry, scope.signal);
+			// The gate independently validates a completed safe answer before authority.
+			return purpose === "pattern"
+				? await reviewer.propose?.(evidence, settings, registry, scope.signal)
+				: await reviewer.review(evidence, settings, registry, scope.signal);
 		} catch (error) {
-			const reason = `shadow reviewer failed unexpectedly: ${escapeOneLine(error instanceof Error ? error.message : String(error), 200)}`;
+			const reason = `decision reviewer failed unexpectedly: ${escapeOneLine(error instanceof Error ? error.message : String(error), 200)}`;
 			call.ctx.ui.notify?.(`Automode: ${reason}`, "warning");
 			return { status: "error", source, reason, durationMs: Date.now() - started };
 		}
@@ -915,6 +1003,20 @@ export class Gate {
  * unknown keys through, so the key set is unchanged and only values are
  * replaced with the reviewed copies.
  */
+function authorizesReview(receipt: ReviewReceipt | undefined, evidence: ActionEvidence, settings: AutomodeSettings): boolean {
+	if (receipt?.status !== "completed" || !settings.decisionModel || !buildReviewInput(evidence).ok) return false;
+	const identity = receipt.decisionModel;
+	if (!identity || identity.provider !== settings.decisionModel.provider || identity.model !== settings.decisionModel.model
+		|| identity.endpoint !== settings.disclosureEndpoint) return false;
+	const consent = checkDisclosureConsent(settings, { endpoint: identity.endpoint, workspace: evidence.workspace });
+	if (!consent.consented) return false;
+	const validated = validateAnswers(buildQuestions(), receipt.output);
+	if (!validated.ok) return false;
+	const answer = validated.answers.safety;
+	return answer?.choice === "safe" && (answer.probabilities.safe ?? 0) >= settings.reviewSafeThreshold
+		&& answer.confidence >= settings.reviewConfidenceThreshold;
+}
+
 function applyReviewedArgs(input: Record<string, unknown>, reviewed: Record<string, unknown>): void {
 	for (const key of Object.keys(input)) {
 		if (!Object.hasOwn(reviewed, key)) delete input[key];

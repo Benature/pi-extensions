@@ -32,6 +32,7 @@ export type DisclosureConsent = "none" | "approved" | "declined";
 export interface ReviewerSettings {
 	decisionModel: { provider: string; model: string } | null;
 	disclosureConsent: DisclosureConsent;
+	disclosureVersion?: number | null;
 	/** Bound provider id; older/invalid files normalize to `null`. */
 	disclosureProvider?: string | null;
 	/** Bound model id; older/invalid files normalize to `null`. */
@@ -69,6 +70,7 @@ export interface ReviewerEvidence {
 	protectedReason?: string;
 	sensitive: boolean;
 	complete: boolean;
+	reviewableShell?: boolean;
 	fingerprint: string;
 	reason?: string;
 	/** FileSnapshot is owned by the core worker; treated as opaque metadata. */

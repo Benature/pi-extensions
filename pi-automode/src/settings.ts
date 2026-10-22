@@ -38,6 +38,9 @@ const KNOWN_KEYS = new Set([
   "enabled",
   "decisionModel",
   "disclosureConsent",
+  "disclosureVersion",
+  "reviewSafeThreshold",
+  "reviewConfidenceThreshold",
   "disclosureProvider",
   "disclosureModel",
   "disclosureEndpoint",
@@ -124,6 +127,12 @@ function validateNumber(
   return n;
 }
 
+function validateProbability(value: unknown, where: string, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0.5 || value > 1) fail(`${where}: expected a finite probability in [0.5, 1]`);
+  return value;
+}
+
 function validateRuleList(value: unknown, where: string): Rule[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) fail(`${where}: expected array`);
@@ -195,6 +204,9 @@ export function validateSettings(input: unknown): AutomodeSettings {
     enabled: input.enabled,
     decisionModel,
     disclosureConsent,
+    disclosureVersion: input.disclosureVersion == null ? null : validateNumber(input.disclosureVersion, "settings.disclosureVersion", { min: 1, max: 1000 }, 1),
+    reviewSafeThreshold: validateProbability(input.reviewSafeThreshold, "settings.reviewSafeThreshold", DEFAULT_SETTINGS.reviewSafeThreshold),
+    reviewConfidenceThreshold: validateProbability(input.reviewConfidenceThreshold, "settings.reviewConfidenceThreshold", DEFAULT_SETTINGS.reviewConfidenceThreshold),
     disclosureProvider,
     disclosureModel,
     disclosureEndpoint,

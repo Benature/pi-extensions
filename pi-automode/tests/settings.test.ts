@@ -174,6 +174,18 @@ test("validateSettings enforces numeric bounds", () => {
   assert.equal(ok.logMaxEntries, 100_000);
 });
 
+test("active review thresholds and disclosure version are validated independently of old files", () => {
+  const old = validateSettings(VALID_MINIMAL);
+  assert.equal(old.disclosureVersion, null);
+  assert.equal(old.reviewSafeThreshold, 0.99);
+  assert.equal(old.reviewConfidenceThreshold, 0.9);
+  for (const value of [NaN, Infinity, 0.49, 1.01, null, "0.99"]) {
+    assert.throws(() => validateSettings({ ...VALID_MINIMAL, reviewSafeThreshold: value }));
+    assert.throws(() => validateSettings({ ...VALID_MINIMAL, reviewConfidenceThreshold: value }));
+  }
+  assert.throws(() => validateSettings({ ...VALID_MINIMAL, disclosureVersion: "1" }));
+});
+
 test("old files without disclosure bindings load with null bindings", async () => {
   const dir = await tempDir();
   const file = path.join(dir, "automode.json");
@@ -237,6 +249,7 @@ function consentedSettings(overrides: Partial<AutomodeSettings>): AutomodeSettin
     disclosureModel: "jev-1.13.2",
     disclosureEndpoint: "https://api.typesafe.example/v1",
     disclosureWorkspace: "/canonical/workspace",
+    disclosureVersion: 1,
     ...overrides,
   });
 }

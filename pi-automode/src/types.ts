@@ -29,6 +29,10 @@ export interface AutomodeSettings {
   enabled: boolean;
   decisionModel: DecisionModelSelection | null;
   disclosureConsent: DisclosureConsent;
+  /** Explicit consent for command-bearing active safety review. Null = old consent. */
+  disclosureVersion: number | null;
+  reviewSafeThreshold: number;
+  reviewConfidenceThreshold: number;
   /** Consent binding: provider id of the decision model at consent time. Null = unbound. */
   disclosureProvider: string | null;
   /** Consent binding: model id of the decision model at consent time. Null = unbound. */
@@ -56,6 +60,9 @@ export const DEFAULT_SETTINGS: AutomodeSettings = Object.freeze({
   enabled: false,
   decisionModel: null,
   disclosureConsent: "none",
+  disclosureVersion: null,
+  reviewSafeThreshold: 0.99,
+  reviewConfidenceThreshold: 0.9,
   disclosureProvider: null,
   disclosureModel: null,
   disclosureEndpoint: null,

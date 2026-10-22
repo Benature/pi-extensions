@@ -25,6 +25,7 @@ export const DEFAULT_APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
 
 const CHOICE_DECLINE = "Decline";
 const CHOICE_ALLOW_ONCE = "Allow once";
+const CHOICE_ALWAYS = "Always Allow";
 const CHOICE_INSPECT = "Inspect details";
 const CHOICE_BACK = "Back";
 
@@ -53,6 +54,7 @@ export interface ApprovalRequest {
 	detail: string;
 	evidence: ActionEvidence;
 	decision: Decision;
+	allowAlways?: boolean;
 	turnSignal?: AbortSignal;
 	/**
 	 * Gate-linked pending signal (lifecycle epoch + turn + entry deadline).
@@ -70,7 +72,7 @@ export interface ApprovalToken {
 }
 
 export type ApprovalOutcome =
-	| { kind: "allow-once"; token: ApprovalToken }
+	| { kind: "allow-once" | "always-allow"; token: ApprovalToken }
 	| { kind: "declined"; replay: boolean }
 	| { kind: "expired" }
 	| { kind: "cancelled"; reason: string }
@@ -174,22 +176,20 @@ export class ApprovalManager {
 			try {
 				if (combined.aborted) return classifyAbort();
 				for (;;) {
-					const title =
-						`Needs your permission\n\n${req.summary}\n\n` +
-						`Why: ${escapeTerminal(req.decision.reason)}`;
-					const choice = await ctx.ui.select(title, [CHOICE_DECLINE, CHOICE_ALLOW_ONCE, CHOICE_INSPECT], {
+					const title = `Needs your permission\n\n${req.summary}`;
+					const choice = await ctx.ui.select(title, [CHOICE_DECLINE, CHOICE_ALLOW_ONCE, ...(req.allowAlways ? [CHOICE_ALWAYS] : []), CHOICE_INSPECT], {
 						signal: combined,
 						timeout: remaining(),
 					});
 					if (combined.aborted) return classifyAbort();
-					if (choice === CHOICE_ALLOW_ONCE) {
+					if (choice === CHOICE_ALLOW_ONCE || (choice === CHOICE_ALWAYS && req.allowAlways)) {
 						// Token creation requires the epochs that gate revalidation re-checks.
 						if (!this.#deps.epochs.check(epochSnap) || this.#deps.settings.epoch !== settingsEpoch) {
 							return { kind: "cancelled", reason: "policy or session changed while awaiting approval" };
 						}
 						const id = this.#deps.newId?.() ?? `approval-${++fallbackId}`;
 						return {
-							kind: "allow-once",
+							kind: choice === CHOICE_ALWAYS ? "always-allow" : "allow-once",
 							token: { id, fingerprint: req.fingerprint, epoch: epochSnap, settingsEpoch, consumed: false },
 						};
 					}

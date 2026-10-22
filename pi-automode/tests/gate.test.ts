@@ -526,6 +526,7 @@ async function askHarness(consent: Partial<AutomodeSettings>, baseUrl?: string) 
 		settings: {
 			enabled: true,
 			decisionModel: { provider: "typesafe", model: "jev-1.13.2" },
+			disclosureVersion: 1,
 			// Consent binds provider+model too; tests override to drift them.
 			disclosureProvider: "typesafe",
 			disclosureModel: "jev-1.13.2",

@@ -16,5 +16,6 @@
 	"reviewMaxRequests": 100,
 	"approvalTimeoutMs": 600000,
 	"disclosureProvider": null,
-	"disclosureModel": null
+	"disclosureModel": null,
+	"disclosureVersion": 1
 }

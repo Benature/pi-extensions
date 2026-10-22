@@ -1,7 +1,10 @@
 import type { Rule } from "../types.js";
 
 type Atom = { test: (char: string) => boolean; optional: boolean; repeat: boolean; literal?: string };
-export interface CompiledPattern { readonly test: (text: string) => boolean; readonly prefix: string }
+export interface CompiledPattern { readonly test: (text: string) => boolean; readonly prefix: string; readonly atoms: number }
+/** A lookup exceeding this deterministic work bound throws, so the gate blocks
+ * rather than interpreting an unfinished blocklist scan as a miss. */
+const MAX_MATCH_WORK = 8_000_000;
 
 /** Full-string, non-backtracking matching. Regex deliberately excludes groups,
  * alternation, lookaround, backreferences and counted repeats. Supported atoms:
@@ -68,7 +71,8 @@ export function compilePattern(text: string, mode: Rule["mode"] = "glob"): Compi
   const closure = (states: Uint8Array) => {
     for (let i = 0; i < atoms.length; i++) if (states[i] && atoms[i]!.optional) states[i + 1] = 1;
   };
-  return { prefix, test: (value) => {
+  return { prefix, atoms: atoms.length, test: (value) => {
+    if ((value.length + 1) * (atoms.length + 1) > MAX_MATCH_WORK) throw new Error("rule match exceeds bounded work budget");
     let states = new Uint8Array(atoms.length + 1);
     states[0] = 1;
     closure(states);
@@ -126,10 +130,15 @@ export function matchCompiled(index: RuleIndex, text: string, tool = "bash"): Ru
   const exact = index.exact.get(key(tool, text));
   if (exact) return exact;
   let cursor: Node | undefined = index.root;
+  let remainingWork = MAX_MATCH_WORK;
   for (const char of key(tool, text).split("")) {
     cursor = cursor.children.get(char);
     if (!cursor) break;
-    for (const candidate of cursor.patterns) if (candidate.pattern.test(text)) return candidate.rule;
+    for (const candidate of cursor.patterns) {
+      remainingWork -= (text.length + 1) * (candidate.pattern.atoms + 1);
+      if (remainingWork < 0) throw new Error("rule lookup exceeds bounded work budget");
+      if (candidate.pattern.test(text)) return candidate.rule;
+    }
   }
   return undefined;
 }

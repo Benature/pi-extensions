@@ -2,10 +2,11 @@
  * Bounded review envelope: the only data this adapter may transmit.
  *
  * Privacy rules (fail closed, stay local):
- * - Sensitive, incomplete, or protected-target evidence is never transmitted.
+ * - Sensitive/protected or incomplete filesystem evidence stays local. Explicitly
+ *   reviewable simple opaque commands may be judged without deterministic proof.
  * - The bash command under review IS transmitted: it is the action being
  *   judged and a safety judgment without it would be fiction. It is sent
- *   only after the sensitive/complete/protected gates above pass. Every
+ *   only after the privacy/eligibility gates above pass. Every
  *   OTHER argument value is never transmitted: a scanner cannot prove an
  *   arbitrary payload (write content, edit old/new text) is free of
  *   secrets whose keys look ordinary, so the rest of the envelope is a
@@ -35,10 +36,12 @@ import type {
 	ReviewInput,
 	ReviewerEvidence,
 } from "./contract.js";
+import { patternCandidates, patternQuestions } from "./patterns.js";
+import { reviewableCommand } from "../core/reviewable-command.js";
 import { buildQuestions, QUESTION_VERSION } from "./questions.js";
 
 /** Bump on any shape change; recorded in every envelope. */
-export const ENVELOPE_VERSION = 3;
+export const ENVELOPE_VERSION = 4;
 
 /** Serialized-state UTF-8 byte budget; far under any per-request budget. */
 export const DEFAULT_MAX_STATE_BYTES = 16_000;
@@ -119,19 +122,21 @@ function estimateSerializedBytes(value: JsonValueLike): number {
  */
 export function buildReviewInput(
 	evidence: ReviewerEvidence,
-	options?: { maxStateBytes?: number },
+	options?: { maxStateBytes?: number; purpose?: "safety" | "pattern" },
 ): EnvelopeResult {
 	if (evidence.sensitive) {
 		return { ok: false, reason: "sensitive evidence is never transmitted; review stays local" };
 	}
-	if (!evidence.complete) {
+	if (!evidence.complete && !(evidence.reviewableShell === true && evidence.action.tool === "bash" && typeof evidence.action.args.command === "string" && reviewableCommand(evidence.action.args.command))) {
 		return { ok: false, reason: "incomplete evidence is never transmitted; review stays local" };
 	}
 	if (typeof evidence.protectedReason === "string" && evidence.protectedReason.length > 0) {
 		return { ok: false, reason: "protected-target evidence is never transmitted; review stays local" };
 	}
 
-	const questions: Record<string, DecisionModelChoiceQuestionLike> = buildQuestions();
+	const candidates = options?.purpose === "pattern" ? patternCandidates(evidence) : [];
+	if (options?.purpose === "pattern" && candidates.length === 0) return { ok: false, reason: "no suitable generalized pattern candidates; stayed local" };
+	const questions: Record<string, DecisionModelChoiceQuestionLike> = options?.purpose === "pattern" ? patternQuestions(candidates) : buildQuestions();
 
 	if (!isRecord(evidence.action) || typeof evidence.action.tool !== "string" || typeof evidence.action.cwd !== "string") {
 		return { ok: false, reason: "action identity is malformed; review stays local" };
@@ -170,6 +175,8 @@ export function buildReviewInput(
 			...(typeof evidence.canonicalPath === "string" ? { canonical_path: evidence.canonicalPath } : {}),
 		},
 		evidence: {
+			deterministic_complete: evidence.complete,
+			reviewable_opaque_program: evidence.reviewableShell === true,
 			// evidence.reason embeds raw command tokens and path spellings from
 			// local analysis; like the shell opaque-reason text it never leaves
 			// the machine.
@@ -177,6 +184,11 @@ export function buildReviewInput(
 			snapshots: evidence.snapshots.map(snapshotMetadata),
 		},
 	};
+	if (options?.purpose === "pattern") {
+		state.review_purpose = "operator-confirmed-reusable-permission";
+		state.pattern_candidates = candidates.map((candidate) => ({ id: candidate.id,
+			rules: candidate.rules.map((rule) => ({ tool: rule.tool ?? "bash", mode: rule.mode ?? "glob", text: rule.text })) }));
+	}
 	const maxStateBytes = options?.maxStateBytes ?? DEFAULT_MAX_STATE_BYTES;
 	// Refuse before allocating a large serialization (estimate is a lower bound).
 	if (estimateSerializedBytes(state) > maxStateBytes) {

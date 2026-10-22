@@ -59,6 +59,10 @@ test("literal-prefix trie excludes unrelated shared-first-character patterns", (
   assert.equal(matchCompiled(index, "git cmd2899 --help"), rules[2899]);
   assert.equal(calls, 1);
 });
+test("oversized matching work fails closed instead of skipping a blocklist candidate", () => {
+  assert.throws(() => matchCommandRule([{ text: "*z".repeat(500) }], "a".repeat(20000)), /bounded work budget/);
+});
+
 test("pathological wildcard/regex input does not use recursive backtracking", () => {
   assert.equal(compilePattern(`${"*a".repeat(100)}z`).test("a".repeat(500)), false);
   assert.equal(compilePattern(`${"a*".repeat(100)}z`, "regex").test("a".repeat(500)), false);

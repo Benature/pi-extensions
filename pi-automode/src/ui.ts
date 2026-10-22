@@ -1,4 +1,5 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { DISCLOSURE_VERSION } from "./core/disclosure.js";
 import { DEFAULT_ALLOWLIST, DEFAULT_BLOCKLIST } from "./default-rules.js";
 import type { AutomodeSettings, DecisionLog, Rule } from "./types.js";
 import { escapeOneLine, escapeTerminal } from "./runtime/escape.js";
@@ -7,7 +8,7 @@ import { normalizeDisclosureEndpoint } from "./core/disclosure.js";
 import type { AutomodeHealth } from "./runtime/health.js";
 
 /**
- * Pi-native dialogs: a compact panel, rules, logs and optional shadow review.
+ * Pi-native dialogs: a compact panel, rules, logs and optional active safety review.
  *
  * Authority rules (IMPLEMENTATION.md invariant 6 + B1):
  * - Pi dispatches slash commands BEFORE input hooks and provides no command
@@ -275,7 +276,7 @@ async function showDetails(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		`Tools checked: ${deps.guardedTools.join(", ")}. Other tools and nested calls are blocked while on.`,
 		"Protected writes are blocked. Approved shell commands are not sandboxed.",
 		`Rules: ${count(settings.blocklist)} blocklist, ${count(settings.allowlist)} allowlist; built-in defaults: ${DEFAULT_BLOCKLIST.length} blocklist, ${DEFAULT_ALLOWLIST.length} allowlist (always active)`,
-		`Decision model: ${decisionModel ? `${escapeOneLine(decisionModel.provider)}/${escapeOneLine(decisionModel.model)} (shadow only; consent: ${settings.disclosureConsent})` : "none — local checks only"}`,
+		`Decision model: ${decisionModel ? `${escapeOneLine(decisionModel.provider)}/${escapeOneLine(decisionModel.model)} (safe ≥ ${settings.reviewSafeThreshold}, confidence ≥ ${settings.reviewConfidenceThreshold}; consent v${settings.disclosureVersion ?? "old"}: ${settings.disclosureConsent})` : "none — local checks only"}`,
 		`Pending: ${deps.gate.pendingManaged} managed, ${deps.approval.pendingCount} awaiting approval`,
 		`Settings: ${escapeOneLine(deps.dirs.agentDir)}/automode.json`,
 		`Logs: local; retained ${settings.logRetentionDays} days, up to ${settings.logMaxEntries} entries`,
@@ -665,8 +666,8 @@ async function decisionModelPicker(deps: UiDeps, ctx: CommandCtx): Promise<void>
 	// Selection grants consent, so show the exact normalized destination before
 	// the decision. Never render rejected URLs: they may contain credentials.
 	const title = [
-		"Decision Models — shadow review",
-		"Only bounded metadata (tool name, argument key names, path metadata; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
+		"Decision Models — active safety review",
+		"Selecting a model approves current disclosure: exact bounded bash commands, tool/path metadata and proposed permission patterns may go to this endpoint. File bodies and other argument values never leave. Safe judgments above the configured thresholds may approve unmatched actions. Hard blocks remain final.",
 		...rows.map((row) => {
 			const endpoint = normalizeDisclosureEndpoint(typeof row.model.baseUrl === "string" ? row.model.baseUrl : "");
 			return `${row.plain} → ${endpoint === null ? "invalid endpoint (selection unavailable)" : escapeTerminal(endpoint)}`;
@@ -691,6 +692,7 @@ async function decisionModelPicker(deps: UiDeps, ctx: CommandCtx): Promise<void>
 			...current,
 			decisionModel: null,
 			disclosureConsent: "none",
+			disclosureVersion: null,
 			disclosureProvider: null,
 			disclosureModel: null,
 			disclosureEndpoint: null,
@@ -713,11 +715,12 @@ async function decisionModelPicker(deps: UiDeps, ctx: CommandCtx): Promise<void>
 		...current,
 		decisionModel: { provider: model.provider, model: model.id },
 		disclosureConsent: "approved",
+		disclosureVersion: DISCLOSURE_VERSION,
 		disclosureProvider: model.provider,
 		disclosureModel: model.id,
 		disclosureEndpoint: endpoint,
 		disclosureWorkspace: deps.dirs.workspace,
 	};
 	if (!(await saveSettings(deps, ctx, next, epoch0))) return;
-	ctx.ui.notify(`Shadow review: ${escapeOneLine(model.provider)}/${escapeOneLine(model.id)}.`, "info");
+	ctx.ui.notify(`Active safety review: ${escapeOneLine(model.provider)}/${escapeOneLine(model.id)}.`, "info");
 }
