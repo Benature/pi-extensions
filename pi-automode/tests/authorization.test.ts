@@ -145,6 +145,14 @@ test("Always Allow cancellation, no suitable pattern, and stale confirmation nev
   await assert.rejects(stale.call(), /session changed/);
   assert.equal(stale.settings.current.allowlist.length, 0);
 });
+test("Always Allow never saves authority when the mandatory rule audit fails", async () => {
+  using h = await harness({ result: receipt("unsafe"), answers: ["Always Allow", "Save and allow"],
+    onAppend: (entry) => { if (entry.source === "approval-always-rule") throw new Error("rule audit failed"); } });
+  await assert.rejects(h.call(), /rule audit failed/);
+  assert.equal(h.settings.current.allowlist.length, 0);
+  assert.equal(h.executions, 0);
+});
+
 test("Always Allow supports a reusable native-read directory scope, not one rule per file", async () => {
   using h = await harness({ result: receipt("unsafe"), answers: ["Always Allow", "Save and allow"] });
   const shared = join(h.root, "shared");

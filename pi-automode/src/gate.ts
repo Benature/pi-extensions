@@ -76,7 +76,7 @@ export interface GateSettingsStore {
 	readonly epoch: number;
 	readonly error: string | null;
 	reload(): Promise<boolean>;
-	update?(next: AutomodeSettings): Promise<void>;
+	update?(next: AutomodeSettings, options?: { authorize?: () => boolean }): Promise<void>;
 }
 
 export interface GateLogStore {
@@ -725,7 +725,10 @@ export class Gate {
 		if (!store.update) throw new AutomodeBlockError("settings persistence unavailable; nothing saved");
 		const previousEpoch = store.epoch;
 		const rules = candidate.rules.filter((rule) => !store.current.allowlist.some((existing) => JSON.stringify(existing) === JSON.stringify(rule)));
-		await store.update({ ...store.current, allowlist: [...store.current.allowlist, ...rules] });
+		await store.update({ ...store.current, allowlist: [...store.current.allowlist, ...rules] }, {
+			authorize: () => !scope.signal.aborted && this.#deps.epochs.check(scope.epochSnap)
+				&& store.epoch === previousEpoch && this.state === "on",
+		});
 		// Only this explicitly confirmed mutation may rebase this call. Other
 		// queued calls retain their old settings epoch and fail closed.
 		if (scope.signal.aborted || !this.#deps.epochs.check(scope.epochSnap) || store.epoch !== previousEpoch + 1) {

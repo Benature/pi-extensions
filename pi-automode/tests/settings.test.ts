@@ -27,6 +27,25 @@ async function modeOf(p: string): Promise<number> {
 
 const VALID_MINIMAL = { version: 1, enabled: true };
 
+test("permission-save authority is rechecked immediately before the atomic commit", async () => {
+  const dir = await tempDir();
+  try {
+    const file = path.join(dir, "automode.json");
+    const store = new SettingsStore(file);
+    await store.update(validateSettings(VALID_MINIMAL));
+    const before = await fs.readFile(file, "utf8");
+    const epoch = store.epoch;
+    let checks = 0;
+    await assert.rejects(store.update({ ...store.current, allowlist: [{ text: "git status" }] }, {
+      authorize: () => ++checks < 3,
+    }), /save authority expired/);
+    assert.equal(checks, 3);
+    assert.equal(await fs.readFile(file, "utf8"), before);
+    assert.equal(store.epoch, epoch);
+    assert.deepEqual(await fs.readdir(dir), ["automode.json"]);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
 test("oversized updates preserve the readable file, current settings and epoch", async () => {
   const dir = await tempDir();
   try {

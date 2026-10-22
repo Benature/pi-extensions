@@ -532,7 +532,11 @@ export class SettingsStore {
    * SettingsConflictError when the on-disk file changed outside this store
    * since our last read/write (concurrent-edit / external-drift detection).
    */
-  async update(next: AutomodeSettings): Promise<void> {
+  async update(next: AutomodeSettings, options?: { authorize?: () => boolean }): Promise<void> {
+    const authorize = () => {
+      if (options?.authorize && !options.authorize()) throw new SettingsConflictError("settings save authority expired or was invalidated");
+    };
+    authorize();
     const validated = cloneSettings(next);
 
     // Early drift check (fast path), then a LATE check under the store lock
@@ -547,6 +551,7 @@ export class SettingsStore {
     }
 
     await this.#withLock(async () => {
+      authorize();
       if (this.#loaded) await this.#checkDrift();
       await fs.mkdir(dir, { recursive: true, mode: 0o700 });
       const temp = `${this.#filePath}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
@@ -567,6 +572,9 @@ export class SettingsStore {
         await handle.close();
         handle = null;
         await fs.chmod(temp, 0o600);
+        // Re-check asynchronous permission saves after queue, fsync and chmod;
+        // a cancelled/stale confirmation must not commit from a delayed queue.
+        authorize();
         await fs.rename(temp, this.#filePath);
         // Best-effort directory fsync for durability of the rename.
         try {
