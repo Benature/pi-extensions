@@ -5,15 +5,16 @@
  * All modules use ESM `.js` import specifiers (Node >= 22.19).
  */
 
-/**
- * One allowlist/blocklist entry: a strict command or a glob pattern matched
- * against the full bash command text. `*` is the only wildcard and matches
- * any (possibly empty) sequence of characters; every other byte is literal,
- * including whitespace. A rule without `*` is a byte-exact match.
+/** Full-string command/path rule. No message/natural-language interpretation.
+ * Default tool is bash; native file tools match the canonical absolute path.
+ * Default mode is glob (* wildcard); exact permits literal *, regex is bounded
+ * non-backtracking syntax implemented in core/rules.ts.
  */
 export interface Rule {
   text: string;
   enabled?: boolean;
+  tool?: "bash" | "read" | "edit" | "write";
+  mode?: "glob" | "exact" | "regex";
 }
 
 export interface DecisionModelSelection {
@@ -124,6 +125,9 @@ export interface ActionEvidence {
   sensitive: boolean;
   /** False when any decisive evidence could not be established; unprovable cases Ask/Block. */
   complete: boolean;
+  /** Only opacity (not filesystem/integrity failure) prevents deterministic proof.
+   * Eligible simple, non-sensitive commands may receive explicit/model permission. */
+  reviewableShell?: boolean;
   /**
    * Binds tool, exact argument bytes, canonical cwd, canonical targets and
    * snapshot content. Request IDs are deliberately excluded: they are not

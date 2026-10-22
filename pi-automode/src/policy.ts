@@ -8,15 +8,11 @@ import type { ActionEvidence, AutomodeSettings, Decision, Rule } from "./types.j
  *
  * Precedence (a configured decision model may settle an Ask later; a Block
  * is always final):
- *   supported route/integrity → protected writes → blocklist command rules
- *   (operator, then built-in defaults) → workspace file floor and narrowly
- *   supported allowlist shell rules (operator, then defaults) → Ask.
- *
- * Command rules are strict commands or glob patterns matched against the
- * full command text (`*` matches any run of characters; every other byte is
- * literal). Opaque shell (composition, interpreters, git, unverifiable
- * executables, PATH or startup-env ambiguity) Asks even with a matching
- * allowlist rule.
+ *   supported route/integrity → protected writes → all blocklists → sensitive/
+ *   incomplete target checks → explicit operator allowlist → workspace floor /
+ *   verified built-in read-only allows → model/local Ask.
+ * Operator permission can authorize simple opaque programs, not broken path
+ * evidence, secret targets, shell compositions/expansions or startup ambiguity.
  */
 
 export const SUPPORTED_TOOLS: ReadonlySet<string> = new Set(["read", "edit", "write", "bash"]);
@@ -64,16 +60,17 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
   // 3. Blocklist command rules (enabled operator rules, then built-in
   //    defaults). Works even when shell evidence is incomplete: the match
   //    itself needs no filesystem proof.
+  const subject = tool === "bash" ? evidence.action.args?.command : evidence.canonicalPath;
+  if (typeof subject === "string") {
+    const blockRule = matchCommandRule(settings.blocklist, subject, tool);
+    if (blockRule !== undefined) return block("rule:blocklist", "blocklist rule match", blockRule);
+  }
   if (tool === "bash") {
     const command = evidence.action.args?.command;
     if (typeof command === "string") {
-      const blockRule = matchCommandRule(settings.blocklist, command);
+      const blockRule = matchCommandRule(DEFAULT_BLOCKLIST, command);
       if (blockRule !== undefined) {
-        return block("rule:blocklist", "blocklist rule match", blockRule);
-      }
-      const defaultBlock = matchCommandRule(DEFAULT_BLOCKLIST, command);
-      if (defaultBlock !== undefined) {
-        return block("rule:default-blocklist", "built-in default blocklist rule match", defaultBlock);
+        return block("rule:default-blocklist", "built-in default blocklist rule match", blockRule);
       }
     }
   }
@@ -94,6 +91,8 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
         `filesystem evidence is incomplete (${evidence.reason ?? "unknown cause"}); unprovable cases ask`,
       );
     }
+    const operatorAllow = typeof subject === "string" ? matchCommandRule(settings.allowlist, subject, tool) : undefined;
+    if (operatorAllow) return allow("rule:allowlist", "explicit tool-scoped allowlist permission", operatorAllow);
     if (
       evidence.canonicalPath !== undefined
       && isWithinOrEqual(evidence.workspace, evidence.canonicalPath)
@@ -109,16 +108,15 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
     );
   }
 
-  // 4b. Narrowly supported allowlist shell rules. A matching allowlist rule
-  //     alone is not proof of effects: approved Bash internals are not
-  //     sandboxed, so opaque commands Ask even when the text matches.
+  // 4b. Explicit permission can cover simple opaque programs; defaults cannot.
+  // Compositions, sensitive operands and broken evidence still need local approval.
   const command = evidence.action.args?.command;
   if (typeof command === "string") {
     const operatorAllow = matchCommandRule(settings.allowlist, command);
     const defaultAllow = operatorAllow === undefined ? matchCommandRule(DEFAULT_ALLOWLIST, command) : undefined;
     const allowRule = operatorAllow ?? defaultAllow;
     if (allowRule !== undefined) {
-      if (!evidence.complete) {
+      if (evidence.sensitive || evidence.protectedReason !== undefined || (!evidence.complete && !(operatorAllow && evidence.reviewableShell))) {
         return ask(
           "policy:opaque-shell",
           `allowlist rule matched but shell evidence is incomplete (${evidence.reason ?? "unknown cause"}); unverifiable commands are not auto-allowed`,
@@ -126,7 +124,7 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
       }
       return allow(
         defaultAllow !== undefined ? "rule:default-allowlist" : "rule:allowlist",
-        `${defaultAllow !== undefined ? "built-in default allowlist" : "allowlist"} rule match with complete evidence`,
+        `${defaultAllow !== undefined ? "verified built-in default allowlist" : "explicit operator allowlist"} rule match`,
         allowRule,
       );
     }

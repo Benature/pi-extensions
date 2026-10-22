@@ -3,6 +3,7 @@ import { constants as fsConstants, promises as fs } from "node:fs";
 import path from "node:path";
 
 import { canonicalJson } from "./core/canonical-json.js";
+import { compilePattern } from "./core/rules.js";
 import { normalizeDisclosureEndpoint } from "./core/disclosure.js";
 import { DEFAULT_SETTINGS } from "./types.js";
 import type { AutomodeSettings, Rule } from "./types.js";
@@ -80,7 +81,7 @@ function validateText(value: unknown, where: string, max: number): string {
 
 function validateRule(value: unknown, where: string): Rule {
   if (!isPlainObject(value)) fail(`${where}: expected object`);
-  checkKeys(value, new Set(["type", "text", "enabled"]), where);
+  checkKeys(value, new Set(["type", "text", "enabled", "tool", "mode"]), where);
   // Legacy beta files carried a `type` field. Only command rules survive;
   // message rules were removed and must be deleted by the operator.
   if (value.type === "message") {
@@ -91,6 +92,16 @@ function validateRule(value: unknown, where: string): Rule {
   }
   const text = validateText(value.text, `${where}.text`, 4000);
   const rule: Rule = { text };
+  if (value.tool !== undefined) {
+    if (!["bash", "read", "edit", "write"].includes(value.tool as string)) fail(`${where}.tool: unsupported tool`);
+    rule.tool = value.tool as Rule["tool"] & string;
+  }
+  if (value.mode !== undefined) {
+    if (!["glob", "exact", "regex"].includes(value.mode as string)) fail(`${where}.mode: expected glob | exact | regex`);
+    rule.mode = value.mode as Rule["mode"] & string;
+  }
+  try { compilePattern(text, rule.mode); }
+  catch (error) { fail(`${where}: ${error instanceof Error ? error.message : String(error)}`); }
   if (value.enabled !== undefined) {
     if (typeof value.enabled !== "boolean") fail(`${where}.enabled: expected boolean`);
     rule.enabled = value.enabled;

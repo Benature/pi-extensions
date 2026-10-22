@@ -7,8 +7,8 @@ import type { Rule } from "./types.js";
  * to them — every blocklist (default or operator) outranks every allowlist.
  *
  * Rule syntax: `*` matches any run of characters; every other byte is
- * literal. Matching is indexed (see core/rules.ts), so defaults cost one
- * hash probe per decision.
+ * literal. Matching uses exact hashes and literal-prefix indexing (core/rules.ts);
+ * leading-wildcard patterns necessarily require additional checks.
  *
  * Default allowlist entries only ever skip approval for narrowly verified
  * read-only shell invocations with complete evidence; an opaque or
@@ -37,7 +37,7 @@ export const DEFAULT_ALLOWLIST: readonly Rule[] = Object.freeze([
 	"false",
 ].map((text) => Object.freeze({ text }) as Rule));
 
-/** Catastrophic-by-default commands: disk wipes, device overwrites, fork bombs. */
+/** Selected dangerous spellings, not an exhaustive shell security policy. */
 export const DEFAULT_BLOCKLIST: readonly Rule[] = Object.freeze([
 	"rm -rf /",
 	"rm -rf /*",

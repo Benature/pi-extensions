@@ -287,7 +287,7 @@ test("enable/disable and delete flows; delete requires explicit confirmation", a
 	const handler = createCommandHandler(h.deps);
 	// Disable it (rule lines carry a positional prefix; toggle needs a confirm).
 	const ctx = h.makeCtx([
-		"1. [allowlist] npm test -- parser",
+		"1. [allowlist] bash/glob npm test -- parser",
 		"Disable",
 		"Disable rule",
 	]);
@@ -295,7 +295,7 @@ test("enable/disable and delete flows; delete requires explicit confirmation", a
 	assert.equal(h.settings.current.allowlist[0]?.enabled, false);
 	// Delete with Cancel → kept.
 	const ctx2 = h.makeCtx([
-		"1. [allowlist · disabled] npm test -- parser",
+		"1. [allowlist · disabled] bash/glob npm test -- parser",
 		"Delete",
 		"Cancel",
 	]);
@@ -303,7 +303,7 @@ test("enable/disable and delete flows; delete requires explicit confirmation", a
 	assert.equal(h.settings.current.allowlist.length, 1, "cancelled delete keeps the rule");
 	// Delete confirmed → gone.
 	const ctx3 = h.makeCtx([
-		"1. [allowlist · disabled] npm test -- parser",
+		"1. [allowlist · disabled] bash/glob npm test -- parser",
 		"Delete",
 		"Delete rule",
 	]);

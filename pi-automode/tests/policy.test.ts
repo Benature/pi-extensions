@@ -198,7 +198,7 @@ test("floor never covers outside-workspace or incomplete targets", async () => {
   assert.equal(hard.decision.source, "policy:incomplete-evidence");
 });
 
-test("exact allow command + complete evidence allows; opaque shell asks even with a rule", async () => {
+test("exact operator permission covers simple opaque commands, unlike built-in defaults", async () => {
   const fx = await fixture();
   const cfg = settings({ allowlist: [{ text: "ls -la" }] });
   const ok = await decide(fx, "bash", { command: "ls -la" }, cfg);
@@ -211,16 +211,18 @@ test("exact allow command + complete evidence allows; opaque shell asks even wit
   assert.equal(miss.decision.outcome, "allow");
   assert.equal(miss.decision.source, "rule:default-allowlist");
 
-  // Exact rule for an opaque program: Ask, never a fake allow.
+  // Explicit operator authority, not a claim of proven program effects.
   const npmCfg = settings({ allowlist: [{ text: "npm test -- parser" }] });
   await fs.writeFile(path.join(fx.workspace, "package.json"), "{}");
   const npm = await decide(fx, "bash", { command: "npm test -- parser" }, npmCfg);
-  assert.equal(npm.decision.outcome, "ask");
-  assert.equal(npm.decision.source, "policy:opaque-shell");
+  assert.equal(npm.decision.outcome, "allow");
+  assert.equal(npm.decision.source, "rule:allowlist");
 
   const gitCfg = settings({ allowlist: [{ text: "git status" }] });
   const git = await decide(fx, "bash", { command: "git status" }, gitCfg);
-  assert.equal(git.decision.outcome, "ask", "git status is not intrinsically safe");
+  assert.equal(git.decision.outcome, "allow", "operator explicitly authorized this invocation");
+  const exactMiss = await decide(fx, "bash", { command: "git status " }, gitCfg);
+  assert.equal(exactMiss.decision.outcome, "ask", "extra bytes do not inherit exact authority");
 });
 
 test("built-in default rules apply alongside operator rules", async () => {
@@ -269,8 +271,8 @@ test("script change after an allow rule: fingerprint revalidation catches it", a
   await fs.writeFile(path.join(fx.workspace, "run.sh"), "echo v1");
   const cfg = settings({ allowlist: [{ text: "bash run.sh" }] });
   const first = await decide(fx, "bash", { command: "bash run.sh" }, cfg);
-  // Interpreters are opaque in this beta: Ask, but with the script snapshot bound.
-  assert.equal(first.decision.outcome, "ask");
+  // Explicit operator permission still binds script content for final revalidation.
+  assert.equal(first.decision.outcome, "allow");
   await fs.writeFile(path.join(fx.workspace, "run.sh"), "echo v2-changed");
   const second = await decide(fx, "bash", { command: "bash run.sh" }, cfg);
   assert.notEqual(

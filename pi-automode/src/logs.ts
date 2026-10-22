@@ -33,7 +33,9 @@ function isRule(value: unknown): value is Rule {
   if (value.type !== undefined && value.type !== "command") return false;
   if (typeof value.text !== "string") return false;
   if (value.enabled !== undefined && typeof value.enabled !== "boolean") return false;
-  return Object.keys(value).every((k) => k === "type" || k === "text" || k === "enabled");
+  if (value.tool !== undefined && !["bash", "read", "edit", "write"].includes(value.tool as string)) return false;
+  if (value.mode !== undefined && !["glob", "exact", "regex"].includes(value.mode as string)) return false;
+  return Object.keys(value).every((k) => ["type", "text", "enabled", "tool", "mode"].includes(k));
 }
 
 const ENTRY_KEYS = new Set([

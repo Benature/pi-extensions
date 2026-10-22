@@ -304,7 +304,7 @@ async function reverify(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 
 function ruleLine(list: "allowlist" | "blocklist", rule: Rule): string {
 	const flags = rule.enabled === false ? " · disabled" : "";
-	return `[${list}${flags}] ${escapeOneLine(rule.text, 120)}`;
+	return `[${list}${flags}] ${rule.tool ?? "bash"}/${rule.mode ?? "glob"} ${escapeOneLine(rule.text, 120)}`;
 }
 
 interface RuleRef {
@@ -361,17 +361,19 @@ async function rulesEditor(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 }
 
 async function addRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings, epoch0: number): Promise<void> {
-	const choices = ["Allowlist command", "Blocklist command"];
-	const choice = await ctx.ui.select("Add rule — exact command or glob; * matches anything", [...choices, CANCEL]);
-	if (!choice || !choices.includes(choice)) return;
-	const list = choice.startsWith("Allowlist") ? "allowlist" : "blocklist";
-	const text = await ctx.ui.editor(
-		list === "allowlist"
-			? "Allowlist rule — exact command or glob with *; unverifiable commands still ask"
-			: "Blocklist rule — exact command or glob with *; matches are blocked outright",
-	);
+	const definitions = (["Allowlist", "Blocklist"] as const).flatMap((effect) =>
+		(["bash", "read", "edit", "write"] as const).flatMap((tool) =>
+			(["glob", "exact", "regex"] as const).map((mode) => ({
+				label: `${effect} ${mode === "glob" ? "" : `${mode} `}${tool === "bash" ? "command" : tool}`,
+				tool, mode, list: effect === "Allowlist" ? "allowlist" as const : "blocklist" as const,
+			}))));
+	const choice = await ctx.ui.select("Add rule — command/path patterns, not messages", [...definitions.map((d) => d.label), CANCEL]);
+	const definition = definitions.find((d) => d.label === choice);
+	if (!definition) return;
+	const { tool, mode, list } = definition;
+	const text = await ctx.ui.editor(`${list} ${tool}/${mode} — full ${tool === "bash" ? "command" : "canonical absolute path"}; regex: literals, classes, . * + ? only`);
 	if (text === undefined || text.length === 0) return;
-	const rule: Rule = { text };
+	const rule: Rule = { text, ...(tool !== "bash" ? { tool } : {}), ...(mode !== "glob" ? { mode } : {}) };
 	const confirmed = await confirmAuthority(
 		ctx,
 		"Save rule?",
