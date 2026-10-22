@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Replace natural-language/message rules with command allowlist/blocklist rules:
+  exact commands, `*` globs, and an explicit safe regex mode. Legacy command
+  entries migrate; message entries produce a visible configuration error.
+- Add built-in command defaults in a separate source file. All blocklists
+  precede allowlists; built-in read-only allows still require verified evidence.
+- Index literal command prefixes rather than scanning every command pattern;
+  keep matching full-string and resistant to pathological backtracking.
+- Activate optional safety decisions for unmatched eligible calls. Only a
+  validated `safe` answer meeting the configured threshold may authorize;
+  failures and uncertainty fall back to local approval, never a hard-block override.
+- Require current-version disclosure consent before command-bearing review;
+  old metadata-only/shadow consent cannot silently expand.
+- Add **Always Allow** with model-selected generalized command patterns and
+  explicit local scope confirmation before persistence. Remove the main
+  approval dialog's **Why:** line; retain reasons in details and audit records.
+
 ## 0.2.0
 
 Release the current extension updates together.

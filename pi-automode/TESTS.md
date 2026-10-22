@@ -1,5 +1,10 @@
 # Live Jev shadow run — test evidence
 
+> **Historical shadow-only smoke.** These results predate command-only rules,
+> built-in defaults, and active safety decisions. They are not validation of
+> the current authorization thresholds. See [current behavior](README.md) and
+> [dated verification evidence](docs/verification.md).
+
 Live shadow run of the pi-automode permission beta: 20 fixed cases executed
 against an inert fixture workspace, deterministic policy decisions from the
 built package (`dist/policy.js`) plus **shadow-only** answers from the real

@@ -111,8 +111,8 @@ export interface FileSnapshot {
 
 /**
  * How a bash command's executable was resolved, or why it is treated as
- * opaque. Opaque commands never receive a deterministic allow in this beta,
- * even with an exact operator allow rule.
+ * opaque. Opaque effects are not proven by executable evidence. Eligible
+ * simple invocations may still receive explicit operator/model permission.
  */
 export interface ShellResolution {
   command: string;
