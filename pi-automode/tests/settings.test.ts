@@ -103,26 +103,34 @@ test("validateSettings rejects wrong types", () => {
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, decisionModel: { provider: "", model: "m" } }));
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: {} }));
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "cmd", text: "ls" }] }));
+  // Removed message rules are rejected with an explicit migration error.
+  assert.throws(
+    () => validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "message", text: "ls" }] }),
+    /message rules are no longer supported/,
+  );
+  // Legacy type: "command" is accepted and dropped from the validated rule.
+  const legacy = validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "command", text: "ls" }] });
+  assert.deepEqual(legacy.allowlist[0], { text: "ls" });
   assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "command" }] }));
   assert.throws(() =>
-    validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "command", text: "ls", enabled: 1 }] }),
+    validateSettings({ ...VALID_MINIMAL, allowlist: [{ text: "ls", enabled: 1 }] }),
   );
   assert.throws(() =>
-    validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "command", text: "ls", bogus: true }] }),
+    validateSettings({ ...VALID_MINIMAL, allowlist: [{ text: "ls", bogus: true }] }),
   );
-  assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "command", text: "" }] }));
+  assert.throws(() => validateSettings({ ...VALID_MINIMAL, allowlist: [{ text: "" }] }));
 });
 
 test("validateSettings accepts unicode rule text, rejects control characters", () => {
   const ok = validateSettings({
     ...VALID_MINIMAL,
-    blocklist: [{ type: "message", text: "绝不部署到生产环境 🚫" }],
+    blocklist: [{ text: "绝不部署到生产环境 🚫" }],
   });
   assert.equal(ok.blocklist[0]?.text, "绝不部署到生产环境 🚫");
 
   for (const bad of ["badbell", "badescape", "baddel", "badc1"]) {
     assert.throws(
-      () => validateSettings({ ...VALID_MINIMAL, allowlist: [{ type: "command", text: bad }] }),
+      () => validateSettings({ ...VALID_MINIMAL, allowlist: [{ text: bad }] }),
       (e) => e instanceof Error,
       `expected rejection for ${JSON.stringify(bad)}`,
     );
@@ -130,7 +138,7 @@ test("validateSettings accepts unicode rule text, rejects control characters", (
   // Tab/newline/CR remain legal inside operator-written text.
   const withNl = validateSettings({
     ...VALID_MINIMAL,
-    allowlist: [{ type: "message", text: "line one\nline two\tend" }],
+    allowlist: [{ text: "line one\nline two\tend" }],
   });
   assert.equal(withNl.allowlist[0]?.text, "line one\nline two\tend");
 
@@ -372,7 +380,7 @@ test("load reads a valid file", async () => {
   const file = path.join(dir, "automode.json");
   await fs.writeFile(
     file,
-    JSON.stringify({ version: 1, enabled: true, allowlist: [{ type: "command", text: "ls" }] }),
+    JSON.stringify({ version: 1, enabled: true, allowlist: [{ text: "ls" }] }),
   );
   const store = new SettingsStore(file);
   await store.load();
@@ -417,7 +425,7 @@ test("reload returns false when nothing changed, true on external valid change",
 
   await fs.writeFile(
     file,
-    JSON.stringify({ version: 1, enabled: true, blocklist: [{ type: "command", text: "rm -rf /" }] }),
+    JSON.stringify({ version: 1, enabled: true, blocklist: [{ text: "rm -rf /" }] }),
   );
   assert.equal(await store.reload(), true);
   assert.equal(store.epoch, epochAfterUpdate + 1);

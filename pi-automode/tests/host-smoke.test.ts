@@ -411,7 +411,7 @@ test("host-smoke: an earlier PATH executable cannot hide behind a trusted agent-
 	writeFileSync(join(earlier, "ls"), `#!/bin/sh\nprintf executed > '${marker}'\n`);
 	chmodSync(join(earlier, "ls"), 0o700);
 	writeFileSync(join(env.agentDir, "automode.json"), JSON.stringify({
-		...REAL_GATE_SETTINGS, allowlist: [{ type: "command", text: "ls -la" }],
+		...REAL_GATE_SETTINGS, allowlist: [{ text: "ls -la" }],
 	}));
 	const savedPath = process.env.PATH;
 	const savedAgent = process.env.PI_CODING_AGENT_DIR;

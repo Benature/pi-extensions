@@ -5,8 +5,13 @@
  * All modules use ESM `.js` import specifiers (Node >= 22.19).
  */
 
+/**
+ * One allowlist/blocklist entry: a strict command or a glob pattern matched
+ * against the full bash command text. `*` is the only wildcard and matches
+ * any (possibly empty) sequence of characters; every other byte is literal,
+ * including whitespace. A rule without `*` is a byte-exact match.
+ */
 export interface Rule {
-  type: "message" | "command";
   text: string;
   enabled?: boolean;
 }

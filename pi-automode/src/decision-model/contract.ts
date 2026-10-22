@@ -10,7 +10,6 @@
  */
 
 export interface Rule {
-	type: "message" | "command";
 	text: string;
 	enabled?: boolean;
 }

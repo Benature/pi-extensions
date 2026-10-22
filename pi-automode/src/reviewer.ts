@@ -65,7 +65,7 @@ export type {
 	Rule,
 	ValidatedChoiceAnswer,
 } from "./decision-model/contract.js";
-export { ALLOW_QUESTION_ID, BLOCK_QUESTION_ID, QUESTION_VERSION } from "./decision-model/questions.js";
+export { QUESTION_VERSION } from "./decision-model/questions.js";
 export { ENVELOPE_VERSION } from "./decision-model/envelope.js";
 
 export type ReviewStatus =
@@ -77,11 +77,11 @@ export type ReviewStatus =
 	| "aborted";
 
 /**
- * Shadow evidence of one review attempt. `shadow` is always true: this record
- * cannot authorize an action and cannot clear an unresolved block.
+ * Typed evidence of one review attempt. The receipt alone authorizes nothing:
+ * the gate applies its own threshold and precedence (a Block is never lifted)
+ * before letting a completed `safe` judgment settle an Ask.
  */
 export interface ReviewReceipt {
-	readonly shadow: true;
 	readonly status: ReviewStatus;
 	/** `native-decision-model:<provider>/<model>` when a decision model is selected. */
 	readonly source: string;
@@ -364,7 +364,6 @@ export class NativeReviewer {
 				usage?: DecisionModelUsage;
 			} = {},
 		): ReviewReceipt => ({
-			shadow: true,
 			status,
 			source: fields.source ?? "native-decision-model:none",
 			...(fields.reason !== undefined ? { reason: fields.reason } : {}),
@@ -396,7 +395,7 @@ export class NativeReviewer {
 		// malformed shape must surface as an error receipt, never a throw.
 		let built: EnvelopeResult;
 		try {
-			built = buildReviewInput(evidence, settings, { maxStateBytes: this.#maxStateBytes });
+			built = buildReviewInput(evidence, { maxStateBytes: this.#maxStateBytes });
 		} catch (error) {
 			return done("error", {
 				source,

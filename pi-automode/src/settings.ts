@@ -81,10 +81,16 @@ function validateText(value: unknown, where: string, max: number): string {
 function validateRule(value: unknown, where: string): Rule {
   if (!isPlainObject(value)) fail(`${where}: expected object`);
   checkKeys(value, new Set(["type", "text", "enabled"]), where);
-  const type = value.type;
-  if (type !== "message" && type !== "command") fail(`${where}: type must be "message" or "command"`);
+  // Legacy beta files carried a `type` field. Only command rules survive;
+  // message rules were removed and must be deleted by the operator.
+  if (value.type === "message") {
+    fail(`${where}.type: message rules are no longer supported; remove this rule from automode.json`);
+  }
+  if (value.type !== undefined && value.type !== "command") {
+    fail(`${where}.type: must be "command" when present`);
+  }
   const text = validateText(value.text, `${where}.text`, 4000);
-  const rule: Rule = { type, text };
+  const rule: Rule = { text };
   if (value.enabled !== undefined) {
     if (typeof value.enabled !== "boolean") fail(`${where}.enabled: expected boolean`);
     rule.enabled = value.enabled;

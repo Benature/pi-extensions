@@ -1,17 +1,20 @@
 import { isWithinOrEqual } from "./core/paths.js";
+import { matchCommandRule } from "./core/rules.js";
 import type { ActionEvidence, AutomodeSettings, Decision, Rule } from "./types.js";
 
 /**
  * Pure policy: deterministic precedence over canonical evidence.
  *
- * Precedence (shadow beta — decision model output never creates Allow here):
- *   supported route/integrity → protected writes → exact block commands →
- *   unresolved message block (Ask) → workspace file floor and narrowly
- *   supported exact shell allows → Ask.
+ * Precedence (a configured decision model may settle an Ask later; a Block
+ * is always final):
+ *   supported route/integrity → protected writes → blocklist command rules →
+ *   workspace file floor and narrowly supported allowlist shell rules → Ask.
  *
- * No blanket shell prefixes: command rules match every byte exactly. Opaque
- * shell (composition, interpreters, git, unverifiable executables, PATH or
- * startup-env ambiguity) Asks even with an exact allow rule.
+ * Command rules are strict commands or glob patterns matched against the
+ * full command text (`*` matches any run of characters; every other byte is
+ * literal). Opaque shell (composition, interpreters, git, unverifiable
+ * executables, PATH or startup-env ambiguity) Asks even with a matching
+ * allowlist rule.
  */
 
 export const SUPPORTED_TOOLS: ReadonlySet<string> = new Set(["read", "edit", "write", "bash"]);
@@ -32,15 +35,7 @@ function allow(source: string, reason: string, matchedRule?: Rule): Decision {
   return d;
 }
 
-/** Byte-exact match against enabled command rules. Every byte is significant. */
-export function matchCommandRule(rules: Rule[], command: string): Rule | undefined {
-  return rules.find((r) => r.type === "command" && r.enabled !== false && r.text === command);
-}
-
-/** Enabled message rules cannot be resolved deterministically in this beta. */
-export function hasEnabledMessageRule(rules: Rule[]): boolean {
-  return rules.some((r) => r.type === "message" && r.enabled !== false);
-}
+export { matchCommandRule };
 
 export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSettings): Decision {
   const tool = evidence.action.tool;
@@ -64,34 +59,23 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
     );
   }
 
-  // 3. Exact block commands (byte-exact, enabled rules only). Works even when
-  //    shell evidence is incomplete: the match itself needs no filesystem proof.
+  // 3. Blocklist command rules (enabled rules only). Works even when shell
+  //    evidence is incomplete: the match itself needs no filesystem proof.
   if (tool === "bash") {
     const command = evidence.action.args?.command;
     if (typeof command === "string") {
       const blockRule = matchCommandRule(settings.blocklist, command);
       if (blockRule !== undefined) {
-        return block("rule:blocklist", "exact blocklist command rule match", blockRule);
+        return block("rule:blocklist", "blocklist rule match", blockRule);
       }
     }
   }
 
-  // 4. Unresolved message block: an enabled message block rule cannot be
-  //    settled deterministically, and decision model output is shadow-only in
-  //    this beta, so it resolves to a local Ask before the file floor or any
-  //    automatic allow. Message rules are never silently ignored.
-  if (hasEnabledMessageRule(settings.blocklist)) {
-    return ask(
-      "policy:message-block-unresolved",
-      "an enabled message block rule cannot be evaluated deterministically; asking instead of guessing",
-    );
-  }
-
-  // 5a. Workspace file floor: native reads/edits/writes canonically inside the
+  // 4a. Workspace file floor: native reads/edits/writes canonically inside the
   //     workspace, not protected, with complete evidence.
   if (tool === "read" || isWrite) {
     if (evidence.sensitive || evidence.protectedReason !== undefined) {
-      // Protected/sensitive reads are a local Ask, never hosted review.
+      // Protected/sensitive reads are a local Ask, never decision-model review.
       return ask(
         "policy:sensitive-read",
         `target is protected (${evidence.protectedReason ?? "secret-bearing"}); requires a local operator decision`,
@@ -118,9 +102,9 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
     );
   }
 
-  // 5b. Narrowly supported exact shell allows. The exact allow rule alone is
-  //     not proof of effects: approved Bash internals are not sandboxed, so
-  //     opaque commands Ask even when the bytes match.
+  // 4b. Narrowly supported allowlist shell rules. A matching allowlist rule
+  //     alone is not proof of effects: approved Bash internals are not
+  //     sandboxed, so opaque commands Ask even when the text matches.
   const command = evidence.action.args?.command;
   if (typeof command === "string") {
     const allowRule = matchCommandRule(settings.allowlist, command);
@@ -128,14 +112,14 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
       if (!evidence.complete) {
         return ask(
           "policy:opaque-shell",
-          `exact allow rule matched but shell evidence is incomplete (${evidence.reason ?? "unknown cause"}); this beta asks instead of trusting opaque programs`,
+          `allowlist rule matched but shell evidence is incomplete (${evidence.reason ?? "unknown cause"}); unverifiable commands are not auto-allowed`,
         );
       }
-      return allow("rule:allowlist", "exact allowlist command rule match with complete evidence", allowRule);
+      return allow("rule:allowlist", "allowlist rule match with complete evidence", allowRule);
     }
   }
   return ask(
     "policy:no-matching-rule",
-    "no operator rule covers this exact invocation; no blanket shell prefixes exist",
+    "no allowlist or blocklist rule covers this invocation",
   );
 }

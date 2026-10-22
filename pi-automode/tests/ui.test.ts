@@ -255,15 +255,15 @@ test("a halted gate accepts a toggle even when the enabled flag already matches"
 
 // ------------------------------------------------------------------ rules CRUD
 
-test("add a block message rule verbatim, including whitespace and control chars", async () => {
+test("add a blocklist glob rule verbatim, including whitespace and control chars", async () => {
 	const h = makeHarness({ enabled: true });
 	const handler = createCommandHandler(h.deps);
-	const evilText = "Never deploy to production\n\x1b[31mRED\x1b[0m";
-	const ctx = h.makeCtx(["Add rule", "Block message", evilText, "Save rule"]);
+	const evilText = "rm -rf *\n\x1b[31mRED\x1b[0m";
+	const ctx = h.makeCtx(["Add rule", "Blocklist command", evilText, "Save rule"]);
 	await handler("rules", ctx);
 	assert.equal(h.settings.updates.length, 1);
 	const rule = h.settings.current.blocklist[0];
-	assert.deepEqual(rule, { type: "message", text: evilText }, "saved exactly as written");
+	assert.deepEqual(rule, { text: evilText }, "saved exactly as written");
 	// The confirmation dialog displayed it escaped.
 	const confirm = ctx.calls.find((c) => c.title.startsWith("Save rule?"));
 	assert.ok(confirm);
@@ -282,12 +282,12 @@ test("rule add aborts cleanly on escape at any step", async () => {
 test("enable/disable and delete flows; delete requires explicit confirmation", async () => {
 	const h = makeHarness({
 		enabled: true,
-		allowlist: [{ type: "command", text: "npm test -- parser" }],
+		allowlist: [{ text: "npm test -- parser" }],
 	});
 	const handler = createCommandHandler(h.deps);
 	// Disable it (rule lines carry a positional prefix; toggle needs a confirm).
 	const ctx = h.makeCtx([
-		"1. [allow · command] npm test -- parser",
+		"1. [allowlist] npm test -- parser",
 		"Disable",
 		"Disable rule",
 	]);
@@ -295,7 +295,7 @@ test("enable/disable and delete flows; delete requires explicit confirmation", a
 	assert.equal(h.settings.current.allowlist[0]?.enabled, false);
 	// Delete with Cancel → kept.
 	const ctx2 = h.makeCtx([
-		"1. [allow · command · disabled] npm test -- parser",
+		"1. [allowlist · disabled] npm test -- parser",
 		"Delete",
 		"Cancel",
 	]);
@@ -303,7 +303,7 @@ test("enable/disable and delete flows; delete requires explicit confirmation", a
 	assert.equal(h.settings.current.allowlist.length, 1, "cancelled delete keeps the rule");
 	// Delete confirmed → gone.
 	const ctx3 = h.makeCtx([
-		"1. [allow · command · disabled] npm test -- parser",
+		"1. [allowlist · disabled] npm test -- parser",
 		"Delete",
 		"Delete rule",
 	]);
@@ -620,7 +620,7 @@ const SAMPLE_LOG: DecisionLog = {
 	outcome: "block",
 	source: "rule:blocklist \x1b[7m",
 	reason: "exact blocklist command rule match",
-	matchedRule: { type: "command", text: "git push --force" },
+	matchedRule: { text: "git push --force" },
 };
 
 test("logs viewer shows decisions escaped and detail honestly reports uncaptured fields", async () => {
@@ -751,7 +751,7 @@ test("a stale rule confirmation (settings epoch moved mid-dialog) is discarded, 
 	// was shown for state S and must never apply to a newer state.
 	const ctx = h.makeCtx([
 		"Add rule",
-		"Block command",
+		"Blocklist command",
 		"rm -rf /",
 		() => {
 			h.settings.epoch += 1;
@@ -766,14 +766,14 @@ test("a stale rule confirmation (settings epoch moved mid-dialog) is discarded, 
 
 test("rule workflows retain the epoch of the displayed rule list", async () => {
 	for (const action of ["add", "delete"] as const) {
-		const h = makeHarness({ enabled: true, blocklist: [{ type: "command", text: "old" }] });
+		const h = makeHarness({ enabled: true, blocklist: [{ text: "old" }] });
 		const ctx = h.makeCtx([
 			(_title, options) => {
-				h.settings.current = makeSettings({ enabled: false, blocklist: [{ type: "command", text: "new" }] });
+				h.settings.current = makeSettings({ enabled: false, blocklist: [{ text: "new" }] });
 				h.settings.epoch += 1;
 				return action === "add" ? "Add rule" : options[0];
 			},
-			...(action === "add" ? ["Block command", "another", "Save rule"] : ["Delete", "Delete rule"]),
+			...(action === "add" ? ["Blocklist command", "another", "Save rule"] : ["Delete", "Delete rule"]),
 		]);
 		await createCommandHandler(h.deps)("rules", ctx);
 		assert.equal(h.settings.updates.length, 0, `${action} must not overwrite a newer configuration`);

@@ -273,7 +273,7 @@ async function showDetails(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	const lines = [
 		`Tools checked: ${deps.guardedTools.join(", ")}. Other tools and nested calls are blocked while on.`,
 		"Protected writes are blocked. Approved shell commands are not sandboxed.",
-		`Rules: ${count(settings.blocklist)} block, ${count(settings.allowlist)} allow`,
+		`Rules: ${count(settings.blocklist)} blocklist, ${count(settings.allowlist)} allowlist`,
 		`Decision model: ${decisionModel ? `${escapeOneLine(decisionModel.provider)}/${escapeOneLine(decisionModel.model)} (shadow only; consent: ${settings.disclosureConsent})` : "none — local checks only"}`,
 		`Pending: ${deps.gate.pendingManaged} managed, ${deps.approval.pendingCount} awaiting approval`,
 		`Settings: ${escapeOneLine(deps.dirs.agentDir)}/automode.json`,
@@ -301,9 +301,9 @@ async function reverify(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 
 // ---------------------------------------------------------------- rules
 
-function ruleLine(list: "allow" | "block", rule: Rule): string {
+function ruleLine(list: "allowlist" | "blocklist", rule: Rule): string {
 	const flags = rule.enabled === false ? " · disabled" : "";
-	return `[${list} · ${rule.type}${flags}] ${escapeOneLine(rule.text, 120)}`;
+	return `[${list}${flags}] ${escapeOneLine(rule.text, 120)}`;
 }
 
 interface RuleRef {
@@ -334,7 +334,7 @@ async function rulesEditor(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 			rules.forEach((rule, index) => {
 				// Positional prefix: duplicate rule texts produce identical labels,
 				// so selection keys on the unique position, never the label bytes.
-				options.push(`${options.length + 1}. ${ruleLine(list === "allowlist" ? "allow" : "block", rule)}`);
+				options.push(`${options.length + 1}. ${ruleLine(list, rule)}`);
 				refs.push({ list, index, rule });
 			});
 		}
@@ -360,37 +360,32 @@ async function rulesEditor(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 }
 
 async function addRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings, epoch0: number): Promise<void> {
-	const choices = ["Allow command", "Block command", "Allow message", "Block message"];
-	const choice = await ctx.ui.select("Add rule — command rules match exact text", [...choices, CANCEL]);
+	const choices = ["Allowlist command", "Blocklist command"];
+	const choice = await ctx.ui.select("Add rule — exact command or glob; * matches anything", [...choices, CANCEL]);
 	if (!choice || !choices.includes(choice)) return;
-	const effect = choice.startsWith("Allow") ? "allow" : "block";
-	const type: Rule["type"] = choice.endsWith("command") ? "command" : "message";
-	const title = type === "command"
-		? "Exact command — whitespace matters; complex allow commands still ask"
-		: effect === "block"
-			? "Message rule — while enabled, ALL otherwise allowed actions ask for approval"
-			: "Message rule — shadow review only; never auto-approves actions";
-	const text = await ctx.ui.editor(title);
+	const list = choice.startsWith("Allowlist") ? "allowlist" : "blocklist";
+	const text = await ctx.ui.editor(
+		list === "allowlist"
+			? "Allowlist rule — exact command or glob with *; unverifiable commands still ask"
+			: "Blocklist rule — exact command or glob with *; matches are blocked outright",
+	);
 	if (text === undefined || text.length === 0) return;
-	const rule: Rule = { type, text };
+	const rule: Rule = { text };
 	const confirmed = await confirmAuthority(
 		ctx,
 		"Save rule?",
-		`${effect} ${type} rule:\n${escapeTerminal(text, { multiline: true })}`,
+		`${list} rule:\n${escapeTerminal(text, { multiline: true })}`,
 		"Save rule",
 	);
 	if (!confirmed) return;
-	const next: AutomodeSettings =
-		effect === "allow"
-			? { ...current, allowlist: [...current.allowlist, rule] }
-			: { ...current, blocklist: [...current.blocklist, rule] };
+	const next: AutomodeSettings = { ...current, [list]: [...current[list], rule] };
 	if (await saveSettings(deps, ctx, next, epoch0)) ctx.ui.notify("Rule saved.", "info");
 }
 
 async function editRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings, ref: RuleRef, epoch0: number): Promise<void> {
 	const toggleLabel = ref.rule.enabled === false ? "Enable" : "Disable";
 	const moveLabel = ref.list === "allowlist" ? "Move to blocklist" : "Move to allowlist";
-	const choice = await ctx.ui.select(`${ruleLine(ref.list === "allowlist" ? "allow" : "block", ref.rule)}`, [
+	const choice = await ctx.ui.select(`${ruleLine(ref.list, ref.rule)}`, [
 		"Back",
 		"Edit text",
 		toggleLabel,
@@ -420,7 +415,7 @@ async function editRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings
 		const confirmed = await confirmAuthority(
 			ctx,
 			ref.rule.enabled === false ? "Enable rule?" : "Disable rule?",
-			ruleLine(ref.list === "allowlist" ? "allow" : "block", ref.rule),
+			ruleLine(ref.list, ref.rule),
 			ref.rule.enabled === false ? "Enable rule" : "Disable rule",
 		);
 		if (!confirmed) return;
@@ -432,7 +427,7 @@ async function editRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings
 		return;
 	}
 	if (choice === moveLabel) {
-		const confirmed = await confirmAuthority(ctx, "Change rule effect?", ruleLine(ref.list === "allowlist" ? "allow" : "block", ref.rule), "Move rule");
+		const confirmed = await confirmAuthority(ctx, "Move rule?", ruleLine(ref.list, ref.rule), "Move rule");
 		if (!confirmed) return;
 		const next = lists();
 		next[ref.list].splice(ref.index, 1);
@@ -445,7 +440,7 @@ async function editRule(deps: UiDeps, ctx: CommandCtx, current: AutomodeSettings
 		const confirmed = await confirmAuthority(
 			ctx,
 			"Delete rule?",
-			ruleLine(ref.list === "allowlist" ? "allow" : "block", ref.rule),
+			ruleLine(ref.list, ref.rule),
 			"Delete rule",
 		);
 		if (!confirmed) return;
@@ -479,7 +474,7 @@ function logDetail(entry: DecisionLog): string {
 		`cwd: ${escapeTerminal(entry.action.cwd)}`,
 	];
 	if (entry.matchedRule) {
-		lines.push(`matched rule: [${entry.matchedRule.type}] ${escapeTerminal(entry.matchedRule.text, { multiline: true })}`);
+		lines.push(`matched rule: ${escapeTerminal(entry.matchedRule.text, { multiline: true })}`);
 	}
 	lines.push(
 		entry.decisionModel !== undefined
@@ -668,7 +663,7 @@ async function decisionModelPicker(deps: UiDeps, ctx: CommandCtx): Promise<void>
 	// the decision. Never render rejected URLs: they may contain credentials.
 	const title = [
 		"Decision Models — shadow review",
-		"Only bounded metadata (tool name, argument key names, path metadata, message-rule text; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
+		"Only bounded metadata (tool name, argument key names, path metadata; never argument values or file bodies) may go to the selected endpoint; reviews never approve actions.",
 		...rows.map((row) => {
 			const endpoint = normalizeDisclosureEndpoint(typeof row.model.baseUrl === "string" ? row.model.baseUrl : "");
 			return `${row.plain} → ${endpoint === null ? "invalid endpoint (selection unavailable)" : escapeTerminal(endpoint)}`;

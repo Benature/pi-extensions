@@ -808,7 +808,7 @@ export class Gate {
 		const decisionModel = settings.decisionModel;
 		if (!reviewer || !decisionModel) return undefined;
 		const source = `native-decision-model:${decisionModel.provider}/${decisionModel.model}`;
-		const skipped = (reason: string): ReviewReceipt => ({ shadow: true, status: "skipped", source, reason, durationMs: 0 });
+		const skipped = (reason: string): ReviewReceipt => ({ status: "skipped", source, reason, durationMs: 0 });
 		const registry = call.ctx.modelRegistry;
 		if (!registry) return skipped("model registry unavailable; stayed local");
 		const model = findDecisionModel(registry, decisionModel.provider, decisionModel.model);
@@ -831,7 +831,7 @@ export class Gate {
 		} catch (error) {
 			const reason = `shadow reviewer failed unexpectedly: ${escapeOneLine(error instanceof Error ? error.message : String(error), 200)}`;
 			call.ctx.ui.notify?.(`Automode: ${reason}`, "warning");
-			return { shadow: true, status: "error", source, reason, durationMs: Date.now() - started };
+			return { status: "error", source, reason, durationMs: Date.now() - started };
 		}
 	}
 
