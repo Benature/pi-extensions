@@ -1,5 +1,6 @@
 import { isWithinOrEqual } from "./core/paths.js";
 import { matchCommandRule } from "./core/rules.js";
+import { DEFAULT_ALLOWLIST, DEFAULT_BLOCKLIST } from "./default-rules.js";
 import type { ActionEvidence, AutomodeSettings, Decision, Rule } from "./types.js";
 
 /**
@@ -7,8 +8,9 @@ import type { ActionEvidence, AutomodeSettings, Decision, Rule } from "./types.j
  *
  * Precedence (a configured decision model may settle an Ask later; a Block
  * is always final):
- *   supported route/integrity → protected writes → blocklist command rules →
- *   workspace file floor and narrowly supported allowlist shell rules → Ask.
+ *   supported route/integrity → protected writes → blocklist command rules
+ *   (operator, then built-in defaults) → workspace file floor and narrowly
+ *   supported allowlist shell rules (operator, then defaults) → Ask.
  *
  * Command rules are strict commands or glob patterns matched against the
  * full command text (`*` matches any run of characters; every other byte is
@@ -59,14 +61,19 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
     );
   }
 
-  // 3. Blocklist command rules (enabled rules only). Works even when shell
-  //    evidence is incomplete: the match itself needs no filesystem proof.
+  // 3. Blocklist command rules (enabled operator rules, then built-in
+  //    defaults). Works even when shell evidence is incomplete: the match
+  //    itself needs no filesystem proof.
   if (tool === "bash") {
     const command = evidence.action.args?.command;
     if (typeof command === "string") {
       const blockRule = matchCommandRule(settings.blocklist, command);
       if (blockRule !== undefined) {
         return block("rule:blocklist", "blocklist rule match", blockRule);
+      }
+      const defaultBlock = matchCommandRule(DEFAULT_BLOCKLIST, command);
+      if (defaultBlock !== undefined) {
+        return block("rule:default-blocklist", "built-in default blocklist rule match", defaultBlock);
       }
     }
   }
@@ -107,7 +114,9 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
   //     sandboxed, so opaque commands Ask even when the text matches.
   const command = evidence.action.args?.command;
   if (typeof command === "string") {
-    const allowRule = matchCommandRule(settings.allowlist, command);
+    const operatorAllow = matchCommandRule(settings.allowlist, command);
+    const defaultAllow = operatorAllow === undefined ? matchCommandRule(DEFAULT_ALLOWLIST, command) : undefined;
+    const allowRule = operatorAllow ?? defaultAllow;
     if (allowRule !== undefined) {
       if (!evidence.complete) {
         return ask(
@@ -115,7 +124,11 @@ export function evaluatePolicy(evidence: ActionEvidence, settings: AutomodeSetti
           `allowlist rule matched but shell evidence is incomplete (${evidence.reason ?? "unknown cause"}); unverifiable commands are not auto-allowed`,
         );
       }
-      return allow("rule:allowlist", "allowlist rule match with complete evidence", allowRule);
+      return allow(
+        defaultAllow !== undefined ? "rule:default-allowlist" : "rule:allowlist",
+        `${defaultAllow !== undefined ? "built-in default allowlist" : "allowlist"} rule match with complete evidence`,
+        allowRule,
+      );
     }
   }
   return ask(

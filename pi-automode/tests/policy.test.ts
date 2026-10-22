@@ -206,9 +206,10 @@ test("exact allow command + complete evidence allows; opaque shell asks even wit
   assert.equal(ok.decision.source, "rule:allowlist");
   assert.equal(ok.decision.matchedRule?.text, "ls -la");
 
-  // Same rule, different bytes → no match.
+  // Different bytes miss the operator rule but the built-in `ls *` default covers them.
   const miss = await decide(fx, "bash", { command: "ls -la " }, cfg);
-  assert.equal(miss.decision.outcome, "ask");
+  assert.equal(miss.decision.outcome, "allow");
+  assert.equal(miss.decision.source, "rule:default-allowlist");
 
   // Exact rule for an opaque program: Ask, never a fake allow.
   const npmCfg = settings({ allowlist: [{ text: "npm test -- parser" }] });
@@ -220,6 +221,30 @@ test("exact allow command + complete evidence allows; opaque shell asks even wit
   const gitCfg = settings({ allowlist: [{ text: "git status" }] });
   const git = await decide(fx, "bash", { command: "git status" }, gitCfg);
   assert.equal(git.decision.outcome, "ask", "git status is not intrinsically safe");
+});
+
+test("built-in default rules apply alongside operator rules", async () => {
+  const fx = await fixture();
+  const cfg = settings();
+  // Default allowlist: plain verified read-only commands run without a rule.
+  const ls = await decide(fx, "bash", { command: "ls" }, cfg);
+  assert.equal(ls.decision.outcome, "allow", ls.decision.reason);
+  assert.equal(ls.decision.source, "rule:default-allowlist");
+  // Default blocklist: catastrophic patterns block with no operator rule.
+  const rm = await decide(fx, "bash", { command: "rm -rf /" }, cfg);
+  assert.equal(rm.decision.outcome, "block");
+  assert.equal(rm.decision.source, "rule:default-blocklist");
+  const dd = await decide(fx, "bash", { command: "dd if=/dev/zero of=/dev/sda bs=1M" }, cfg);
+  assert.equal(dd.decision.outcome, "block");
+  assert.equal(dd.decision.source, "rule:default-blocklist");
+  // A default block outranks even a matching operator allowlist rule.
+  const allowRm = settings({ allowlist: [{ text: "rm -rf /" }] });
+  const overridden = await decide(fx, "bash", { command: "rm -rf /" }, allowRm);
+  assert.equal(overridden.decision.outcome, "block");
+  // An operator block outranks a default allowlist entry.
+  const blockLs = settings({ blocklist: [{ text: "ls *" }] });
+  const blocked = await decide(fx, "bash", { command: "ls -la" }, blockLs);
+  assert.equal(blocked.decision.outcome, "block");
 });
 
 test("blocklist outranks an identical allowlist rule", async () => {
@@ -234,7 +259,7 @@ test("blocklist outranks an identical allowlist rule", async () => {
 
 test("unmatched bash with no rules asks", async () => {
   const fx = await fixture();
-  const { decision } = await decide(fx, "bash", { command: "ls" }, settings());
+  const { decision } = await decide(fx, "bash", { command: "git status" }, settings());
   assert.equal(decision.outcome, "ask");
   assert.equal(decision.source, "policy:no-matching-rule");
 });
@@ -265,12 +290,13 @@ test("policy is pure with respect to settings identity (no mutation)", async () 
 
 test("glob allowlist rules allow verified commands and stay literal elsewhere", async () => {
   const fx = await fixture();
-  const cfg = settings({ allowlist: [{ text: "ls *" }] });
-  const ok = await decide(fx, "bash", { command: "ls -la" }, cfg);
+  await fs.writeFile(path.join(fx.workspace, "a.txt"), "x\n");
+  const cfg = settings({ allowlist: [{ text: "wc *" }] });
+  const ok = await decide(fx, "bash", { command: "wc -l a.txt" }, cfg);
   assert.equal(ok.decision.outcome, "allow", ok.decision.reason);
-  assert.equal(ok.decision.matchedRule?.text, "ls *");
-  // `ls *` does not cover the bare `ls` (no trailing space to match).
-  const bare = await decide(fx, "bash", { command: "ls" }, cfg);
+  assert.equal(ok.decision.matchedRule?.text, "wc *");
+  // `wc *` does not cover the bare `wc` (no trailing space to match).
+  const bare = await decide(fx, "bash", { command: "wc" }, cfg);
   assert.equal(bare.decision.outcome, "ask");
   assert.equal(bare.decision.source, "policy:no-matching-rule");
 });

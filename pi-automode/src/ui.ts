@@ -1,4 +1,5 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_ALLOWLIST, DEFAULT_BLOCKLIST } from "./default-rules.js";
 import type { AutomodeSettings, DecisionLog, Rule } from "./types.js";
 import { escapeOneLine, escapeTerminal } from "./runtime/escape.js";
 import { ambientShellCustomizations, type HostShellOptions } from "./runtime/host.js";
@@ -273,7 +274,7 @@ async function showDetails(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 	const lines = [
 		`Tools checked: ${deps.guardedTools.join(", ")}. Other tools and nested calls are blocked while on.`,
 		"Protected writes are blocked. Approved shell commands are not sandboxed.",
-		`Rules: ${count(settings.blocklist)} blocklist, ${count(settings.allowlist)} allowlist`,
+		`Rules: ${count(settings.blocklist)} blocklist, ${count(settings.allowlist)} allowlist; built-in defaults: ${DEFAULT_BLOCKLIST.length} blocklist, ${DEFAULT_ALLOWLIST.length} allowlist (always active)`,
 		`Decision model: ${decisionModel ? `${escapeOneLine(decisionModel.provider)}/${escapeOneLine(decisionModel.model)} (shadow only; consent: ${settings.disclosureConsent})` : "none — local checks only"}`,
 		`Pending: ${deps.gate.pendingManaged} managed, ${deps.approval.pendingCount} awaiting approval`,
 		`Settings: ${escapeOneLine(deps.dirs.agentDir)}/automode.json`,
