@@ -14,7 +14,7 @@ import { AsyncMutex } from "./runtime/mutex.js";
 import { freezeCopy, validateToolArgs, isSupportedTool } from "./runtime/freeze.js";
 import { effectiveToolArgs } from "./runtime/pi-paths.js";
 import { ambientShellCustomizations, type HostShellOptions } from "./runtime/host.js";
-import { checkDisclosureConsent, DISCLOSURE_VERSION } from "./core/disclosure.js";
+import { checkDisclosureConsent } from "./core/disclosure.js";
 import type { EvidenceContext } from "./evidence.js";
 import { escapeOneLine } from "./runtime/escape.js";
 
@@ -619,14 +619,21 @@ export class Gate {
 			throw new AutomodeBlockError(reason);
 		}
 
+		const registry = call.ctx.modelRegistry;
+		const decisionModel = current.decisionModel;
+		const liveModel = decisionModel ? findDecisionModel(registry, decisionModel.provider, decisionModel.model) : undefined;
+		const liveConsent = checkDisclosureConsent(current, {
+			endpoint: modelBaseUrl(liveModel),
+			workspace: evidence.workspace,
+		});
 		const outcome = await this.#deps.approval.request(call.ctx, {
 			fingerprint: evidence.fingerprint,
 			summary: summarizeAction(call.tool, rec),
 			detail: renderInspectDetail(evidence, decision),
 			evidence,
 			decision,
-			allowAlways: Boolean(current.disclosureVersion === DISCLOSURE_VERSION && current.disclosureConsent === "approved"
-				&& this.#deps.reviewer?.propose && this.#deps.settings.update && current.decisionModel && patternCandidates(evidence).length > 0),
+			allowAlways: Boolean(liveConsent.consented && registry && liveModel
+				&& this.#deps.reviewer?.propose && this.#deps.settings.update && decisionModel && patternCandidates(evidence).length > 0),
 			signal: scope.signal,
 			...(call.turnSignal ? { turnSignal: call.turnSignal } : {}),
 		});

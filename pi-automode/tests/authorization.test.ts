@@ -22,7 +22,7 @@ function receipt(choice = "safe", probability = 0.999, confidence = 0.999): Revi
       probabilities: Object.fromEntries(["safe", "unsafe", "uncertain"].map((label) => [label, label === choice ? probability : others])) } } };
 }
 async function harness(options: { result?: ReviewReceipt; proposal?: ReviewReceipt; onSelect?: (title: string) => void; settings?: Partial<AutomodeSettings>; answers?: string[];
-  onReview?: () => void; onAppend?: (entry: DecisionLog) => void } = {}) {
+  onReview?: () => void; onAppend?: (entry: DecisionLog) => void; registry?: unknown } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "automode-authorization-")));
   const workspace = join(root, "workspace");
   const agentDir = join(root, "agent");
@@ -39,10 +39,13 @@ async function harness(options: { result?: ReviewReceipt; proposal?: ReviewRecei
   let reviews = 0;
   let executions = 0;
   const titles: string[] = [];
+  const optionLists: string[][] = [];
   const answers = [...(options.answers ?? ["Decline"])];
   const ctx = { mode: "tui", hasUI: true, cwd: workspace,
-    modelRegistry: { findOfType: () => ({ baseUrl: endpoint }) },
-    ui: { select: async (title: string) => { titles.push(title); options.onSelect?.(title); return answers.shift(); }, notify: () => {} } };
+    modelRegistry: "registry" in options ? options.registry : { findOfType: () => ({ baseUrl: endpoint }) },
+    ui: { select: async (title: string, choices?: string[]) => {
+      titles.push(title); if (choices) optionLists.push(choices); options.onSelect?.(title); return answers.shift();
+    }, notify: () => {} } };
   const gate = new Gate({ settings, logs: { append: async (entry, cfg) => { options.onAppend?.(entry); await logs.append(entry, cfg); } },
     epochs, approval, buildEvidence, evaluatePolicy, dirs: { workspace, agentDir, extensionDir }, host: () => ({}),
     reviewer: {
@@ -53,7 +56,7 @@ async function harness(options: { result?: ReviewReceipt; proposal?: ReviewRecei
     } });
   const call = (command = "git status") => gate.executeGuarded({ tool: "bash", args: { command }, ctx,
     requestId: "authorization", run: async () => { executions++; return "executed"; } });
-  return { root, workspace, agentDir, settings, logs, epochs, gate, ctx, titles, call,
+  return { root, workspace, agentDir, settings, logs, epochs, gate, ctx, titles, optionLists, call,
     get reviews() { return reviews; }, get executions() { return executions; },
     [Symbol.dispose]() { rmSync(root, { recursive: true, force: true }); } };
 }
@@ -148,6 +151,32 @@ test("Always Allow cancellation, no suitable pattern, and stale confirmation nev
   await assert.rejects(stale.call(), /session changed/);
   assert.equal(stale.settings.current.allowlist.length, 0);
 });
+test("Always Allow is hidden unless live model provider/model/endpoint/workspace/version consent is valid", async () => {
+  const assertHidden = async (h: Awaited<ReturnType<typeof harness>>) => {
+    await assert.rejects(h.call(), /declined/);
+    assert.equal(h.executions, 0);
+    assert.ok(!h.optionLists[0]?.includes("Always Allow"));
+  };
+  using wrongProvider = await harness({ result: receipt("unsafe"), settings: { disclosureProvider: "other" } });
+  await assertHidden(wrongProvider);
+  using wrongModel = await harness({ result: receipt("unsafe"), settings: { disclosureModel: "other" } });
+  await assertHidden(wrongModel);
+  using wrongEndpoint = await harness({ result: receipt("unsafe"), settings: { disclosureEndpoint: "https://other.example/v1" } });
+  await assertHidden(wrongEndpoint);
+  using wrongWorkspace = await harness({ result: receipt("unsafe"), settings: { disclosureWorkspace: "/tmp/other-workspace" } });
+  await assertHidden(wrongWorkspace);
+  using oldVersion = await harness({ result: receipt("unsafe"), settings: { disclosureVersion: null } });
+  await assertHidden(oldVersion);
+  using missingRegistry = await harness({ result: receipt("unsafe"), registry: undefined });
+  await assertHidden(missingRegistry);
+  using missingModel = await harness({ result: receipt("unsafe"), registry: { findOfType: () => undefined } });
+  await assertHidden(missingModel);
+  using valid = await harness({ result: receipt("unsafe") });
+  await assert.rejects(valid.call(), /declined/);
+  assert.equal(valid.executions, 0);
+  assert.ok(valid.optionLists[0]?.includes("Always Allow"));
+});
+
 test("Always Allow never saves authority when the mandatory rule audit fails", async () => {
   using h = await harness({ result: receipt("unsafe"), answers: ["Always Allow", "Save and allow"],
     onAppend: (entry) => { if (entry.source === "approval-always-rule") throw new Error("rule audit failed"); } });
