@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Allow explicit run deadlines up to six hours through `minimalSubagents.timeoutMs`; retain the thirty-minute default and session-bound cancellation.
+
 ## 0.0.7
 
 Release the current extension updates together.
