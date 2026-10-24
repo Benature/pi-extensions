@@ -61,6 +61,25 @@ for (const [packageDir, version] of packages) {
     assert.equal(cache.snapshot(agentDir, cwd, true, [{ name: "registered", config: { command: "server" } }]).mcp[0]!.enabled, true);
   });
 }
+test("host adapter requires native validation and modern namespaces", async t => {
+  const root = await mkdtemp(join(tmpdir(), "slate-mcp-exports-")); t.after(() => rm(root, { recursive: true, force: true }));
+  const fixtures = [
+    { name: "missing-validator", exports: 'export const mcpNamespace = name => name;', modern: false, legacy: false },
+    { name: "invalid-validator", exports: 'export const validateMcpServerConfig = true; export const mcpNamespace = name => name;', modern: false, legacy: false },
+    { name: "missing-namespace", exports: 'export const validateMcpServerConfig = (_name, value) => value;', modern: false, legacy: true },
+    { name: "invalid-namespace", exports: 'export const validateMcpServerConfig = (_name, value) => value; export const mcpNamespace = true;', modern: false, legacy: true },
+    { name: "complete", exports: 'export const validateMcpServerConfig = (_name, value) => value; export const mcpNamespace = name => name;', modern: true, legacy: true },
+  ];
+  for (const fixture of fixtures) {
+    const packageDir = join(root, fixture.name);
+    await mkdir(join(packageDir, "dist/core"), { recursive: true });
+    await writeFile(join(packageDir, "package.json"), '{"type":"module"}');
+    await writeFile(join(packageDir, "dist/core/mcp-servers.js"), fixture.exports);
+    assert.equal(Boolean(await loadSidebarMcpHost(packageDir, "1.4.0")), fixture.modern, fixture.name);
+    assert.equal(Boolean(await loadSidebarMcpHost(packageDir, "1.0.0")), fixture.legacy, fixture.name);
+  }
+});
+
 test("unavailable host adapter never fabricates enabled/disabled state", async () => {
   assert.equal(await loadSidebarMcpHost("/missing", "1.4.0"), undefined);
   for (const version of ["unknown", "1.2.0", "1.4.1", "2.0.0"]) {

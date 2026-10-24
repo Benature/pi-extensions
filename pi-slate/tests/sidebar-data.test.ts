@@ -140,6 +140,11 @@ test("MCP file cache invalidates parsed files when host BOM support changes", as
   assert.equal(cache.snapshot(root, root, false, []).mcpError, "MCP config unreadable");
   cache.setHost({ ...host, stripBom: true });
   assert.deepEqual(cache.snapshot(root, root, false, []), { mcp: [{ name: "server", source: "global", enabled: true }] });
+  const parsed = cache.read(join(root, "mcp.json"));
+  cache.setHost({ ...host, stripBom: true });
+  assert.equal(cache.read(join(root, "mcp.json")), parsed, "unchanged parsing semantics preserve the cache");
+  cache.setHost(undefined);
+  assert.equal(cache.snapshot(root, root, false, []).mcpError, "MCP config unreadable");
   cache.setHost({ ...host, stripBom: false });
   assert.equal(cache.snapshot(root, root, false, []).mcpError, "MCP config unreadable");
 });

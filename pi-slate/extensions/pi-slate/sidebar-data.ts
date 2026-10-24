@@ -250,7 +250,10 @@ function resolveMcp(
 export class SidebarMcpFiles {
   private cached = new Map<string, { key: string; value: McpFile }>();
   private host?: SidebarMcpHost;
-  setHost(host: SidebarMcpHost | undefined): void { this.host = host; this.clear(); }
+  setHost(host: SidebarMcpHost | undefined): void {
+    if (Boolean(this.host?.stripBom) !== Boolean(host?.stripBom)) this.clear();
+    this.host = host;
+  }
   read(path: string): McpFile {
     try {
       const stat = statSync(path);
