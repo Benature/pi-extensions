@@ -7,6 +7,7 @@ This file is a navigation index for agents, not an API specification. Paths are 
 ## Documentation
 
 - [Package README](README.md): install, tools, defaults, optional setup, config, and code-search notes.
+- [Efficiency and continuation](docs/efficiency.md): URL-only fetch, local evidence handles, preview budgets, reuse/cooldowns, and context benchmarks.
 - [Multi-source search and Jev](docs/research.md): judgment settings, exact Pi classifier pin, and fail-open behavior.
 
 ## Source contracts

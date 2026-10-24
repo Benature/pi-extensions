@@ -100,6 +100,8 @@ export interface ProviderError extends Error {
 	/** JSON-RPC error code, kept separate from `status` (which is HTTP). */
 	rpcCode?: number;
 	retryable?: boolean;
+	/** Trusted HTTP Retry-After delay, bounded by the retrieval reuse policy. */
+	retryAfterMs?: number;
 }
 
 export interface ProviderErrorOptions {
@@ -107,6 +109,7 @@ export interface ProviderErrorOptions {
 	rpcCode?: number;
 	retryable?: boolean;
 	cause?: unknown;
+	retryAfterMs?: number;
 }
 
 const RETRYABLE_CODES = new Set<ProviderErrorCode>([
@@ -138,6 +141,7 @@ export function providerError(
 	if (opts.rpcCode !== undefined) {
 		error.rpcCode = opts.rpcCode;
 	}
+	if (opts.retryAfterMs !== undefined) error.retryAfterMs = opts.retryAfterMs;
 	error.retryable = opts.retryable ?? isRetryable(code, opts.status);
 	if (opts.cause !== undefined) {
 		error.cause = opts.cause;

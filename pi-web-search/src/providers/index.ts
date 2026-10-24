@@ -2,6 +2,7 @@ import type { AgentToolUpdateCallback, ExtensionToolContext } from "@earendil-wo
 import { githubToken, parallelApiKey } from "../env.ts";
 import { type ResolvedSettings } from "./config.ts";
 import { awaitWithSignal } from "./http.ts";
+import { reuseTransport } from "./reuse.ts";
 import { mergeStreamResults } from "./results.ts";
 import {
 	DEFAULT_CHAIN,
@@ -16,6 +17,10 @@ import {
 
 export interface SearchRequest {
 	query: string;
+	/** URL retrieval without a search request. */
+	fetchOnly?: boolean;
+	/** Session identity enables bounded reuse for direct HTTP transports only. */
+	reuseScope?: string;
 	urls?: string[];
 	signal?: AbortSignal;
 	onUpdate?: AgentToolUpdateCallback;
@@ -154,7 +159,7 @@ export async function runSearch(
 			continue;
 		}
 		try {
-			const result = await runTransport(transport, req);
+			const result = await runTransport((request) => reuseTransport(kind, request, transport), req);
 			const hits = result.searchResults?.length ?? 0;
 			const more = i < chain.length - 1 && options.family === "code";
 			if (hits === 0 && more) {
@@ -321,7 +326,7 @@ export async function runParallelSearch(
 			if (!transport) {
 				throw missingCredentials(kind, `No transport is registered for ${kind}.`);
 			}
-			return { kind, result: await runTransport(transport, req) };
+			return { kind, result: await runTransport((request) => reuseTransport(kind, request, transport), req) };
 		}),
 	);
 

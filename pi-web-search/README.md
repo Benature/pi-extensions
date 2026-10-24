@@ -76,11 +76,11 @@ Classification is off by default. Failures keep retrieved evidence with warnings
 2. `code_search` for literal public-code patterns
 3. Opt-in `multi_search` when you need retrieval from multiple sources
 
-> The tool definitions register two tools by default and activate `multi_search` only when enabled.
+> Two tools are declared directly by default; `multi_search` is opt-in. `search_read` is always registered for codemode discovery, not added as another direct declaration.
 
 | Tool | Inputs | Use |
 | --- | --- | --- |
-| `web_search` | Required `query`; optional `urls` | Public documentation, prose, current information; retrieve known-page excerpts alongside a search. |
+| `web_search` | `query` and/or `urls` | Public documentation and current information; omit `query` to fetch known pages without searching. |
 | `code_search` | Required `query` | Literal identifiers or code snippets in public repositories. |
 | `multi_search` | Required `query` and `scope` (`web`, `code`, or `both`) | Opt-in concurrent retrieval across available sources; optional judgment is configured separately. |
 
@@ -96,7 +96,20 @@ You can narrow searches to specific codebases using prompts like "check Meta's r
 { "query": "AbortSignal.timeout", "scope": "both" }
 ```
 
-Queries are required even when supplying URLs, are limited to 4,000 characters, and must not be blank after trimming. `web_search` accepts up to 20 URL strings; blanks are ignored and invalid/non-HTTP(S) URLs generate warnings. URL input requests remote extraction, not a full browser page or a URL-only fetch. Undeclared tool arguments such as `limit`, `provider`, or `path` are ignored and named in successful-result warnings; they do not configure a provider or filter.
+Supply a query, URLs, or both. Omit `query` for URL-only extraction (no search request). An explicitly supplied query must be nonblank and is limited to 4,000 characters. `web_search` accepts up to 20 URL strings; blanks are ignored and invalid/non-HTTP(S) URLs generate warnings. URL-only calls require at least one valid URL. Extraction returns provider-selected evidence, not a full browser page. Undeclared tool arguments such as `limit`, `provider`, or `path` are ignored and named in successful-result warnings; they do not configure a provider or filter.
+
+### Read more without another network request
+
+Searches return bounded previews plus a session-local `resultId` when evidence can be stored. Use codemode to list results or read a passage:
+
+```js
+const index = await tools.search_read({ resultId: "<returned handle>" });
+text(index);
+const passage = await tools.search_read({ resultId: "<returned handle>", index: 0, find: "timeout" });
+text(passage);
+```
+
+Indexes are zero-based. Omit `find` and use `offset`/`limit` to page; `passage.nextOffset` identifies the next slice. Handles expire after 10 minutes, eviction, shutdown, or reload. Nothing is written to disk. Stored evidence is bounded and may already have been truncated by the provider; it is **not guaranteed full-page content**. If codemode is unavailable, retrieve the cited URL again. See [efficiency and limits](docs/efficiency.md).
 
 ### Code qualifiers
 
@@ -125,7 +138,7 @@ A missing file uses these defaults:
 All fields are optional. Merge changes into the existing file. The extension reads config each operation. Tool exposure changes require `/reload`.
 
 - `web` accepts `exa` and `parallel`. `code` accepts `grep`, `sourcegraph`, and `github`.
-- `maxResults` truncates to an integer, then clamps to **1–20**, per provider. Merged results and additional URL excerpts can exceed this limit. Providers may return fewer results or ignore the limit.
+- `maxResults` truncates to an integer, then clamps to **1–20**. It limits both provider requests and the **global returned preview count**, including URL excerpts. Requested URL extracts are prioritized; additional admitted evidence is available through `search_read`. Providers may return fewer results or ignore the requested limit.
 - `timeoutMs` truncates to integer milliseconds. Positive values have a **1,000 ms minimum**. Nonpositive values use **20,000 ms**. These numeric adjustments emit no warnings.
 - Invalid JSON, unknown fields/providers, and malformed blocks produce `invalid_config`. Wrong-family providers trigger warnings and defaults or removal. Some invalid Jev values trigger defaults with warnings. Only literal `true` enables `jev.enabled`.
 
@@ -183,7 +196,8 @@ Each provider controls quotas and billing. Keys do not guarantee quota or price 
 
 - Default chains: **Exa → Parallel** and **grep.app → Sourcegraph → GitHub**.
 - Empty web results do not trigger fallback. Empty code results or retryable failures continue through the [provider chain](src/providers/index.ts).
-- Results contain links and excerpts, not full pages. See [structured output](src/format.ts).
+- Results contain links and excerpts, not guaranteed full pages. Exact duplicate evidence is collapsed, while distinct passages and code anchors remain. Structured excerpts share a 12,000-character budget, with a 4,000-character per-hit maximum and short model-facing previews. See [structured output](src/format.ts).
+- Direct HTTP retrieval has bounded 30-second session reuse and in-flight deduplication. Rate-limited providers enter a short cooldown. Parallel nested calls always execute through Pi so permission checks are never reused. See [efficiency and limits](docs/efficiency.md).
 
 ## Timeouts, fallback, and errors
 
@@ -209,6 +223,7 @@ Queries, URLs, errors, and excerpts can contain sensitive text.
 4. Run `npm run typecheck`.
 5. Run `npm run audit:prod`.
 6. Run `npm run pack:check`.
+7. Run `npm run bench:context` for offline context-footprint measurements (character-proxy estimates, not billed tokenizer counts).
 
 Optional live check: `npm run smoke:live`. It sends public test queries without your credentials. See [release checks and limits](docs/release-validation.md).
 
