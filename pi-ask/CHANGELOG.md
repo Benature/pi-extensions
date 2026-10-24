@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `ask_user` repairs common malformed payloads before validation: a lone question flattened to the top level, question fields left beside a one-item `questions` array
+
 ## 0.1.4
 
 Release the current extension updates together.
