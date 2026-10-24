@@ -102,7 +102,7 @@ export class Sidebar implements Component {
   setActions(actions: SidebarActions): void { this.actions = actions; }
   setSession(session: SidebarSession): void {
     // Keep the full plain-text title for copying/details; truncate only its painted row.
-    this.session = { ...session, name: sidebarText(session.name, session.name?.length), usage: { ...session.usage } };
+    this.session = { ...session, name: sidebarText(session.name, Infinity), usage: { ...session.usage } };
     this.changed();
   }
   setResources(resources: SidebarResources): void {
@@ -260,7 +260,7 @@ export class Sidebar implements Component {
     const stat = (label: string, value: string): string => `${this.paint("muted", label)} ${this.paint("text", value)}`;
     const statRight = (label: string, value: string): string => `${this.paint("text", value)} ${this.paint("muted", label)}`;
     return [
-      { text: this.heading(truncateToWidth(name, width, "…"), "accent"), action: name ? () => this.actions?.copy(name) : undefined },
+      { text: this.heading(name, "accent"), action: name ? () => { if (this.session.name) this.actions?.copy(this.session.name); } : undefined },
       { text: this.heading(visibleWidth(identity) > width ? this.pair(`Session ${sidebarText(s.id).slice(0, 8) || "—"}`, `· PID ${s.pid}`, width) : identity), action: () => { if (s.id) this.actions?.copy(s.id); } },
       { text: this.pair(this.paint("text", sidebarText(s.model)), this.paint("dim", sidebarText(s.thinking)), width) },
       { text: "" },

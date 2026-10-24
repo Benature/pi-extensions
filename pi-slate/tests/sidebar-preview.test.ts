@@ -74,7 +74,8 @@ test("session identity keeps the ID while a separate title copies the full name"
 test("long titles stay bounded, copy without ellipsis, and refresh on same-session renames", () => {
   const { sidebar } = fixture();
   const copied: string[] = [];
-  const name = "中文会话 👩‍💻 café —— ".repeat(10).trim();
+  const name = "中文会话 👩‍💻 café —— ".repeat(100).trim();
+  assert(name.length > 512, "full title survives the default sidebar text limit");
   sidebar.setActions({ copy: value => copied.push(value), openFile() {} });
   sidebar.setSession({ ...session, name: `\x1b[31m${name}\x1b[0m\n` });
   const before = sidebar.render(28);
@@ -86,13 +87,17 @@ test("long titles stay bounded, copy without ellipsis, and refresh on same-sessi
   assert.deepEqual(copied, [name], "copy uses the complete sanitized title, not its painted ellipsis");
   assert(sidebar.sessionDetails().includes(`Title: ${name}\n`));
   sidebar.setSession({ ...session, name: "改名后的会话" });
+  sidebar.handleMouse(mouse(1, { width: 28 }));
+  assert.deepEqual(copied, [name, "改名后的会话"], "a click before repaint never copies the previous title");
   const after = sidebar.render(28);
   assert.notEqual(after, before, "renaming invalidates cached rows even with the same clock and ID");
   assert.equal(plain(after)[1], "改名后的会话");
   sidebar.setSession({ ...session, name: " \n\x1b[2J" });
+  sidebar.handleMouse(mouse(1, { width: 28 }));
+  assert.deepEqual(copied, [name, "改名后的会话"], "clearing a title disables copying before repaint");
   assert.equal(plain(sidebar.render(28))[1], "");
   assert.equal(sidebar.handleMouse(mouse(1, { width: 28 })), undefined, "an empty title has no stale copy hit");
-  assert.deepEqual(copied, [name]);
+  assert.deepEqual(copied, [name, "改名后的会话"]);
 });
 
 test("top title uses bold theme accent and follows theme changes independently of the identity", () => {
