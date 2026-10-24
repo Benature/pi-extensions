@@ -483,7 +483,7 @@ test("effort border color option lets Pi's thinking-level border colors through"
   const srcTheme = { fg: (_name: string, text: string) => text, italic: (text: string) => text } as Theme;
   const source = () => ({ project: "slate", branch: null, model: undefined, footer: "standard" as const, theme: srcTheme });
   const locked = new ComposerEditor(tui, editorTheme, new KeybindingsManager(), source);
-  const open = new ComposerEditor(tui, editorTheme, new KeybindingsManager(), source, undefined, true);
+  const open = new ComposerEditor(tui, editorTheme, new KeybindingsManager(), () => ({ ...source(), effortBorderColor: true }));
   locked.setText("prompt");
   open.setText("prompt");
 
@@ -505,4 +505,27 @@ test("effort border color option lets Pi's thinking-level border colors through"
       assert.ok(neutral.every(row => !row.includes(color)));
     }
   }
+});
+
+test("effort border toggles live and retains host updates received while neutral", () => {
+  const tui = { terminal: { rows: 24, columns: 80 }, requestRender() {} } as TUI;
+  const initialPaint = (text: string) => `initial:${text}`;
+  let border = "neutral";
+  const state = {
+    project: "slate", branch: null, model: undefined, footer: "standard" as const,
+    effortBorderColor: true,
+    theme: { fg: (_name: string, text: string) => `${border}:${text}` } as Theme,
+  };
+  const editor = new ComposerEditor(tui, { borderColor: initialPaint } as EditorTheme, new KeybindingsManager(), () => state);
+  assert.equal(editor.borderColor("x"), "initial:x", "native initial color is available before host writes");
+  state.effortBorderColor = false;
+  const latestPaint = (text: string) => `latest:${text}`;
+  editor.borderColor = latestPaint;
+  assert.equal(editor.borderColor("x"), "neutral:x");
+  border = "new-theme";
+  assert.equal(editor.borderColor("x"), "new-theme:x", "neutral chrome follows theme changes");
+  state.effortBorderColor = true;
+  assert.equal(editor.borderColor("x"), "latest:x", "enabling uses host updates stored while off");
+  state.effortBorderColor = false;
+  assert.equal(editor.borderColor("x"), "new-theme:x", "disabling immediately restores chrome");
 });

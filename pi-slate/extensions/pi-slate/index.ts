@@ -159,7 +159,7 @@ function loadConfig(configPath: string): { config: SlateConfig; raw: Record<stri
       ...(messageLength === undefined ? {} : { messageLength }),
       ...(modelDisplay === undefined ? {} : { modelDisplay }),
       showPid: value.showPid === true,
-      ...(value.effortBorderColor === true ? { effortBorderColor: true } : {}),
+      effortBorderColor: value.effortBorderColor === true,
       ...(value.logo === "minimal" || value.logo === "original" ? { logo: value.logo } : {}),
       ...(value.toolStyle === "default" ? { toolStyle: "default" as const } : {}),
       ...(isProgressStyle(value.progress) ? { progress: value.progress } : {}),
@@ -561,6 +561,7 @@ export default function piSlate(pi: ExtensionAPI): void {
           project: basename(current.cwd) || current.cwd, branch: gitBranch,
           model: current.model, modelDisplay: config.modelDisplay, thinking: current.thinkingLevel,
           footer: config.composerMetadata, showPid: config.showPid === true, theme: current.ui.theme,
+          effortBorderColor: config.effortBorderColor === true,
           paddingX: composerPaddingX(config.density),
           working: typeof current.isIdle === "function" && !current.isIdle(),
           workspaceHeader: owns("header"),
@@ -582,7 +583,6 @@ export default function piSlate(pi: ExtensionAPI): void {
             autocompleteMaxVisible: 8,
             embedWorkingStatus: true,
           },
-          config.effortBorderColor === true,
         );
         if (previousDown) activeEditor.onDownBoundary = previousDown;
         // Images wrap first so composer-selection stays outermost: select-all
@@ -1191,8 +1191,8 @@ export default function piSlate(pi: ExtensionAPI): void {
       if (kind === "effort-border") {
         const on = parsed.kind === "effort-border" && parsed.value !== undefined ? parsed.value : config.effortBorderColor !== true;
         apply(
-          on ? { ...config, effortBorderColor: true } : { ...config, effortBorderColor: undefined },
-          on ? "Effort border color on. Run /reload (reload required)." : "Effort border color off. Run /reload (reload required).",
+          { ...config, effortBorderColor: on },
+          on ? "Effort border color on" : "Effort border color off",
           ctx,
         );
         return;

@@ -269,10 +269,13 @@ for (const effortBorderColor of [undefined, false, true, "true", 1]) {
   });
 }
 
-test("effort border commands and picker persist choices without hot-swapping the editor", async t => {
+test("effort border commands and picker persist and apply live without rebuilding the editor", async t => {
   const f = await fixture(t, JSON.stringify({ surfaces: ["editor"], focused: false, density: "compact", showPid: true }));
   const command = f.commands.get("slate")!;
   const saved = async () => JSON.parse(await readFile(f.path, "utf8"));
+  const paint = (text: string) => `<effort>${text}</effort>`;
+  f.composer!.borderColor = paint;
+  assert.equal(f.composer!.borderColor("x"), "x");
   for (const args of ["effort-border on", "effort-border on"]) {
     await command.handler(args, f.ctx);
     const config = await saved();
@@ -281,19 +284,20 @@ test("effort border commands and picker persist choices without hot-swapping the
     assert.equal(config.focused, false);
     assert.equal(config.density, "compact");
     assert.equal(config.showPid, true);
+    assert.equal(f.composer!.borderColor("x"), paint("x"), "saved setting applies immediately");
   }
-  const paint = (text: string) => `<effort>${text}</effort>`;
-  f.composer!.borderColor = paint;
-  assert.equal(f.composer!.borderColor("x"), "x", "saved setting waits for reload");
   assert.equal(f.calls.filter(call => call === "editor").length, 1);
-  assert.match(f.notices.at(-1)!, /Effort border color on.*reload/);
+  assert.equal(f.notices.at(-1), "Effort border color on");
   await command.handler("effort-border off", f.ctx);
-  assert.equal((await saved()).effortBorderColor, undefined);
+  assert.equal((await saved()).effortBorderColor, false);
+  assert.equal(f.composer!.borderColor("x"), "x");
   await command.handler("effort-border", f.ctx);
   assert.equal((await saved()).effortBorderColor, true, "bare command toggles on");
+  assert.equal(f.composer!.borderColor("x"), paint("x"));
   f.choices.push("Effort border color");
   await command.handler("", f.ctx);
-  assert.equal((await saved()).effortBorderColor, undefined, "picker toggles off");
+  assert.equal((await saved()).effortBorderColor, false, "picker toggles off");
+  assert.equal(f.composer!.borderColor("x"), "x");
   const before = await readFile(f.path, "utf8");
   await command.handler("", f.ctx); // Cancel the settings picker.
   await command.handler("effort-border nope", f.ctx);

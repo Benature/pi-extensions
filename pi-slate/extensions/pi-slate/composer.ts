@@ -271,6 +271,7 @@ export type ComposerSource = {
   context?: { tokens: string; resources: string; summary?: string };
   working?: boolean;
   showPid?: boolean;
+  effortBorderColor?: boolean;
   workspaceHeader?: boolean;
   dashboardVisible?: boolean;
   paddingX?: number;
@@ -397,19 +398,21 @@ export class ComposerEditor extends CustomEditor {
     keybindings: KeybindingsManager,
     source: () => ComposerSource,
     options?: ConstructorParameters<typeof CustomEditor>[3],
-    effortBorderColor = false,
   ) {
     super(tui, theme, keybindings, options);
     this.source = source;
-    // Pi assigns thinking-level colors onto editor.borderColor. Ignore those writes
-    // unless the user opted into effort-colored frames via `/slate effort-border`.
-    if (effortBorderColor) return;
-    const paint = (text: string) => chromePaint(this.source().theme)(text);
+    // Keep host effort/theme/bash updates even while neutral chrome is selected,
+    // so opting in can use the latest color without rebuilding the editor.
+    let hostPaint = this.borderColor;
+    const paint = (text: string) => {
+      const src = this.source();
+      return src.effortBorderColor === true ? hostPaint(text) : chromePaint(src.theme)(text);
+    };
     Object.defineProperty(this, "borderColor", {
       configurable: true,
       enumerable: true,
       get: () => paint,
-      set: () => undefined,
+      set: (value: (text: string) => string) => { hostPaint = value; },
     });
   }
 
