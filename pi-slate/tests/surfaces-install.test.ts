@@ -384,7 +384,7 @@ test("dashboard uses live branch facts and session-scoped tasks; commands preser
   await f.emit("session_shutdown", {}, next); assert.equal(f.bus.get("pi:background-tasks")!.size, 0);
 });
 
-test("session titles restore, repaint on rename events, and clear when switching sessions", async t => {
+test("session titles restore, repaint on rename/clear events, and clear when switching sessions", async t => {
   const f = await fixture(t, JSON.stringify({ surfaces: ["sidebar"], focused: false }));
   const sidebar = railOf(f);
   const rows = () => sidebar.render(40).map(unstyled);
@@ -401,6 +401,10 @@ test("session titles restore, repaint on rename events, and clear when switching
 
   await f.emit("session_start"); // Reload/resume keeps the stored title.
   assert(rows().some(row => row.includes("手动固定的标题")));
+  f.manager.appendSessionInfo("");
+  await f.emit("session_info_changed", { name: "" });
+  assert.match(rows()[1]!, /^│\s+│$/, "clearing the stored name restores the blank title row");
+  assert.match(sidebar.sessionDetails(), /Title: —/);
   const restored = SessionManager.inMemory(f.ctx.cwd);
   restored.appendSessionInfo("已恢复的标题");
   await f.emit("session_start", {}, { ...f.ctx, sessionManager: restored });
