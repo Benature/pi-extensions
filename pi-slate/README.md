@@ -12,7 +12,7 @@
 pi install npm:pi-slate
 ```
 
-Requires Pi Coding Agent and a terminal that renders the Kitty or iTerm2 image protocol, such as Ghostty or Warp. Keep other UI extensions enabled and select only the surfaces you want Slate to own; same-slot writers follow host precedence.
+Tested with Pi 1.4.0. Requires Pi Coding Agent and a terminal that renders the Kitty or iTerm2 image protocol, such as Ghostty or Warp. Keep other UI extensions enabled and select only the surfaces you want Slate to own; same-slot writers follow host precedence.
 
 Explore settings with `/slate` after installation, and copy a bug report with `/slate bug`. Releases: [CHANGELOG](CHANGELOG.md).
 

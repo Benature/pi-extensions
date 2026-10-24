@@ -611,6 +611,38 @@ for (const state of ["live", "invalidated", "replaced"] as const) {
   }
 }
 
+for (const closeHiddenFirst of [false, true]) {
+  test(`Pi 1.4 stacked native dialogs restore the Slate composer (hidden first: ${closeHiddenFirst})`, async t => {
+    const f = await fixture(t, JSON.stringify({ surfaces: ["editor", "sidebar"], focused: false }));
+    const composer = f.composer!, editorContainer = new Container(); editorContainer.addChild(composer);
+    composer.setText("draft before dialogs");
+    const root = Reflect.get(f.tui, "layoutRoot");
+    const host = Object.assign(Object.create(InteractiveMode.prototype) as object, {
+      ui: f.tui, editor: composer, editorContainer, extensionDialogs: [],
+      keybindings: new KeybindingsManager(), programStatus: { setBlocked() {} }, disposeActiveSelector() {},
+    });
+    const custom = Reflect.get(host, "showExtensionCustom") as ExtensionContext["ui"]["custom"];
+    const dialogs = [new Text("first dialog", 0, 0), new Text("second dialog", 0, 0)];
+    const close: Array<(value: string) => void> = [];
+    const pending = dialogs.map(dialog => custom.call(host, (_tui, _theme, _keys, done) => {
+      close.push(done); return dialog;
+    }));
+    await Promise.resolve();
+    assert.deepEqual(editorContainer.children, [dialogs[1]]);
+    assert.equal((f.tui as TuiAltScreen).getFocusedComponent(), dialogs[1]);
+    const first = closeHiddenFirst ? 0 : 1, remaining = 1 - first;
+    close[first]!("first result"); await pending[first];
+    assert.deepEqual(editorContainer.children, [dialogs[remaining]]);
+    assert.equal((f.tui as TuiAltScreen).getFocusedComponent(), dialogs[remaining]);
+    close[remaining]!("second result"); await pending[remaining];
+    assert.deepEqual(editorContainer.children, [composer]);
+    assert.equal((f.tui as TuiAltScreen).getFocusedComponent(), composer);
+    assert.equal(composer.getText(), "draft before dialogs");
+    assert.equal(Reflect.get(f.tui, "layoutRoot"), root); assert.equal(railOf(f).splitActive, true);
+    assert.doesNotThrow(() => composer.render(100));
+  });
+}
+
 for (const step of ["select", "input", "editor"] as const) {
   test(`bug-report ${step} completion is ignored after shutdown`, async t => {
     const f = await fixture(t, JSON.stringify({ surfaces: [] }));
