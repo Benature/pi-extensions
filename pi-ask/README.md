@@ -40,7 +40,7 @@ The agent calls `ask_user`. `/answer` if it asked in prose instead.
 | `/answer` | Turn the latest completed assistant message into a form |
 | `/ask-settings` | Settings overlay. `?` inside a form opens the same overlay |
 
-TUI-only. Non-TUI callers get `status: "unavailable"`.
+Hosts without the custom TUI (RPC subagents, ACP clients) get the same interview as sequential select/input cards with back navigation and a review card. Callers with no dialog UI at all get `status: "unavailable"`.
 
 ## Contract
 
@@ -57,7 +57,7 @@ Output:
 - `answers[id]`: `{ values, labels, customText?, note?, optionNotes? }`
 - `unanswered: id[]`
 
-Optional config: `~/.pi/agent/extensions/pi-ask.json`. `/answer` uses the current chat model unless `answer.extractionModels` is set.
+Optional config: `~/.pi/agent/extensions/pi-ask.json`. `/answer` uses the current chat model unless `answer.extractionModels` is set. `PI_ASK_LOCALE=zh` localizes the dialog cards and result summaries (Simplified Chinese).
 
 ## Context footprint
 

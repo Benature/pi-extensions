@@ -9,6 +9,8 @@ export interface AskStrings {
 	backTo: (label: string) => string;
 	/** Row that leaves a multi-question card, carrying the picked count. */
 	done: (count: number) => string;
+	/** Row that advances a single-choice card without answering. */
+	skip: string;
 	/** Row that opens a freeform answer prompt. */
 	typeYourOwn: string;
 	/** Title of the freeform answer prompt. */
@@ -32,6 +34,7 @@ export interface AskStrings {
 const EN_STRINGS: AskStrings = {
 	backTo: (label) => `← Back to ${label}`,
 	done: (count) => `✔ Done (${count} selected)`,
+	skip: "→ Skip for now",
 	typeYourOwn: "✎ Type your own",
 	customAnswerTitle: "Type your answer:",
 	reviewHeading: "Review your answers",
@@ -46,6 +49,7 @@ const EN_STRINGS: AskStrings = {
 const ZH_STRINGS: AskStrings = {
 	backTo: (label) => `← 返回${label}`,
 	done: (count) => `✔ 完成（已选 ${count} 项）`,
+	skip: "→ 暂时跳过",
 	typeYourOwn: "✎ 自己输入",
 	customAnswerTitle: "请输入你的回答：",
 	reviewHeading: "检查你的回答",
