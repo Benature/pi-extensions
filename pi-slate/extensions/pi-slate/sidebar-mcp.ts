@@ -9,22 +9,29 @@ export type SidebarMcpHost = {
   stripBom: boolean;
 };
 
+// Verified against native file parsers; unknown formats still fail closed.
+const HOST_FORMATS = new Map([
+  ["0.99.0", { projectOverrides: false, stripBom: false }],
+  ["1.0.0", { projectOverrides: false, stripBom: false }],
+  ["1.1.0", { projectOverrides: true, stripBom: false }],
+  ["1.3.0", { projectOverrides: true, stripBom: false }],
+  ["1.4.0", { projectOverrides: true, stripBom: true }],
+]);
+
 export async function loadSidebarMcpHost(packageDir: string, version: string): Promise<SidebarMcpHost | undefined> {
   try {
-    // Modern semantics are checked against the running native file parser.
-    // 1.1.0, 1.3.0 and 1.4.0 retain 1.0.4 overrides/namespaces; unknown formats still fail closed.
     const patch = /^1\.0\.(\d+)$/.exec(version);
-    const modern = version === "1.1.0" || version === "1.3.0" || version === "1.4.0" || (patch !== null && Number(patch[1]) >= 4);
-    const legacy = version === "0.99.0" || version === "1.0.0";
-    if (!legacy && !modern) return undefined;
+    const format = HOST_FORMATS.get(version)
+      ?? (patch !== null && Number(patch[1]) >= 4 ? { projectOverrides: true, stripBom: false } : undefined);
+    if (!format) return undefined;
     const native = await import(pathToFileURL(join(packageDir, "dist/core/mcp-servers.js")).href) as {
       validateMcpServerConfig?: SidebarMcpHost["validate"];
       mcpNamespace?: SidebarMcpHost["namespace"];
     };
     if (typeof native.validateMcpServerConfig !== "function") return undefined;
-    const projectOverrides = !legacy;
+    const { projectOverrides, stripBom } = format;
     if (projectOverrides && typeof native.mcpNamespace !== "function") return undefined;
     return { validate: native.validateMcpServerConfig,
-      namespace: projectOverrides ? native.mcpNamespace! : name => name, projectOverrides, stripBom: version === "1.4.0" };
+      namespace: projectOverrides ? native.mcpNamespace! : name => name, projectOverrides, stripBom };
   } catch { return undefined; }
 }

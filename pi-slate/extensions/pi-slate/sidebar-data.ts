@@ -243,7 +243,7 @@ function resolveMcp(
   for (const [name, server] of files) rows.set(name, { name: sidebarText(name), source: server.source, enabled: server.config.enabled !== false });
   for (const [name, row] of invalid) if (!rows.has(name)) rows.set(name, row);
   return { mcp: [...rows.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    ...(!host ? { mcpError: "MCP configuration validation unavailable" } : rejected ? { mcpError: "MCP configuration has rejected entries" } : {}) };
+    ...(!host && rows.size > 0 ? { mcpError: "MCP configuration validation unavailable" } : rejected ? { mcpError: "MCP configuration has rejected entries" } : {}) };
 }
 
 /** File reads are bounded and cached outside render; never evaluate env or credential commands. */

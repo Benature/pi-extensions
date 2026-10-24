@@ -8,7 +8,7 @@ import { getPackageDir, VERSION } from "@earendil-works/pi-coding-agent";
 import { loadSidebarMcpHost } from "../extensions/pi-slate/sidebar-mcp.ts";
 import { SidebarMcpFiles } from "../extensions/pi-slate/sidebar-data.ts";
 
-// Run the same fixtures through actual pinned and installed native file parsers.
+// Check both installations even at the same version: the operator's actual host may differ from the dev pin.
 const installed = "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent";
 const installedVersion = await readFile(join(installed, "package.json"), "utf8").then(text => (JSON.parse(text) as { version: string }).version).catch(() => "unavailable");
 const packages = [[getPackageDir(), VERSION], [installed, installedVersion]] as const;
@@ -47,7 +47,7 @@ for (const [packageDir, version] of packages) {
       );
       assert(!JSON.stringify(result).includes("SECRET"));
     }
-    if (version === "1.4.0") {
+    if (host.stripBom) {
       await writeFile(join(agentDir, "mcp.json"), '\uFEFF{"mcpServers":{"bom":{"command":"server"}}}');
       await writeFile(join(cwd, ".pi/mcp.json"), '\uFEFF{"mcpServers":{"bom":{"enabled":false}}}'); cache.clear();
       const loaded = native.loadMcpConfig({ agentDir, cwd, projectTrusted: true });
@@ -78,6 +78,35 @@ test("host adapter requires native validation and modern namespaces", async t =>
     assert.equal(Boolean(await loadSidebarMcpHost(packageDir, "1.4.0")), fixture.modern, fixture.name);
     assert.equal(Boolean(await loadSidebarMcpHost(packageDir, "1.0.0")), fixture.legacy, fixture.name);
   }
+  for (const [version, projectOverrides, stripBom] of [
+    ["0.99.0", false, false], ["1.0.0", false, false], ["1.0.4", true, false],
+    ["1.0.99", true, false], ["1.1.0", true, false], ["1.3.0", true, false], ["1.4.0", true, true],
+  ] as const) {
+    const host = await loadSidebarMcpHost(join(root, "complete"), version); assert(host, version);
+    assert.equal(host.projectOverrides, projectOverrides, version);
+    assert.equal(host.stripBom, stripBom, version);
+  }
+});
+
+test("unavailable validation is not an error without entries, but file errors remain visible", async t => {
+  const root = await mkdtemp(join(tmpdir(), "slate-mcp-empty-")); t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, ".pi"));
+  const cache = new SidebarMcpFiles();
+  assert.deepEqual(cache.snapshot(root, root, true, []), { mcp: [] }, "missing files need no validation");
+  await writeFile(join(root, "mcp.json"), '{}');
+  await writeFile(join(root, ".pi/mcp.json"), '{"mcpServers":{}}');
+  assert.deepEqual(cache.snapshot(root, root, true, []), { mcp: [] }, "empty files need no validation");
+  await writeFile(join(root, ".pi/mcp.json"), '{"mcpServers":{"project":{"command":"server"}}}');
+  assert.deepEqual(cache.snapshot(root, root, false, []), { mcp: [] }, "untrusted entries are not read");
+  const project = cache.snapshot(root, root, true, []);
+  assert.equal(project.mcp[0]!.enabled, null); assert.match(project.mcpError!, /unavailable/);
+  await writeFile(join(root, ".pi/mcp.json"), '{bad');
+  assert.equal(cache.snapshot(root, root, true, []).mcpError, "MCP config unreadable");
+  await writeFile(join(root, "mcp.json"), '{"mcpServers":[]}');
+  assert.equal(cache.snapshot(root, root, false, []).mcpError, "MCP config invalid");
+  await writeFile(join(root, "mcp.json"), '{"mcpServers":{"global":{"command":"server"}}}');
+  const global = cache.snapshot(root, root, false, []);
+  assert.equal(global.mcp[0]!.enabled, null); assert.match(global.mcpError!, /unavailable/);
 });
 
 test("unavailable host adapter never fabricates enabled/disabled state", async () => {
