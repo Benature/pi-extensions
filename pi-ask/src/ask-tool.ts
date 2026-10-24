@@ -12,7 +12,7 @@ import {
 	successfulResponse,
 	validateParams,
 } from "./ask-tool-helpers.ts";
-import { AskParamsSchema } from "./schema.ts";
+import { AskParamsSchema, stripSchemaDescriptions } from "./schema.ts";
 import { prepareAskParams } from "./state/normalize.ts";
 import type { AskParams } from "./types.ts";
 import { runAskFlow } from "./ui/controller.ts";
@@ -25,7 +25,8 @@ export function registerAskTool(pi: ExtensionAPI) {
 		promptSnippet:
 			"Interview the user to clarify gaps in context or requirements, get missing authorization, or brainstorm",
 		promptGuidelines: [...ASK_TOOL_PROMPT_GUIDELINES],
-		parameters: AskParamsSchema,
+		// Field prose lives in the guidelines; the registered schema stays lean.
+		parameters: stripSchemaDescriptions(AskParamsSchema),
 		prepareArguments: (args) => prepareAskParams(args) as AskParams,
 		execute: (_toolCallId, params, _signal, _onUpdate, ctx) =>
 			executeAskTool(params as AskParams, ctx),

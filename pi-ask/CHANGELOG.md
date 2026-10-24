@@ -4,6 +4,7 @@
 
 - `ask_user` repairs common malformed payloads before validation: a lone question flattened to the top level, question fields left beside a one-item `questions` array
 - Localized dialog cards and result summaries via `PI_ASK_LOCALE`, with Simplified Chinese as the first locale
+- Context footprint cut by ~44% (671 → 376 est. tokens): the registered parameter schema ships without per-field `description` prose and the guidelines are tightened; `npm run tokens` reports the estimate
 
 ## 0.1.4
 

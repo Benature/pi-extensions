@@ -34,6 +34,7 @@
   },
   "scripts": {
     "test": "node --test --experimental-strip-types tests/**/*.test.ts",
+    "tokens": "node --experimental-strip-types scripts/token-report.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "node ../node_modules/eslint/bin/eslint.js . --max-warnings=0",
     "test:unit": "node ../scripts/test-package.mjs pi-ask unit",

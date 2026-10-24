@@ -123,6 +123,20 @@ test("ask option schema and tool guidance support grounded recommendations", () 
 	);
 });
 
+test("registered schema strips prose but keeps the description field", () => {
+	const { tool } = registerMockTool();
+	const questionItems = tool.parameters.properties.questions.items;
+	const optionProps = questionItems.properties.options.items.properties;
+	assert.ok(
+		"description" in optionProps,
+		"option description field must survive stripping"
+	);
+	assert.equal(optionProps.description.type, "string");
+	assert.equal(optionProps.description.description, undefined);
+	assert.equal(questionItems.properties.prompt.description, undefined);
+	assert.equal(tool.parameters.description, undefined);
+});
+
 test("ask params schema constrains question types", () => {
 	assert.equal(
 		Value.Check(AskParamsSchema, {

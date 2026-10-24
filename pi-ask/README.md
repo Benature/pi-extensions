@@ -58,3 +58,17 @@ Output:
 - `unanswered: id[]`
 
 Optional config: `~/.pi/agent/extensions/pi-ask.json`. `/answer` uses the current chat model unless `answer.extractionModels` is set.
+
+## Context footprint
+
+Recurring model-facing contribution of `ask_user`, measured with `npm run tokens` (character proxy: `ceil(chars / 4)`, not provider billing):
+
+| Part | Chars | Est. tokens |
+| --- | ---: | ---: |
+| description | 148 | 37 |
+| prompt snippet | 103 | 26 |
+| prompt guidelines | 723 | 181 |
+| parameter schema | 528 | 132 |
+| **total** | **1,502** | **376** |
+
+Field-level prose lives in the guidelines; the registered schema ships without `description` keys.
