@@ -257,6 +257,58 @@ test("surface saves require reload; focus/width never enable an unselected sideb
   assert.deepEqual(JSON.parse(await readFile(f.path, "utf8")).surfaces, []);
 });
 
+for (const effortBorderColor of [undefined, false, true, "true", 1]) {
+  test(`effort border config only opts in for literal true: ${String(effortBorderColor)}`, async t => {
+    const text = JSON.stringify({ surfaces: ["editor"], effortBorderColor });
+    const f = await fixture(t, text);
+    const paint = (value: string) => `<effort>${value}</effort>`;
+    f.composer!.borderColor = paint;
+    assert.equal(f.composer!.borderColor("x"), effortBorderColor === true ? paint("x") : "x");
+    assert.equal(f.foreign.borderColor("x"), "x", "foreign editor remains untouched");
+    assert.equal(await readFile(f.path, "utf8"), text, "loading does not rewrite settings");
+  });
+}
+
+test("effort border commands and picker persist choices without hot-swapping the editor", async t => {
+  const f = await fixture(t, JSON.stringify({ surfaces: ["editor"], focused: false, density: "compact", showPid: true }));
+  const command = f.commands.get("slate")!;
+  const saved = async () => JSON.parse(await readFile(f.path, "utf8"));
+  for (const args of ["effort-border on", "effort-border on"]) {
+    await command.handler(args, f.ctx);
+    const config = await saved();
+    assert.equal(config.effortBorderColor, true);
+    assert.deepEqual(config.surfaces, ["editor"]);
+    assert.equal(config.focused, false);
+    assert.equal(config.density, "compact");
+    assert.equal(config.showPid, true);
+  }
+  const paint = (text: string) => `<effort>${text}</effort>`;
+  f.composer!.borderColor = paint;
+  assert.equal(f.composer!.borderColor("x"), "x", "saved setting waits for reload");
+  assert.equal(f.calls.filter(call => call === "editor").length, 1);
+  assert.match(f.notices.at(-1)!, /Effort border color on.*reload/);
+  await command.handler("effort-border off", f.ctx);
+  assert.equal((await saved()).effortBorderColor, undefined);
+  await command.handler("effort-border", f.ctx);
+  assert.equal((await saved()).effortBorderColor, true, "bare command toggles on");
+  f.choices.push("Effort border color");
+  await command.handler("", f.ctx);
+  assert.equal((await saved()).effortBorderColor, undefined, "picker toggles off");
+  const before = await readFile(f.path, "utf8");
+  await command.handler("", f.ctx); // Cancel the settings picker.
+  await command.handler("effort-border nope", f.ctx);
+  assert.equal(await readFile(f.path, "utf8"), before);
+});
+
+test("effort border settings never enable an unselected editor", async t => {
+  const f = await fixture(t, JSON.stringify({ surfaces: [], effortBorderColor: true }));
+  await f.commands.get("slate")!.handler("effort-border off", f.ctx);
+  await f.commands.get("slate")!.handler("effort-border on", f.ctx);
+  assert.deepEqual(JSON.parse(await readFile(f.path, "utf8")).surfaces, []);
+  assert.equal(f.calls.includes("editor"), false);
+  assert.equal(f.composer, undefined);
+});
+
 test("invalid files activate nothing, warn, and survive even a settings command", async (t) => {
   const text = '{"version":999,"surfaces":["editor"]}';
   const f = await fixture(t, text);

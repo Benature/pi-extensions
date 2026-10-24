@@ -477,21 +477,32 @@ test("a tall prompt scrolls by wheel and leaves a short prompt to the transcript
   assert.equal(scrollComposerByLines(editor, -1), false);
 });
 
-
 test("effort border color option lets Pi's thinking-level border colors through", () => {
   const tui = { terminal: { rows: 24, columns: 80 }, requestRender() {} } as TUI;
   const editorTheme = { borderColor: (text: string) => text } as EditorTheme;
   const srcTheme = { fg: (_name: string, text: string) => text, italic: (text: string) => text } as Theme;
   const source = () => ({ project: "slate", branch: null, model: undefined, footer: "standard" as const, theme: srcTheme });
-  const effortPaint = (text: string) => `<${text}>`;
-
-  // Default: Slate owns the frame and ignores Pi's borderColor writes.
   const locked = new ComposerEditor(tui, editorTheme, new KeybindingsManager(), source);
-  locked.borderColor = effortPaint;
-  assert.notEqual(locked.borderColor("x"), "<x>");
-
-  // Opt-in: Pi's thinking-level colors reach the composer frame again.
   const open = new ComposerEditor(tui, editorTheme, new KeybindingsManager(), source, undefined, true);
-  open.borderColor = effortPaint;
-  assert.equal(open.borderColor("x"), "<x>");
+  locked.setText("prompt");
+  open.setText("prompt");
+
+  // Successive host writes (effort/theme/bash changes) must repaint the whole frame.
+  for (const color of ["\x1b[35m", "\x1b[36m"]) {
+    const effortPaint = (text: string) => `${color}${text}\x1b[0m`;
+    locked.borderColor = effortPaint;
+    open.borderColor = effortPaint;
+    assert.equal(locked.borderColor("x"), "x", "default frame ignores host writes");
+    assert.equal(open.borderColor("x"), effortPaint("x"));
+    for (const width of [40, 80]) {
+      const frame = open.render(width);
+      const neutral = locked.render(width);
+      for (const glyph of ["┌", "┐", "│", "└", "┘"]) {
+        assert.ok(frame.join("\n").includes(effortPaint(glyph)), `host color reaches ${glyph}`);
+      }
+      assert.deepEqual(frame.map(stripVTControlCharacters), neutral.map(stripVTControlCharacters));
+      assert.ok(frame.every(row => visibleWidth(row) <= width));
+      assert.ok(neutral.every(row => !row.includes(color)));
+    }
+  }
 });

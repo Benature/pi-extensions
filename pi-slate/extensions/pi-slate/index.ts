@@ -1110,7 +1110,7 @@ export default function piSlate(pi: ExtensionAPI): void {
   };
 
   pi.registerCommand("slate", {
-    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, header logo, progress indicator, message length, theme, or file a bug",
+    description: "Session dashboard, surfaces, density, composer metadata, sidebar, focused mode, PID display, effort border color, header logo, progress indicator, message length, theme, or file a bug",
     getArgumentCompletions: slateArgumentCompletions,
     handler: async (args, ctx) => {
       const parsed = parseSlateArgs(args);
