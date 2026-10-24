@@ -1,7 +1,5 @@
 # Changelog
 
-## Unreleased
-
 ## 0.1.4
 
 Release the current extension updates together.
