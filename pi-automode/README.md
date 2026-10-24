@@ -58,15 +58,25 @@ Automode cannot undo actions already started.
 
 | Command | Use |
 |---|---|
-| `/automode` | Open the compact panel: toggle, rules, logs, optional decision models, details |
+| `/automode` | Open the compact panel: toggle, rules, logs, optional decision models, settings |
 | `/automode on` | Enable checks immediately (interactive terminal) |
 | `/automode off` | Disable checks immediately (pending approvals cancelled) |
 | `/automode rules` | Add or manage rules |
 | `/automode logs` | View recorded decisions, newest first |
 
 The status line and panel header are color-coded: **Automode: On** green,
-**Automode: Off** yellow, **Automode: Halted** red. **Details** contains
-coverage, queue counts, settings location, and log limits.
+**Automode: Off** yellow, **Automode: Halted** red. **Settings** opens a compact,
+full-width editor styled like Pi's native selectors, with horizontal separators,
+for approval wait, immediate safe threshold, confidence
+guard, model-review timeout and session budget, and log retention/entry limits.
+Navigate with ↑/↓; type a number to replace a value inline, or press Enter to edit
+it. Enter applies an edit; Tab applies it and moves to the next setting. Escape
+cancels the current edit, or discards the draft when not editing. The layout height and
+reserved help area stay stable as you navigate. Times are entered in seconds and
+thresholds in percent, with default values and validated bounds shown in place.
+Changes stay in a draft until **Save changes** (or Ctrl+S); **Cancel** discards them. **Reset to defaults** resets only those tuning values
+and also requires Save. Model selection, disclosure consent, rules, and on/off
+state are never changed by this reset. Queue counts remain visible in Settings.
 If configuration changes unexpectedly, checks halt; inspect the settings,
 then choose **Re-verify configuration** in the panel. Changes and approvals
 require Pi's interactive terminal, not RPC or print mode.
@@ -121,7 +131,8 @@ separators, so a path glob grants a subtree, not just direct children.
   ],
   "blocklist": [{ "text": "rm -rf *" }],
   "reviewSafeThreshold": 0.99,
-  "reviewConfidenceThreshold": 0.9
+  "reviewConfidenceThreshold": 0.67,
+  "approvalTimeoutMs": 60000
 }
 ```
 
@@ -177,13 +188,23 @@ provider, model, credential-free endpoint, workspace, and disclosure version.
 Credentials remain in Pi's auth system. There is no provider or chat-model fallback.
 
 Model confidence is not a safety guarantee or a measured false-approval rate.
-Defaults require `P(safe) >= 0.99` and `confidence >= 0.9`; both settings accept
+Immediate auto-approval defaults to `P(safe) >= 0.99` and `confidence >= 0.67`; both settings accept
 finite values in `[0.5, 1]`. The same thresholds apply to model-selected reusable
 patterns. This is not a calibrated security profile. Review defaults to a
 2-second timeout and 100 requests per session; an Always Allow proposal consumes
 another request. Evidence, settings, lifecycle, and audit availability are
 rechecked before execution. Commands that cannot pass the privacy/integrity
 checks stay local even when a decision model is selected.
+
+Permission dialogs default to **60 seconds** (`approvalTimeoutMs`). If unanswered,
+an eligible, completed **safe** judgment with `P(safe) > 0.50` and confidence at
+or above `reviewConfidenceThreshold` may authorize this action once. Otherwise,
+the action is declined and the coding model receives a block result so it can
+try another approach. Explicit **Decline** or **Escape** never uses this fallback.
+Hard blocks, protected targets, missing consent, failed reviews, cancellation,
+settings drift, and changed evidence cannot be overridden. Timeout permissions
+are recorded as `approval-timeout-model`; they never save reusable rules.
+Existing explicit settings override the new defaults.
 
 ## Verified startup
 

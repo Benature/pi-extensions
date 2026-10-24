@@ -1,6 +1,7 @@
-import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import type { ExtensionUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { showModelPicker } from "./model-picker.js";
 import { DISCLOSURE_VERSION } from "./core/disclosure.js";
-import { DEFAULT_ALLOWLIST, DEFAULT_BLOCKLIST } from "./default-rules.js";
+import { editTuningSettings, TUNING_FIELDS } from "./settings-editor.js";
 import type { AutomodeSettings, DecisionLog, Rule } from "./types.js";
 import { escapeOneLine, escapeTerminal } from "./runtime/escape.js";
 import { ambientShellCustomizations, type HostShellOptions } from "./runtime/host.js";
@@ -27,6 +28,7 @@ const USAGE = "Usage: /automode [on|off|rules|logs]";
 
 /** Minimal UI surface used by the command layer (subset of ExtensionUIContext). */
 export interface CommandUi {
+	custom?: ExtensionUIContext["custom"];
 	select(
 		title: string,
 		options: string[],
@@ -129,7 +131,7 @@ export function createCommandHandler(deps: UiDeps): (args: string, ctx: CommandC
 	};
 }
 
-/** Keep the footer quiet; diagnostics live in Details. */
+/** Keep the footer quiet; diagnostics live in Settings. */
 export function statusText(deps: UiDeps, theme?: Theme): string {
 	const settings = deps.settings.current;
 	const state = deps.gate.state;
@@ -247,7 +249,7 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		if (ctx.mode !== "tui") lines.push("Changes and approvals require the interactive terminal.");
 		if (deps.approval.pendingCount) lines.push(`${deps.approval.pendingCount} awaiting approval`);
 		const toggle = settings?.enabled ? "Toggle OFF" : "Toggle ON";
-		const options = [toggle, "Rules", "Logs", "Decision Models", "Details"];
+		const options = [toggle, "Rules", "Logs", "Decision Models", "Settings"];
 		if (state === "halted") options.unshift("Re-verify configuration");
 		options.push("Close");
 
@@ -261,27 +263,34 @@ async function showPanel(deps: UiDeps, ctx: CommandCtx): Promise<void> {
 		else if (choice === "Rules") await rulesEditor(deps, ctx);
 		else if (choice === "Logs") await logsViewer(deps, ctx);
 		else if (choice === "Decision Models") await decisionModelPicker(deps, ctx);
-		else if (choice === "Details") await showDetails(deps, ctx);
+		else if (choice === "Settings") await showSettings(deps, ctx);
 		else if (choice === "Re-verify configuration") await reverify(deps, ctx);
 		else return;
 		refreshStatus(deps, ctx);
 	}
 }
 
-async function showDetails(deps: UiDeps, ctx: CommandCtx): Promise<void> {
-	const settings = deps.settings.current;
-	const decisionModel = settings.decisionModel;
-	const count = (rules: Rule[]) => rules.filter((r) => r.enabled !== false).length;
-	const lines = [
-		`Tools checked: ${deps.guardedTools.join(", ")}. Other tools and nested calls are blocked while on.`,
-		"Protected writes are blocked. Approved shell commands are not sandboxed.",
-		`Rules: ${count(settings.blocklist)} blocklist, ${count(settings.allowlist)} allowlist; built-in defaults: ${DEFAULT_BLOCKLIST.length} blocklist, ${DEFAULT_ALLOWLIST.length} allowlist (always active)`,
-		`Decision model: ${decisionModel ? `${escapeOneLine(decisionModel.provider)}/${escapeOneLine(decisionModel.model)} (safe ≥ ${settings.reviewSafeThreshold}, confidence ≥ ${settings.reviewConfidenceThreshold}; consent v${settings.disclosureVersion ?? "old"}: ${settings.disclosureConsent})` : "none — local checks only"}`,
-		`Pending: ${deps.gate.pendingManaged} managed, ${deps.approval.pendingCount} awaiting approval`,
-		`Settings: ${escapeOneLine(deps.dirs.agentDir)}/automode.json`,
-		`Logs: local; retained ${settings.logRetentionDays} days, up to ${settings.logMaxEntries} entries`,
-	];
-	await ctx.ui.select(`Automode details\n\n${lines.join("\n")}`, ["Back"]);
+async function showSettings(deps: UiDeps, ctx: CommandCtx): Promise<void> {
+	if (!requireOperator(ctx)) return;
+	const epoch0 = deps.settings.epoch;
+	const current = deps.settings.current;
+	if (!current) {
+		ctx.ui.notify("Automode: no valid configuration; fix automode.json first.", "error");
+		return;
+	}
+	let next: AutomodeSettings | undefined;
+	try {
+		next = await editTuningSettings(ctx.ui, current,
+			`Pending: ${deps.gate.pendingManaged} managed, ${deps.approval.pendingCount} awaiting approval`);
+	} catch {
+		return; // UI failure never persists a partially edited draft.
+	}
+	if (!next) return;
+	if (TUNING_FIELDS.every((field) => next[field.key] === current[field.key])) {
+		ctx.ui.notify("No settings changed.", "info");
+		return;
+	}
+	if (await saveSettings(deps, ctx, next, epoch0)) ctx.ui.notify("Automode settings saved.", "info");
 }
 
 async function reverify(deps: UiDeps, ctx: CommandCtx): Promise<void> {
@@ -665,17 +674,24 @@ async function decisionModelPicker(deps: UiDeps, ctx: CommandCtx): Promise<void>
 	const options = [PICKER_RULES_ONLY, ...rows.map((row) => row.painted)];
 	// Selection grants consent, so show the exact normalized destination before
 	// the decision. Never render rejected URLs: they may contain credentials.
-	const title = [
-		"Decision Models — active safety review",
-		"Selecting a model approves current disclosure: exact bounded bash commands, tool/path metadata and proposed permission patterns may go to this endpoint. File bodies and other argument values never leave. Safe judgments above the configured thresholds may approve unmatched actions. Hard blocks remain final.",
+	const disclosure = "Selecting a model approves current disclosure: exact bounded bash commands, tool/path metadata and proposed permission patterns may go to this endpoint. File bodies and other argument values never leave. Safe judgments above the configured thresholds may approve unmatched actions. Hard blocks remain final.";
+	const items = [
+		{ value: PICKER_RULES_ONLY, label: PICKER_RULES_ONLY, description: "Nothing is uploaded." },
 		...rows.map((row) => {
 			const endpoint = normalizeDisclosureEndpoint(typeof row.model.baseUrl === "string" ? row.model.baseUrl : "");
-			return `${row.plain} → ${endpoint === null ? "invalid endpoint (selection unavailable)" : escapeTerminal(endpoint)}`;
+			return { value: row.plain, label: row.painted, description: `Endpoint: ${endpoint === null ? "invalid endpoint (selection unavailable)" : escapeTerminal(endpoint)}` };
 		}),
-	].join("\n");
+	];
 	let choice: string | undefined;
 	try {
-		choice = await ctx.ui.select(title, options);
+		if (ctx.ui.custom) {
+			choice = await showModelPicker({ custom: ctx.ui.custom.bind(ctx.ui) }, disclosure, items);
+		} else {
+			const title = ["Decision Models — active safety review", disclosure,
+				...items.slice(1).map((item) => `${item.value} → ${item.description.slice("Endpoint: ".length)}`),
+			].join("\n");
+			choice = await ctx.ui.select(title, options);
+		}
 	} catch {
 		return;
 	}

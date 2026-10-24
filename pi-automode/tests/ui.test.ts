@@ -694,7 +694,7 @@ test("panel header is the status label alone, with no state subtitle", async () 
 	const h = makeHarness();
 	const ctx = h.makeCtx(["Close"], "tui", true, STUB_THEME);
 	await createCommandHandler(h.deps)("", ctx);
-	assert.deepEqual(ctx.calls[0]?.options, ["Toggle ON", "Rules", "Logs", "Decision Models", "Details", "Close"]);
+	assert.deepEqual(ctx.calls[0]?.options, ["Toggle ON", "Rules", "Logs", "Decision Models", "Settings", "Close"]);
 	const title = ctx.calls[0]?.title ?? "";
 	assert.equal(title, "\x1b[33mAutomode: Off\x1b[0m", "label only; no subtitle");
 	assert.ok(!/Guarded tools are checked|run without Automode checks/.test(title));
@@ -795,13 +795,78 @@ test("decision model consent displays normalized destinations without exposing i
 	assert.doesNotMatch(title, /key@|token=1/);
 });
 
-test("managed queue diagnostics live in Details, not the footer or main panel", async () => {
+test("managed queue diagnostics live in Settings, not the footer or main panel", async () => {
 	const h = makeHarness({ enabled: true });
 	h.gate.pendingManaged = 3;
 	assert.equal(statusText(h.deps), "Automode: On");
 	const handler = createCommandHandler(h.deps);
-	const ctx = h.makeCtx(["Details", "Back", "Close"]);
+	const ctx = h.makeCtx(["Settings", "Cancel", "Close"]);
 	await handler("", ctx);
 	assert.doesNotMatch(ctx.calls[0]?.title ?? "", /managed|Settings|Coverage/);
 	assert.match(ctx.calls[1]?.title ?? "", /Pending: 3 managed, 0 awaiting approval/);
+});
+
+const chooseSetting = (prefix: string) => (_title: string, options: string[]) => options.find((option) => option.startsWith(prefix));
+
+test("Settings edits a draft and saves all seven tunings in native units without changing authority", async () => {
+	const model = { provider: "typesafe", model: "jev" };
+	const h = makeHarness({ enabled: true, decisionModel: model, disclosureConsent: "approved", disclosureVersion: 1,
+		allowlist: [{ text: "git status" }] });
+	const ctx = h.makeCtx(["Settings", chooseSetting("Approval wait"), "45", chooseSetting("Immediate safe"), "98",
+		chooseSetting("Model confidence"), "75", chooseSetting("Model review timeout"), "1.5",
+		chooseSetting("Model requests"), "50", chooseSetting("Keep logs"), "14", chooseSetting("Maximum log"), "1000",
+		"Save changes", "Close"]);
+	await createCommandHandler(h.deps)("", ctx);
+	assert.equal(h.settings.updates.length, 1);
+	assert.equal(h.settings.current.approvalTimeoutMs, 45_000);
+	assert.equal(h.settings.current.reviewSafeThreshold, 0.98);
+	assert.equal(h.settings.current.reviewConfidenceThreshold, 0.75);
+	assert.equal(h.settings.current.reviewTimeoutMs, 1500);
+	assert.equal(h.settings.current.reviewMaxRequests, 50);
+	assert.equal(h.settings.current.logRetentionDays, 14);
+	assert.equal(h.settings.current.logMaxEntries, 1000);
+	assert.deepEqual(h.settings.current.decisionModel, model);
+	assert.equal(h.settings.current.disclosureConsent, "approved");
+	assert.equal(h.settings.current.disclosureVersion, 1);
+	assert.equal(h.settings.current.enabled, true);
+	assert.deepEqual(h.settings.current.allowlist, [{ text: "git status" }]);
+	assert.equal(h.health.length, 1);
+});
+
+test("Settings reset requires Save, preserves consent and state, and Cancel/Escape discard drafts", async () => {
+	for (const exit of ["Cancel", undefined]) {
+		const h = makeHarness({ approvalTimeoutMs: 600_000 });
+		const ctx = h.makeCtx(["Settings", "Reset to defaults", exit, "Close"]);
+		await createCommandHandler(h.deps)("", ctx);
+		assert.equal(h.settings.updates.length, 0);
+		assert.equal(h.settings.current.approvalTimeoutMs, 600_000);
+	}
+	const h = makeHarness({ enabled: true, approvalTimeoutMs: 600_000, reviewConfidenceThreshold: 0.9,
+		disclosureConsent: "approved", disclosureVersion: null });
+	await createCommandHandler(h.deps)("", h.makeCtx(["Settings", "Reset to defaults", "Save changes", "Close"]));
+	assert.equal(h.settings.current.approvalTimeoutMs, 60_000);
+	assert.equal(h.settings.current.reviewConfidenceThreshold, 0.67);
+	assert.equal(h.settings.current.enabled, true);
+	assert.equal(h.settings.current.disclosureVersion, null, "reset cannot renew disclosure consent");
+	assert.equal(h.settings.current.disclosureConsent, "approved");
+});
+
+test("Settings refuses invalid values, cancelled input, stale saves, RPC and UI failures", async () => {
+	const h = makeHarness();
+	const ctx = h.makeCtx(["Settings", chooseSetting("Approval wait"), "0", chooseSetting("Model confidence"), "49",
+		chooseSetting("Maximum log"), "1.5", chooseSetting("Keep logs"), undefined, "Save changes", "Close"]);
+	await createCommandHandler(h.deps)("", ctx);
+	assert.equal(h.settings.updates.length, 0);
+	assert.equal(ctx.notifications.filter((entry) => entry.type === "warning").length, 3);
+	const stale = makeHarness();
+	await createCommandHandler(stale.deps)("", stale.makeCtx(["Settings", chooseSetting("Approval wait"), "30",
+		() => { stale.settings.epoch++; return "Save changes"; }, "Close"]));
+	assert.equal(stale.settings.updates.length, 0);
+	const rpc = makeHarness();
+	await createCommandHandler(rpc.deps)("", rpc.makeCtx(["Settings", "Close"], "rpc"));
+	assert.equal(rpc.settings.updates.length, 0);
+	const failed = makeHarness();
+	await createCommandHandler(failed.deps)("", failed.makeCtx(["Settings", chooseSetting("Approval wait"), "30",
+		() => { throw new Error("terminal closed"); }, "Close"]));
+	assert.equal(failed.settings.updates.length, 0);
 });

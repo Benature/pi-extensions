@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Replace Details with a clean Settings editor: seven numeric tuning values,
+  contextual help, seconds/percent inputs, validation, draft Save/Cancel, and a
+  reset-to-defaults action that preserves models, consent, rules, and on/off state.
+  Match Pi's native full-width selectors with horizontal separators and a stable
+  reserved help area; edit values inline without opening another dialog.
+  Tab applies and advances; Ctrl+S saves.
+
+- Render permission prompts, model catalogues, and Inspect details without
+  styling the entire body as a title. Add scrollable JSON-highlighted inspection
+  and remove its misleading Back option.
+- Default approval waits to 60 seconds and model confidence to 0.67. An unanswered
+  local approval may run once only with an eligible safe probability > 0.50
+  meeting the confidence guard; otherwise decline. Explicit declines, lifecycle
+  cancellation, privacy restrictions, hard blocks, and revalidation remain final.
+
 - Replace natural-language/message rules with command allowlist/blocklist rules:
   exact commands, `*` globs, and an explicit safe regex mode. Legacy command
   entries migrate; message entries produce a visible configuration error.
