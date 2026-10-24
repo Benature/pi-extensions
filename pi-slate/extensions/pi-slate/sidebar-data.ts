@@ -191,10 +191,11 @@ export class SidebarSkills {
 }
 
 type McpFile = { servers: Record<string, unknown>; error?: string };
-export function parseMcpFile(text: string | undefined): McpFile {
+export function parseMcpFile(text: string | undefined, stripBom = false): McpFile {
   if (text === undefined) return { servers: {} };
   try {
-    const raw = record(JSON.parse(text));
+    // Match the verified host's file parser; older Pi versions reject a BOM.
+    const raw = record(JSON.parse(stripBom && text.startsWith("\uFEFF") ? text.slice(1) : text));
     const servers = record(raw?.mcpServers);
     if (!raw || (raw.mcpServers !== undefined && !servers)) return { servers: {}, error: "MCP config invalid" };
     return { servers: servers ?? {} };
@@ -242,14 +243,17 @@ function resolveMcp(
   for (const [name, server] of files) rows.set(name, { name: sidebarText(name), source: server.source, enabled: server.config.enabled !== false });
   for (const [name, row] of invalid) if (!rows.has(name)) rows.set(name, row);
   return { mcp: [...rows.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    ...(!host ? { mcpError: "MCP configuration validation unavailable" } : rejected ? { mcpError: "MCP configuration has rejected entries" } : {}) };
+    ...(!host && rows.size > 0 ? { mcpError: "MCP configuration validation unavailable" } : rejected ? { mcpError: "MCP configuration has rejected entries" } : {}) };
 }
 
 /** File reads are bounded and cached outside render; never evaluate env or credential commands. */
 export class SidebarMcpFiles {
   private cached = new Map<string, { key: string; value: McpFile }>();
   private host?: SidebarMcpHost;
-  setHost(host: SidebarMcpHost | undefined): void { this.host = host; }
+  setHost(host: SidebarMcpHost | undefined): void {
+    if (Boolean(this.host?.stripBom) !== Boolean(host?.stripBom)) this.clear();
+    this.host = host;
+  }
   read(path: string): McpFile {
     try {
       const stat = statSync(path);
@@ -257,7 +261,7 @@ export class SidebarMcpFiles {
       const key = `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`;
       const old = this.cached.get(path);
       if (old?.key === key) return old.value;
-      const value = parseMcpFile(readFileSync(path, "utf8"));
+      const value = parseMcpFile(readFileSync(path, "utf8"), this.host?.stripBom);
       this.cached.set(path, { key, value });
       return value;
     } catch (error) {
