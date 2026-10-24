@@ -53,7 +53,7 @@ anomalies, no genuine findings.**
   `src/core/disclosure.ts`'s `normalizeDisclosureEndpoint`), workspace =
   fixture realpath
 - **Settings:** `reviewTimeoutMs` 8000 (raised for this live script only),
-  `reviewMaxRequests` 25, logRetention 7d/500 entries, approvalTimeout 600000
+  `reviewMaxRequests` 25, logRetention 7d/500 entries, approvalTimeout 60000
 - **Reviewer session stats after run:** `requestsUsed: 2` (cases 17–18 only),
   breaker closed, availability latch clear, 0 in-flight/queued
 - **Shadow-only disclaimer:** receipts never create Allow and never clear an

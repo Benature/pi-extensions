@@ -62,7 +62,7 @@ export const DEFAULT_SETTINGS: AutomodeSettings = Object.freeze({
   disclosureConsent: "none",
   disclosureVersion: null,
   reviewSafeThreshold: 0.99,
-  reviewConfidenceThreshold: 0.9,
+  reviewConfidenceThreshold: 0.67,
   disclosureProvider: null,
   disclosureModel: null,
   disclosureEndpoint: null,
@@ -73,7 +73,7 @@ export const DEFAULT_SETTINGS: AutomodeSettings = Object.freeze({
   logMaxEntries: 500,
   reviewTimeoutMs: 2000,
   reviewMaxRequests: 100,
-  approvalTimeoutMs: 600_000,
+  approvalTimeoutMs: 60_000,
 });
 
 export interface Action {

@@ -82,7 +82,7 @@ test("validateSettings accepts a minimal valid document and applies defaults", (
   assert.equal(s.logMaxEntries, 500);
   assert.equal(s.reviewTimeoutMs, 2000);
   assert.equal(s.reviewMaxRequests, 100);
-  assert.equal(s.approvalTimeoutMs, 600_000);
+  assert.equal(s.approvalTimeoutMs, 60_000);
 });
 
 test("validateSettings rejects unknown top-level fields, including credentials", () => {
@@ -197,7 +197,7 @@ test("active review thresholds and disclosure version are validated independentl
   const old = validateSettings(VALID_MINIMAL);
   assert.equal(old.disclosureVersion, null);
   assert.equal(old.reviewSafeThreshold, 0.99);
-  assert.equal(old.reviewConfidenceThreshold, 0.9);
+  assert.equal(old.reviewConfidenceThreshold, 0.67);
   for (const value of [NaN, Infinity, 0.49, 1.01, null, "0.99"]) {
     assert.throws(() => validateSettings({ ...VALID_MINIMAL, reviewSafeThreshold: value }));
     assert.throws(() => validateSettings({ ...VALID_MINIMAL, reviewConfidenceThreshold: value }));

@@ -660,8 +660,21 @@ export class Gate {
 				throw new AutomodeBlockError("declined by operator");
 			}
 			case "expired": {
-				await log("block", "approval-timeout", "approval request expired; not executed");
-				throw new AutomodeBlockError("approval expired without an answer");
+				// Only an unanswered, expired local approval may use the lower
+				// probability threshold. Never revive a cancelled turn, Off epoch,
+				// explicit decline, or an action that expired in the execution queue.
+				if (rec.evidence && authorizesReview(receipt, rec.evidence, settings, true)) {
+					scope.cancelDeadline();
+					const fallbackScope: PendingScope = {
+						...scope,
+						deadlineSignal: new AbortController().signal,
+						signal: AbortSignal.any(scope.turnSignal ? [scope.epochSignal, scope.turnSignal] : [scope.epochSignal]),
+					};
+					this.#assertPendingLive(fallbackScope, "timeout model fallback");
+					return this.#finalizeExecution(call, rec, fallbackScope, effectiveAction, decision, settings, receipt, undefined, true, "approval-once", true);
+				}
+				await log("block", "approval-timeout", "approval expired; no eligible safe > 50% judgment meeting the confidence guard; not executed");
+				throw new AutomodeBlockError("approval expired without a qualifying model judgment; action declined, try another approach");
 			}
 			case "cancelled": {
 				await log("block", "cancelled", `${outcome.reason}; not executed`);
@@ -778,6 +791,7 @@ export class Gate {
 		token: ApprovalToken | undefined,
 		modelApproved = false,
 		approvalSource = "approval-once",
+		timeoutModelApproval = false,
 	): Promise<T> {
 		const { settings } = this.#deps;
 		const log = (kind: DecisionLog["outcome"], source: string, reason: string) =>
@@ -804,8 +818,8 @@ export class Gate {
 				call,
 				rec,
 				"allow",
-				token ? approvalSource : modelApproved ? receipt!.source : decision.source,
-				token ? (approvalSource === "approval-always" ? "operator confirmed reusable permission" : "operator approved once") : modelApproved ? "validated safe judgment meets probability and confidence thresholds" : decision.reason,
+				token ? approvalSource : timeoutModelApproval ? "approval-timeout-model" : modelApproved ? receipt!.source : decision.source,
+				token ? (approvalSource === "approval-always" ? "operator confirmed reusable permission" : "operator approved once") : timeoutModelApproval ? "unanswered approval expired; validated safe probability > 0.50 meets confidence guard" : modelApproved ? "validated safe judgment meets probability and confidence thresholds" : decision.reason,
 				settingsAtDecision,
 				decision.matchedRule,
 				receipt,
@@ -873,7 +887,7 @@ export class Gate {
 			return blocked("invalidated", "policy outcome changed while the action was pending; not executed");
 		}
 
-		if (modelApproved && !authorizesReview(receipt, finalEvidence, settings.current)) {
+		if (modelApproved && !authorizesReview(receipt, finalEvidence, settings.current, timeoutModelApproval)) {
 			return blocked("invalidated", "model permission is no longer valid; not executed");
 		}
 
@@ -1016,7 +1030,7 @@ export class Gate {
 
 /** Independently validate eligibility, identity, consent, answer shape,
  * probability and confidence before treating a model receipt as permission. */
-function authorizesReview(receipt: ReviewReceipt | undefined, evidence: ActionEvidence, settings: AutomodeSettings): boolean {
+function authorizesReview(receipt: ReviewReceipt | undefined, evidence: ActionEvidence, settings: AutomodeSettings, timeoutFallback = false): boolean {
 	if (receipt?.status !== "completed" || !settings.decisionModel || !buildReviewInput(evidence).ok) return false;
 	const identity = receipt.decisionModel;
 	if (!identity || identity.provider !== settings.decisionModel.provider || identity.model !== settings.decisionModel.model
@@ -1026,7 +1040,8 @@ function authorizesReview(receipt: ReviewReceipt | undefined, evidence: ActionEv
 	const validated = validateAnswers(buildQuestions(), receipt.output);
 	if (!validated.ok) return false;
 	const answer = validated.answers.safety;
-	return answer?.choice === "safe" && (answer.probabilities.safe ?? 0) >= settings.reviewSafeThreshold
+	return answer?.choice === "safe"
+		&& (timeoutFallback ? (answer.probabilities.safe ?? 0) > 0.50 : (answer.probabilities.safe ?? 0) >= settings.reviewSafeThreshold)
 		&& answer.confidence >= settings.reviewConfidenceThreshold;
 }
 

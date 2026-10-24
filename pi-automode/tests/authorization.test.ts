@@ -56,7 +56,7 @@ async function harness(options: { result?: ReviewReceipt; proposal?: ReviewRecei
     } });
   const call = (command = "git status") => gate.executeGuarded({ tool: "bash", args: { command }, ctx,
     requestId: "authorization", run: async () => { executions++; return "executed"; } });
-  return { root, workspace, agentDir, settings, logs, epochs, gate, ctx, titles, optionLists, call,
+  return { root, workspace, agentDir, settings, logs, epochs, gate, approval, ctx, titles, optionLists, call,
     get reviews() { return reviews; }, get executions() { return executions; },
     [Symbol.dispose]() { rmSync(root, { recursive: true, force: true }); } };
 }
@@ -183,6 +183,79 @@ test("Always Allow never saves authority when the mandatory rule audit fails", a
   await assert.rejects(h.call(), /rule audit failed/);
   assert.equal(h.settings.current.allowlist.length, 0);
   assert.equal(h.executions, 0);
+});
+
+test("unanswered approval expiry accepts safe > 0.50 with confidence >= 0.67 and audits fallback", async () => {
+  using h = await harness({ result: receipt("safe", 0.51, 0.67) });
+  h.approval.request = async () => ({ kind: "expired" });
+  assert.equal(h.settings.current.reviewConfidenceThreshold, 0.67);
+  assert.equal(h.settings.current.approvalTimeoutMs, 60_000);
+  assert.equal(await h.call(), "executed");
+  assert.equal(h.executions, 1);
+  assert.equal((await h.logs.read(h.settings.current)).at(-1)?.source, "approval-timeout-model");
+});
+
+test("real entry deadline closes the unanswered dialog but eligible timeout fallback still executes", async () => {
+  using h = await harness({ result: receipt("safe", 0.7, 0.8), settings: { approvalTimeoutMs: 5000 } });
+  const keepalive = setTimeout(() => {}, 10_000);
+  h.ctx.ui.select = async (_title: string, _choices?: string[], opts?: { signal?: AbortSignal }) => {
+    await new Promise<void>((resolve) => {
+      if (opts?.signal?.aborted) resolve();
+      else opts?.signal?.addEventListener("abort", () => resolve(), { once: true });
+    });
+    return undefined;
+  };
+  try {
+    assert.equal(await h.call(), "executed");
+    assert.equal(h.executions, 1);
+    assert.equal((await h.logs.read(h.settings.current)).at(-1)?.source, "approval-timeout-model");
+  } finally { clearTimeout(keepalive); }
+});
+
+test("timeout fallback rejects ties, unsafe, uncertain, low confidence, failed and stale-consent reviews", async () => {
+  for (const result of [receipt("safe", 0.50), receipt("safe", 0.51, 0.66), receipt("unsafe", 0.8),
+    receipt("uncertain", 0.8), { ...receipt(), status: "timeout" as const }]) {
+    using h = await harness({ result });
+    h.approval.request = async () => ({ kind: "expired" });
+    await assert.rejects(h.call(), /declined/);
+    assert.equal(h.executions, 0);
+  }
+  using stale = await harness({ settings: { disclosureVersion: null } });
+  stale.approval.request = async () => ({ kind: "expired" });
+  await assert.rejects(stale.call(), /declined/);
+  assert.equal(stale.executions, 0);
+});
+
+test("timeout fallback never overrides explicit decline, cancellation, or audit failure", async () => {
+  using declined = await harness({ result: receipt("safe", 0.7, 0.8) });
+  await assert.rejects(declined.call(), /declined/);
+  assert.equal(declined.executions, 0);
+  using cancelled = await harness({ result: receipt("safe", 0.7, 0.8) });
+  cancelled.approval.request = async () => { cancelled.epochs.invalidate("session changed"); return { kind: "expired" }; };
+  await assert.rejects(cancelled.call(), /session changed/);
+  assert.equal(cancelled.executions, 0);
+  using audit = await harness({ result: receipt("safe", 0.7, 0.8), onAppend: (entry) => {
+    if (entry.source === "approval-timeout-model") throw new Error("audit unavailable");
+  } });
+  audit.approval.request = async () => ({ kind: "expired" });
+  await assert.rejects(audit.call(), /decision log unavailable/);
+  assert.equal(audit.executions, 0);
+});
+
+test("timeout fallback rechecks evidence and cannot authorize protected or composed actions", async () => {
+  using changed = await harness({ result: receipt("safe", 0.7, 0.8) });
+  const target = join(changed.root, "shared.txt");
+  writeFileSync(target, "before");
+  changed.approval.request = async () => { writeFileSync(target, "after"); return { kind: "expired" }; };
+  await assert.rejects(changed.gate.executeGuarded({ tool: "read", args: { path: target }, ctx: changed.ctx,
+    requestId: "changed-target", run: async () => assert.fail("changed evidence executed") }), /action or target changed/);
+  assert.equal(changed.executions, 0);
+  for (const command of ["cat .env", "git status; echo x"]) {
+    using h = await harness({ result: receipt("safe", 0.7, 0.8) });
+    h.approval.request = async () => ({ kind: "expired" });
+    await assert.rejects(h.call(command), /declined/);
+    assert.equal(h.executions, 0);
+  }
 });
 
 test("Always Allow supports a reusable native-read directory scope, not one rule per file", async () => {
