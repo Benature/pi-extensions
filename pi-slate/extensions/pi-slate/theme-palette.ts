@@ -17,5 +17,5 @@ export function effortPalette(border: string, borderAccent: string): { vars: Rec
     thinkingMax: 0.70,
   };
   const vars = Object.fromEntries(Object.entries(stops).map(([role, alpha]) => [role, mixHex(borderAccent, border, alpha)]));
-  return { vars, colors: Object.fromEntries(Object.keys(vars).map(role => [role, role])) };
+  return { vars, colors: Object.fromEntries(Object.keys(stops).map(role => [role, role])) };
 }

@@ -12,6 +12,7 @@ import { KeybindingsManager } from "../node_modules/@earendil-works/pi-coding-ag
 import { loadThemeFromPath } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 
 const THEMES_DIR = join(import.meta.dirname, "..", "themes");
+const role = (theme: ReturnType<typeof allSlateThemes>[number], token: string) => theme.vars[theme.colors[token]!]!;
 
 test("every committed theme JSON matches the registry; run npm run themes after editing", () => {
   const built = allSlateThemes();
@@ -35,7 +36,6 @@ test("colors only reference palette vars; hex lives exclusively in vars and expo
 });
 
 test("diff colors derive from each theme's roles, never a name-matched hardcode", () => {
-  const role = (theme: ReturnType<typeof allSlateThemes>[number], name: string) => theme.vars[theme.colors[name]!]!;
   for (const theme of allSlateThemes()) {
     const colors = diffColors(theme);
     assert.equal(colors.headerFg, role(theme, "accent"), theme.name);
@@ -73,7 +73,6 @@ const EFFORT = [
   ["off", "thinkingOff"], ["minimal", "thinkingMinimal"], ["low", "thinkingLow"],
   ["medium", "thinkingMedium"], ["high", "thinkingHigh"], ["xhigh", "thinkingXhigh"], ["max", "thinkingMax"],
 ] as const;
-const role = (theme: ReturnType<typeof allSlateThemes>[number], token: string) => theme.vars[theme.colors[token]!]!;
 
 function luminance(hex: string): number {
   const channels = [1, 3, 5].map(start => {
