@@ -1,5 +1,5 @@
 import type {
-	ProviderKind,
+	EvidenceProvider,
 	SearchResultDetail,
 	Source,
 	StreamResult,
@@ -57,7 +57,7 @@ function documentKey(value: string): string {
 }
 
 export interface ProviderContribution {
-	kind: ProviderKind;
+	kind: EvidenceProvider;
 	result: StreamResult;
 }
 
@@ -83,7 +83,7 @@ export function mergeStreamResults(
 	const warnings: string[] = [...extraWarnings];
 	const usage: { name: string; count: number }[] = [];
 	const requestIds: string[] = [];
-	const kinds: ProviderKind[] = [];
+	const kinds: EvidenceProvider[] = [];
 
 	for (const { kind, result } of parts) {
 		kinds.push(kind);

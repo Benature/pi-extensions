@@ -44,9 +44,7 @@ if (process.argv[2] !== "--child") {
 		const cases: Array<{ name: string; tool: string; provider?: string; config: object; args: Record<string, string | string[]> }> = [
 			{ name: "default web and URL extraction", tool: "web_search", provider: "exa", config: {},
 				args: { query: "Node.js AbortSignal.timeout documentation", urls: ["https://nodejs.org/api/globals.html"] } },
-			{ name: "URL-only keyless Exa extraction", tool: "web_search", provider: "exa", config: { web: { provider: "exa", fallback: [] } },
-				args: { urls: ["https://example.com"] } },
-			{ name: "URL-only native Parallel extraction", tool: "web_search", provider: "parallel", config: { web: { provider: "parallel", fallback: [] } },
+			{ name: "URL-only keyless Jina extraction", tool: "web_search", provider: "jina", config: {},
 				args: { urls: ["https://example.com"] } },
 			{ name: "default code", tool: "code_search", provider: "grep", config: {}, args: { query: "useSyncExternalStore" } },
 			{ name: "scoped Sourcegraph", tool: "code_search", provider: "sourcegraph", config: { code: { provider: "sourcegraph", fallback: [] } },

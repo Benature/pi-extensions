@@ -9,7 +9,9 @@ import { previewEvidence, uniqueEvidence } from "./providers/results.ts";
 import { type WebSearchDetails, formatWebSearchResult } from "./format.ts";
 import { augmentResults, type AugmentedStreamResult } from "./jev/augment.ts";
 import { resolveSettings } from "./providers/config.ts";
-import { withTimeout } from "./providers/http.ts";
+import { awaitWithSignal, withTimeout } from "./providers/http.ts";
+import { jinaFetch } from "./providers/jina.ts";
+import { reuseTransport } from "./providers/reuse.ts";
 import {
 	type RunSearchOptions,
 	type SearchRequest,
@@ -188,7 +190,9 @@ export async function executeSearch(
 				? skippedSources(params.scope, availability)
 				: [];
 
-			const raw = params.parallel
+			const raw = params.fetchOnly && (options.fetchUrls || (!options.transports && !options.loadTransports))
+				? await runUrlOnly(req, options, availability)
+				: params.parallel
 				? await runParallelSearch(req, { ...options, family, availability })
 				: await runSearch(req, { ...options, family: family ?? "web", availability });
 
@@ -255,6 +259,21 @@ export async function executeSearch(
 	} catch (error) {
 		progress.finish();
 		return formatSearchError(params.tool, error);
+	}
+}
+
+/** Keep URL-only reads keyless and independent of the selected search provider. */
+async function runUrlOnly(req: SearchRequest, options: RunSearchOptions, availability: Partial<Record<ProviderKind, boolean>>): Promise<StreamResult> {
+	try {
+		const pending = reuseTransport("jina", req, options.fetchUrls ?? jinaFetch);
+		return req.signal ? await awaitWithSignal(pending, req.signal) : await pending;
+	} catch (error) {
+		if (req.signal?.aborted || !isProviderError(error) || !error.retryable) throw error;
+		// Brave also delegates extraction to Jina: never retry it through that path.
+		const chain = [req.settings.web.provider, ...req.settings.web.fallback];
+		if (chain.every((kind) => kind === "brave")) throw error;
+		const result = await runSearch(req, { ...options, family: "web", availability: { ...availability, brave: false } });
+		return { ...result, warnings: [`Jina URL extraction failed (${error.code}); used fallback.`, ...(result.warnings ?? [])] };
 	}
 }
 

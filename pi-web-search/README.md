@@ -2,8 +2,8 @@
 
 **Web and public-code search for Pi: `web_search`, `code_search`, and opt-in `multi_search`.**
 
-- **Keyless by default:** Exa, Parallel, grep.app, and Sourcegraph. Optional Jev filtering reuses your Pi login/key.
-- You configure providers in settings; Agent only sees small, task-focused tools for minimal context bloat.
+- **Keyless by default:** Exa, Parallel, Jina Reader (URL-only extraction), grep.app, and Sourcegraph. Optional Jev filtering reuses your Pi login/key.
+- You configure providers in settings; Agent only sees small, task-focused tools for minimal context bloat. Optional Brave REST search uses a key; no extra tools or provider-selection arguments.
 - Opt-in search across multiple sources, scoped to web, code, or both.
 - Optional Pi-native Jev ranking, filtering, and safety classification. Off by default.
 
@@ -137,7 +137,7 @@ A missing file uses these defaults:
 
 All fields are optional. Merge changes into the existing file. The extension reads config each operation. Tool exposure changes require `/reload`.
 
-- `web` accepts `exa` and `parallel`. `code` accepts `grep`, `sourcegraph`, and `github`.
+- `web` accepts `exa`, `parallel`, and `brave`. Jina is extraction-only, not a search-chain provider. `code` accepts `grep`, `sourcegraph`, and `github`.
 - `maxResults` truncates to an integer, then clamps to **1–20**. It limits both provider requests and the **global returned preview count**, including URL excerpts. Requested URL extracts are prioritized; additional admitted evidence is available through `search_read`. Providers may return fewer results or ignore the requested limit.
 - `timeoutMs` truncates to integer milliseconds. Positive values have a **1,000 ms minimum**. Nonpositive values use **20,000 ms**. These numeric adjustments emit no warnings.
 - Invalid JSON, unknown fields/providers, and malformed blocks produce `invalid_config`. Wrong-family providers trigger warnings and defaults or removal. Some invalid Jev values trigger defaults with warnings. Only literal `true` enables `jev.enabled`.
@@ -156,7 +156,7 @@ Jev requires a separate opt-in. Anonymous retrieval needs no classifier credenti
 
 ## Credentials
 
-Exa MCP, Parallel native MCP, grep.app, and Sourcegraph need no search key. Anonymous Parallel has lower server-controlled rate limits. A Parallel key is optional.
+Exa MCP, Parallel native MCP, grep.app, and Sourcegraph need no search key. Jina Reader handles URL-only extraction anonymously; Brave search requires its own key. Anonymous Parallel has lower server-controlled rate limits. A Parallel key is optional.
 
 Search credentials use the first nonblank environment alias before `<agent-dir>/auth.json`. GitHub then tries an existing `gh auth login` token.
 
@@ -165,6 +165,7 @@ Search credentials use the first nonblank environment alias before `<agent-dir>/
 | `exa` | `EXA_API_KEY` | Selects REST instead of keyless MCP. |
 | `parallel` | `PARALLEL_API_KEY` | Adds a Bearer header for higher limits. |
 | `github` | `GITHUB_TOKEN`, `GH_TOKEN` | Requires a token. Returns only verified public results. |
+| `brave` | `BRAVE_API_KEY`, `BRAVE_SEARCH_API_KEY` | Optional REST search provider; requires a key. |
 
 - Set environment variables **before starting Pi**. Exports in another shell cannot change a running Pi process. Restart Pi with the changed environment.
 - The extension reads Exa/GitHub stored keys each operation.
@@ -191,6 +192,18 @@ Pi alone resolves classifier authentication at judgment time. Jev needs no separ
 Each provider controls quotas and billing. Keys do not guarantee quota or price changes. Additional sources do not guarantee results or availability.
 
 `/web-search` shows an authentication snapshot, not a live key-validity test. It never displays keys.
+
+### Optional Brave search
+
+Run `/web-search provider brave` to store a key privately, then merge this into `web-search.json`:
+
+```json
+{ "web": { "provider": "brave", "fallback": ["exa", "parallel"] } }
+```
+
+Brave uses one REST request and returns ranked snippets, not generated answers or extra snippets. Its queries are limited to 400 characters and 50 words; longer queries fail explicitly rather than being silently shortened. Without a key, Brave is skipped. Opt-in `multi_search` includes it when credentials are present. Supplied URLs are extracted by keyless Jina alongside Brave search.
+
+URL-only `web_search` uses Jina Reader regardless of the search-provider selection, with existing web extraction as a retryable fallback. Jina is not a search engine, requires no setup, and receives only requested URLs, not the search query. Images and link destinations are omitted from Jina Markdown to reduce output noise. New providers share the existing preview and local-continuation budgets; no new LLM instructions or tools are added.
 
 ## Provider behavior and limits
 

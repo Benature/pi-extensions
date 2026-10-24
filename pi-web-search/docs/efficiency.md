@@ -2,9 +2,9 @@
 
 ## URL-only retrieval
 
-`web_search({ urls: ["https://example.com/docs"] })` performs extraction without a search request. Omit `query` rather than passing an empty string. With both query and URLs, Exa and Parallel start search and extraction concurrently. Both paths share the operation deadline and caller cancellation. A URL-only provider failure can trigger the normal retryable fallback chain; in a combined call, extraction failure becomes a warning alongside successful search evidence.
+`web_search({ urls: ["https://example.com/docs"] })` performs extraction without a search request. Omit `query` rather than passing an empty string. URL-only calls use keyless Jina Reader first; retryable failures use the existing web extraction chain, excluding Brave (which also delegates extraction to Jina). With both query and URLs, Exa and Parallel start their search and extraction concurrently; Brave pairs REST search with Jina extraction. Both paths share the operation deadline and caller cancellation. A URL-only provider failure can trigger the normal retryable fallback chain; in a combined call, extraction failure becomes a warning alongside successful search evidence.
 
-The default remains anonymous Exa MCP with anonymous Parallel MCP fallback. No new service or API key is required.
+Ordinary search defaults remain anonymous Exa MCP with anonymous Parallel MCP fallback. Brave is optional and key-required; Jina URL-only extraction is keyless. Neither adds a model-facing tool, argument, or instruction. Jina is extraction-only and never joins search/research fan-out.
 
 ## Progressive evidence
 
@@ -20,7 +20,7 @@ Only post-judgment, admitted evidence enters the store. Suppressed passages cann
 
 Storage is memory-only and session-scoped: no document files or session JSONL copies. The store has a 10-minute lifetime, 32-entry and 8 MiB aggregate limits, at most 256 results per entry, 64,000 characters per passage and 256,000 passage characters per entry. Non-URL metadata is capped at 1,000 characters per field. Oldest entries are evicted first. `storedClipped` reports local clipping; entries too large to fit are not stored. Shutdown clears that session's entries. Reload, restart and fork do not restore handles. Existing branches within a session share its handle namespace.
 
-**Provider-returned evidence is not necessarily a full page.** For example, Exa URL extraction currently requests at most 3,000 characters per URL. Continuation recovers text beyond the preview, not text that the upstream provider never returned.
+**Provider-returned evidence is not necessarily a full page.** For example, Exa URL extraction currently requests at most 3,000 characters per URL. Jina retains at most 64,000 characters per document, fetches at most three documents concurrently, and caps each JSON response at 1 MiB. It requests Markdown without images or link destinations and verifies returned page identity. Individual Jina page failures are reported without discarding successful siblings. Continuation recovers text beyond the preview, not text that the upstream provider never returned.
 
 ## One global preview budget
 

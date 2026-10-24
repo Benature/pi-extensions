@@ -1,4 +1,6 @@
-export type ProviderKind = "exa" | "parallel" | "grep" | "sourcegraph" | "github";
+export type ProviderKind = "exa" | "parallel" | "grep" | "sourcegraph" | "github" | "brave";
+/** Jina extracts known pages; it never participates in search routing. */
+export type EvidenceProvider = ProviderKind | "jina";
 
 /**
  * Sources answer different questions. Exa/Parallel answer web questions;
@@ -14,6 +16,7 @@ export const PROVIDER_FAMILY: Record<ProviderKind, ProviderFamily> = {
 	grep: "code",
 	sourcegraph: "code",
 	github: "code",
+	brave: "web",
 };
 
 export const PROVIDER_KINDS: readonly ProviderKind[] = [
@@ -22,6 +25,7 @@ export const PROVIDER_KINDS: readonly ProviderKind[] = [
 	"grep",
 	"sourcegraph",
 	"github",
+	"brave",
 ];
 
 /** Default order tried within a family when config does not override it. */
@@ -55,9 +59,9 @@ export interface StreamResult {
 	/** Markdown summary; "" when the provider only returns documents. */
 	text: string;
 	sources?: Source[];
-	providerKind: ProviderKind;
+	providerKind: EvidenceProvider;
 	/** Every provider that contributed, when more than one ran. */
-	providers?: ProviderKind[];
+	providers?: EvidenceProvider[];
 	searchResults?: SearchResultDetail[];
 	/** Exa requestId or Parallel search_id. Joined when several ran. */
 	requestId?: string;

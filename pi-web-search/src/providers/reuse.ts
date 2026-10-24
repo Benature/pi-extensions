@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { exaApiKey, githubToken } from "../env.ts";
+import { braveApiKey, exaApiKey, githubToken } from "../env.ts";
 import { awaitWithSignal, withTimeout } from "./http.ts";
 import type { SearchRequest, SearchTransport } from "./index.ts";
-import { isProviderError, providerError, type ProviderKind, type StreamResult } from "./types.ts";
+import { isProviderError, providerError, type EvidenceProvider, type StreamResult } from "./types.ts";
 
 const TTL_MS = 30_000;
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -22,11 +22,11 @@ export function clearRetrievalCache(owner?: string): void {
 }
 
 /** Native nested calls must execute on every invocation: never cache permission decisions. */
-export async function reuseTransport(kind: ProviderKind, req: SearchRequest, transport: SearchTransport): Promise<StreamResult> {
+export async function reuseTransport(kind: EvidenceProvider, req: SearchRequest, transport: SearchTransport): Promise<StreamResult> {
 	const owner = req.reuseScope;
 	if (!owner || kind === "parallel") return transport(req);
 	if (req.signal?.aborted) throw req.signal.reason;
-	const credential = kind === "exa" ? exaApiKey() : kind === "github" ? githubToken() : undefined;
+	const credential = kind === "exa" ? exaApiKey() : kind === "github" ? githubToken() : kind === "brave" ? braveApiKey() : undefined;
 	const policy = createHash("sha256").update(JSON.stringify([owner, kind, req.settings, credential ?? "anonymous"])).digest("hex");
 	const key = createHash("sha256").update(JSON.stringify([policy, req.query, req.urls, req.fetchOnly])).digest("hex");
 	const now = Date.now();

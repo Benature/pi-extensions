@@ -28,7 +28,7 @@ export const SOURCES_HEADING = "## Sources";
 export const WARNINGS_HEADING = "## Warnings";
 export const COVERAGE_HEADING = "## Coverage";
 
-const ProviderSchema = Type.Union([Type.Literal("exa"), Type.Literal("parallel"), Type.Literal("grep"), Type.Literal("sourcegraph"), Type.Literal("github")]);
+const ProviderSchema = Type.Union([Type.Literal("exa"), Type.Literal("parallel"), Type.Literal("grep"), Type.Literal("sourcegraph"), Type.Literal("github"), Type.Literal("brave"), Type.Literal("jina")]);
 
 /** One declared data contract for renderers, scripts, and failure results. */
 const DetailsSchema = Type.Object({
@@ -189,7 +189,7 @@ function compactResult(result: StreamResult): StreamResult {
 			if (typeof value === "string") {
 				// Keep recognized provenance tags even if large titles consumed the
 				// metadata budget: code rendering depends on these fixed-size tags.
-				compact[key] = key === "source" && ["exa", "parallel", "grep", "sourcegraph", "github"].includes(value)
+				compact[key] = key === "source" && ["exa", "parallel", "grep", "sourcegraph", "github", "brave", "jina"].includes(value)
 					? value : metadata(value);
 			}
 		}
