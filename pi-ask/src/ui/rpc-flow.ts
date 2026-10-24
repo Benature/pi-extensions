@@ -61,7 +61,7 @@ export async function runRpcAskFlow(
 			continue;
 		}
 		const revisit = await reviewCard(ui, state, signal);
-		if (revisit === undefined) {
+		if (signal?.aborted || revisit === undefined) {
 			return finish(state, "cancelled");
 		}
 		if (revisit === "submit") {
@@ -95,11 +95,14 @@ async function askQuestionCard(
 			rows.map((row) => row.label),
 			dialogOptions(signal)
 		);
-		if (chosen === undefined) {
+		if (signal?.aborted || chosen === undefined) {
 			return "cancel";
 		}
 		const row = rows.find((candidate) => candidate.label === chosen);
-		if (!row || row.action.kind === "back") {
+		if (!row) {
+			return "cancel";
+		}
+		if (row.action.kind === "back") {
 			return "back";
 		}
 		if (row.action.kind === "done" || row.action.kind === "skip") {
@@ -111,6 +114,9 @@ async function askQuestionCard(
 				answer.customText,
 				dialogOptions(signal)
 			);
+			if (signal?.aborted) {
+				return "cancel";
+			}
 			if (typed === undefined) {
 				continue;
 			}
@@ -158,7 +164,7 @@ async function askTextCard(
 		currentAnswer(state, question).customText,
 		dialogOptions(signal)
 	);
-	if (typed === undefined) {
+	if (signal?.aborted || typed === undefined) {
 		return "cancel";
 	}
 	state.answers[question.id] = saveCustomText(
@@ -196,7 +202,8 @@ async function reviewCard(
 	if (chosen === strings.submitAnswers) {
 		return "submit";
 	}
-	return rows.indexOf(chosen);
+	const index = rows.indexOf(chosen);
+	return index >= 0 ? index : undefined;
 }
 
 function buildRows(

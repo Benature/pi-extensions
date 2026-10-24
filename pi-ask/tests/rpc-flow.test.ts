@@ -253,6 +253,51 @@ test("an aborted signal cancels before the next card", async () => {
 	assert.equal(result.status, "cancelled");
 });
 
+test("abort racing with review submission cancels the flow", async () => {
+	const controller = new AbortController();
+	const host = scriptHost([{ select: "Speed" }, { select: "Submit answers" }]);
+	const ui = {
+		...host.ui,
+		async select(title: string, rows: string[]) {
+			const reply = await host.ui.select(title, rows);
+			if (title === "Review your answers") controller.abort();
+			return reply;
+		},
+	};
+	const result = await runRpcAskFlow(ui, createInitialState(SINGLE_PARAMS), controller.signal);
+	assert.equal(result.status, "cancelled");
+});
+
+test("unexpected question and review responses cancel safely", async () => {
+	for (const atReview of [false, true]) {
+		let calls = 0;
+		const ui = {
+			async select(_title: string, rows: string[]) {
+				calls++;
+				return atReview && calls === 1 ? rows[0] : "unknown row";
+			},
+			async input() { throw new Error("Unexpected input"); },
+		};
+		const result = await runRpcAskFlow(ui, createInitialState(SINGLE_PARAMS));
+		assert.equal(result.status, "cancelled");
+		assert.equal(calls, atReview ? 2 : 1);
+	}
+});
+
+test("abort racing with text input does not commit the answer", async () => {
+	const controller = new AbortController();
+	const ui = {
+		async select() { throw new Error("Unexpected select"); },
+		async input() { controller.abort(); return "Not committed"; },
+	};
+	const params: AskParams = {
+		questions: [{ id: "notes", prompt: "Any notes?", type: "text" }],
+	};
+	const result = await runRpcAskFlow(ui, createInitialState(params), controller.signal);
+	assert.equal(result.status, "cancelled");
+	assert.equal(result.answers.notes, undefined);
+});
+
 test("zh locale renders localized rows and summaries", async () => {
 	process.env.PI_ASK_LOCALE = "zh";
 	try {
