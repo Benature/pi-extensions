@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `ask_user` repairs common malformed payloads before validation: a lone question flattened to the top level, question fields left beside a one-item `questions` array
+- Localized dialog cards and result summaries via `PI_ASK_LOCALE`, with Simplified Chinese as the first locale
 
 ## 0.1.4
 
